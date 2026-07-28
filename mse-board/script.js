@@ -181,6 +181,92 @@ async function ensureBootstrapAdmin() {
     }
 }
 
+// ==========================================
+// SSO — login herdado do Portal MSE (via iframe com ?sso=<token>)
+// ==========================================
+
+// Mostra o login manual (some com o "Entrando…"). Só é chamado quando o SSO
+// não entrou: assim a tela de login é apenas a segunda alternativa.
+function revelarLoginManual() {
+    const loader = document.getElementById('ssoLoading');
+    if (loader) loader.style.display = 'none';
+    const card = document.getElementById('loginCard');
+    if (card) card.style.display = '';
+}
+
+function ssoMensagemDeErro(reason) {
+    switch (reason) {
+        case 'sem_acesso':
+            return 'Seu acesso ao quadro ainda não foi liberado. Peça ao administrador do MSE Board para incluir o seu e-mail.';
+        case 'expirado':
+        case 'futuro':
+            return 'O acesso automático expirou. Volte ao portal e abra o quadro novamente.';
+        case 'assinatura':
+        case 'formato':
+        case 'payload':
+            return 'Não foi possível validar o acesso automático (token inválido). Faça login normalmente.';
+        case 'config':
+            return 'O acesso automático não está configurado no servidor. Avise o administrador.';
+        default:
+            return 'Não foi possível herdar o login do portal. Faça login normalmente.';
+    }
+}
+
+// Tenta usar o token ?sso=<token> para entrar sem senha.
+// Retorna:
+//   'none'         quando não há token na URL
+//   'redirecting'  quando já vai navegar (parar o fluxo atual)
+//   'ok'           login herdado com sucesso e já estamos na página do quadro
+//   'error'        token presente mas inválido/sem acesso
+async function tryInheritLoginFromSso() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('sso');
+    if (!token) return 'none';
+
+    // Remove o token da URL para não ficar no histórico nem ser reutilizado
+    params.delete('sso');
+    const query = params.toString();
+    const cleanUrl = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
+
+    try {
+        const res = await fetch(`${API_BASE}/sso_login.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+        const data = await res.json().catch(() => null);
+
+        if (res.ok && data && data.ok) {
+            localStorage.setItem('mse_user', JSON.stringify({
+                id: 'sso_' + Date.now(),
+                name: data.email,
+                role: data.role,
+                via: 'sso'
+            }));
+
+            // Estamos na tela de login? Então vamos direto pro quadro.
+            if (document.getElementById('loginForm')) {
+                window.location.replace('board.html');
+                return 'redirecting';
+            }
+            // Já estamos no quadro: só limpa a URL e segue o fluxo normal.
+            history.replaceState(null, '', cleanUrl);
+            return 'ok';
+        }
+
+        // Token presente mas recusado
+        const reason = (data && data.reason) || 'desconhecido';
+        sessionStorage.setItem('mse_sso_error', reason);
+        history.replaceState(null, '', cleanUrl);
+        return 'error';
+    } catch (err) {
+        console.error('Falha no SSO:', err);
+        sessionStorage.setItem('mse_sso_error', 'rede');
+        history.replaceState(null, '', cleanUrl);
+        return 'error';
+    }
+}
+
 window.addEventListener('error', (e) => {
     console.error('Erro capturado:', e.error || e.message);
     if (typeof state !== 'undefined' && state && state.errorLog) {
@@ -203,6 +289,10 @@ window.addEventListener('unhandledrejection', (e) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // SSO: se veio ?sso=<token> do portal, tenta herdar o login antes de tudo.
+    const ssoResultado = await tryInheritLoginFromSso();
+    if (ssoResultado === 'redirecting') return; // vai navegar pro quadro; para aqui
+
     await ensureBootstrapAdmin();
 
     const loginForm = document.getElementById('loginForm');
@@ -214,6 +304,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loginForm) {
         let isSignupMode = false;
 
+        // Já existe uma sessão ativa? Então não precisa mostrar login: vai pro quadro.
+        let sessaoAtual = null;
+        try { sessaoAtual = JSON.parse(localStorage.getItem('mse_user')); } catch (e) {}
+        if (sessaoAtual && sessaoAtual.name) {
+            window.location.replace('board.html');
+            return;
+        }
+
+        // Chegamos aqui = o SSO não entrou (sem token, inválido ou sem acesso).
+        // Só agora revelamos o login manual, como segunda alternativa.
+        revelarLoginManual();
+
         const rememberedRaw = localStorage.getItem('mse_remembered_creds');
         if (rememberedRaw) {
             try {
@@ -223,6 +325,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('rememberMe').checked = true;
             } catch (err) {
                 localStorage.removeItem('mse_remembered_creds');
+            }
+        }
+
+        // Se o acesso automático (SSO) falhou, mostra o motivo aqui na tela de login.
+        const ssoErro = sessionStorage.getItem('mse_sso_error');
+        if (ssoErro) {
+            sessionStorage.removeItem('mse_sso_error');
+            const msgEl = document.getElementById('loginMessage');
+            if (msgEl) {
+                msgEl.textContent = ssoMensagemDeErro(ssoErro);
+                msgEl.className = 'login-message is-error';
+                msgEl.style.display = 'block';
             }
         }
 
