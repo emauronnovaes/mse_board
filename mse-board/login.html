@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSE Board — Entrar</title>
+    <link rel="icon" type="image/png" href="logo-mse-circle.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="login.css">
+</head>
+<body class="login-body">
+
+    <div class="login-card">
+
+        <div class="logo-area">
+            <img src="logo-mse.jpeg" alt="MSE" class="login-logo-img">
+
+            <h1 class="brand-title"><span class="text-carmine">MSE</span> BOARD</h1>
+            <p class="brand-subtitle">Plataforma de Gestão &amp; Projetos</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="username">E-mail corporativo</label>
+                <input type="email" id="username" placeholder="nome@mse.com.br" required>
+            </div>
+
+            <div class="input-group">
+                <label for="password">Senha</label>
+                <input type="password" id="password" placeholder="••••••••" required>
+            </div>
+
+            <div class="input-group" id="confirmPasswordGroup" style="display:none;">
+                <label for="confirmPassword">Confirmar Senha</label>
+                <input type="password" id="confirmPassword" placeholder="••••••••">
+            </div>
+
+            <button type="button" id="forgotPasswordBtn" class="forgot-password-link">Esqueceu sua senha?</button>
+
+            <label class="remember-me-row">
+                <input type="checkbox" id="rememberMe">
+                Lembrar minha senha neste navegador
+            </label>
+
+            <p id="loginMessage" class="login-message" style="display:none;"></p>
+
+            <button type="submit" class="btn-login" id="loginSubmitBtn">Entrar no Sistema</button>
+        </form>
+
+        <p class="toggle-mode-row">
+            <span id="toggleModeText">Ainda não tem conta?</span>
+            <button type="button" id="toggleModeBtn" class="toggle-mode-link">Criar conta</button>
+        </p>
+
+        <p class="login-footer"><span class="text-carmine">MSE</span> Engenharia — Acesso restrito à equipe</p>
+    </div>
+
+    <script src="config.js.php"></script>
+    <script src="script.js"></script>
+</body>
+</html>

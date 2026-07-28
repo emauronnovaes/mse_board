@@ -1,0 +1,231 @@
+/* ==========================================
+   MSE BOARD — Login (Capex Seguro)
+   ========================================== */
+
+:root {
+    --bg: #e8eaee;
+    --card: #FFFFFF;
+    --border: #e4e7ec;
+    --carmine: #2563eb;
+    --carmine-hover: #1a4fd6;
+    --text-charcoal: #192231;
+    --text-editorial: #6b7280;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.login-body {
+    background-color: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.login-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 3rem 2.75rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 2px 4px rgba(17, 24, 39, 0.02), 0 24px 48px -12px rgba(17, 24, 39, 0.08);
+}
+
+/* --- MARCA --- */
+.logo-area {
+    text-align: center;
+    margin-bottom: 2.4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.login-logo-img {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1.3rem;
+    display: block;
+    border-radius: 14px;
+    object-fit: cover;
+    box-shadow: 0 6px 16px rgba(184, 12, 35, 0.18);
+}
+
+.text-carmine {
+    color: var(--carmine);
+}
+
+.brand-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: 0.22em;
+    color: var(--text-charcoal);
+    margin-bottom: 0.55rem;
+}
+
+.brand-subtitle {
+    font-size: 0.84rem;
+    color: var(--text-editorial);
+    letter-spacing: 0.01em;
+}
+
+/* --- FORMULÁRIO --- */
+.input-group {
+    margin-bottom: 1.3rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group label {
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-editorial);
+    letter-spacing: 0.01em;
+}
+
+.input-group input,
+.input-group select {
+    padding: 0.8rem 0.95rem;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background-color: #FFFFFF;
+    color: var(--text-charcoal);
+    font-size: 0.92rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-group input::placeholder {
+    color: #ADB1B8;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+    border-color: var(--carmine);
+    box-shadow: 0 0 0 3px rgba(184, 12, 35, 0.08);
+}
+
+.input-group select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5.5 8l4.5 4.5L14.5 8' stroke='%236B7280' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    padding-right: 2.4rem;
+}
+
+/* --- BOTÃO --- */
+.btn-login {
+    width: 100%;
+    padding: 0.85rem 1.2rem;
+    background-color: var(--carmine);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 9px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    margin-top: 0.6rem;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.btn-login:hover {
+    background-color: var(--carmine-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -8px rgba(184, 12, 35, 0.45);
+}
+
+.btn-login:active {
+    transform: translateY(0);
+}
+
+/* --- RODAPÉ --- */
+.login-footer {
+    text-align: center;
+    margin-top: 1.8rem;
+    font-size: 0.76rem;
+    color: #9CA3AF;
+}
+
+.login-message {
+    font-size: 0.82rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 9px;
+    margin-bottom: 1rem;
+}
+
+.login-message.is-error {
+    background-color: rgba(210, 59, 59, 0.08);
+    color: #bf3a3a;
+    border: 1px solid rgba(210, 59, 59, 0.25);
+}
+
+.login-message.is-pending {
+    background-color: rgba(37, 99, 235, 0.08);
+    color: var(--carmine);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.forgot-password-link {
+    display: block;
+    background: none;
+    border: none;
+    text-align: right;
+    width: 100%;
+    font-size: 0.78rem;
+    color: var(--carmine);
+    cursor: pointer;
+    margin: -0.6rem 0 1rem;
+    padding: 0;
+}
+
+.forgot-password-link:hover {
+    text-decoration: underline;
+}
+
+.remember-me-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--text-editorial);
+    margin-bottom: 1.2rem;
+    cursor: pointer;
+}
+
+.remember-me-row input {
+    cursor: pointer;
+    accent-color: var(--carmine);
+}
+
+.toggle-mode-row {
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-editorial);
+    margin-top: 1.4rem;
+}
+
+.toggle-mode-link {
+    background: none;
+    border: none;
+    color: var(--carmine);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.82rem;
+    padding: 0;
+    margin-left: 0.3rem;
+}
+
+.toggle-mode-link:hover {
+    text-decoration: underline;
+}

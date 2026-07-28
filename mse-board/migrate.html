@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>MSE Board — Migração</title>
+<style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; }
+    button { padding: 12px 20px; font-size: 15px; cursor: pointer; background: #2563eb; color: #fff; border: none; border-radius: 6px; }
+    button:hover { background: #1a4fd6; }
+    pre { background: #f3f4f6; padding: 16px; border-radius: 6px; white-space: pre-wrap; margin-top: 20px; }
+</style>
+</head>
+<body>
+    <h2>Migração: pessoas e post-its para as tabelas novas</h2>
+    <p>Clique no botão abaixo <strong>uma única vez</strong>. É seguro clicar mais de uma vez também — quem já foi migrado é pulado.</p>
+    <button id="btn">Rodar Migração</button>
+    <pre id="result"></pre>
+
+    <script src="config.js.php"></script>
+    <script>
+        // Chave e endereço vêm do .env, entregues por config.js.php (window.APP_CONFIG).
+        const API_SECRET = (window.APP_CONFIG && window.APP_CONFIG.API_SECRET) || '';
+        const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || 'http://localhost/mse_board/mse-backend/api';
+
+        document.getElementById('btn').addEventListener('click', async () => {
+            const result = document.getElementById('result');
+            result.textContent = 'Rodando...';
+            try {
+                const res = await fetch(`${API_BASE}/migrate_to_tables.php`, {
+                    headers: { 'X-API-Key': API_SECRET }
+                });
+                const text = await res.text();
+                result.textContent = text;
+            } catch (err) {
+                result.textContent = 'Erro: ' + err.message;
+            }
+        });
+    </script>
+</body>
+</html>

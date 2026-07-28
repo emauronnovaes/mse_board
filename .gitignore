@@ -1,0 +1,14 @@
+# Segredos / variáveis de ambiente
+.env
+*.env
+!.env.example
+
+# Uploads e backups gerados em runtime
+/mse-backend/uploads/
+/mse-backend/backups/
+
+# Arquivos do sistema operacional / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
