@@ -567,6 +567,34 @@ h1, h2, h3, h4 {
     min-width: 0;
 }
 
+.column-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    line-height: 1;
+    flex-shrink: 0;
+    padding: 0.1rem 0.15rem;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.column-drag-handle:hover {
+    color: var(--accent);
+}
+
+.column-drag-handle:active {
+    cursor: grabbing;
+}
+
+.column.column-dragging {
+    opacity: 0.45;
+}
+
+.column.column-drop-target {
+    border: 2px dashed var(--accent);
+    background-color: var(--bg);
+}
+
 .column-avatar {
     width: 28px;
     height: 28px;

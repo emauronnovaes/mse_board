@@ -113,6 +113,7 @@ function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }
 function saveCardToServer(card) { return apiCall('save_card.php', card); }
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
 function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt }); }
+function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
 function toggleChecklistItemOnServer(cardId, itemIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex }); }
 function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.php', { cardId, author, text }); }
 
@@ -3772,6 +3773,37 @@ function buildColumn(person) {
     const column = document.createElement('div');
     column.className = isDone ? 'column column-done' : 'column';
     column.id = `col_${personId}`;
+    column.draggable = true;
+    column.dataset.personId = personId;
+
+    column.addEventListener('dragstart', (e) => {
+        if (column.dataset.dragFromHandle !== 'true') {
+            e.preventDefault();
+            return;
+        }
+        e.dataTransfer.setData('application/x-mse-column', personId);
+        e.dataTransfer.effectAllowed = 'move';
+        column.classList.add('column-dragging');
+    });
+    column.addEventListener('dragend', () => {
+        delete column.dataset.dragFromHandle;
+        column.classList.remove('column-dragging');
+        document.querySelectorAll('.column.column-drop-target').forEach(c => c.classList.remove('column-drop-target'));
+    });
+    column.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('application/x-mse-column')) {
+            e.preventDefault();
+            column.classList.add('column-drop-target');
+        }
+    });
+    column.addEventListener('dragleave', () => column.classList.remove('column-drop-target'));
+    column.addEventListener('drop', (e) => {
+        if (!e.dataTransfer.types.includes('application/x-mse-column')) return;
+        e.preventDefault();
+        column.classList.remove('column-drop-target');
+        const draggedId = e.dataTransfer.getData('application/x-mse-column');
+        if (draggedId && draggedId !== personId) reorderColumns(draggedId, personId);
+    });
 
     const deleteBtn = `<button class="delete-person-btn" title="Excluir Coluna" onclick="event.stopPropagation(); handleDeletePerson('${personId}')">🗑️</button>`;
 
@@ -3784,7 +3816,8 @@ function buildColumn(person) {
         avatarHtml = `<span class="column-avatar-fallback" onclick="openPersonModalForEdit('${personId}')">${getInitials(person.name)}</span>`;
     }
 
-    const headerClickable = `<div class="column-person-header">${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
+    const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna">⠿</span>`;
+    const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
     let bodyHtml;
     if (isDone) {
@@ -3817,7 +3850,26 @@ function buildColumn(person) {
         ${bodyHtml}
     `;
 
+    const handleEl = column.querySelector('.column-drag-handle');
+    if (handleEl) {
+        handleEl.addEventListener('mousedown', () => { column.dataset.dragFromHandle = 'true'; });
+    }
+
     return column;
+}
+
+function reorderColumns(draggedId, targetId) {
+    const draggedIdx = state.people.findIndex(p => p.id === draggedId);
+    const targetIdx = state.people.findIndex(p => p.id === targetId);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const [draggedPerson] = state.people.splice(draggedIdx, 1);
+    const newTargetIdx = state.people.findIndex(p => p.id === targetId);
+    state.people.splice(newTargetIdx, 0, draggedPerson);
+
+    renderBoard();
+    reorderPeopleOnServer(state.people.map(p => p.id));
+    logAudit(`Reordenou as colunas do quadro`);
 }
 
 function handleDeletePerson(personId) {
