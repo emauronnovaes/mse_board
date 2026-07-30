@@ -586,6 +586,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById('settingsModal').style.display = 'flex';
                 } else if (action === 'export') {
                     exportBoardData();
+                } else if (action === 'import-trello') {
+                    if (getMemberRole(currentUserName) !== 'Admin') {
+                        showToast('Somente administradores podem importar dados do Trello.');
+                    } else {
+                        document.getElementById('trelloImportFile').value = '';
+                        document.getElementById('trelloImportProgress').textContent = '';
+                        document.getElementById('importTrelloModal').style.display = 'flex';
+                    }
                 } else if (action === 'server-backup') {
                     if (getMemberRole(currentUserName) !== 'Admin') {
                         showToast('Somente administradores podem gerenciar backups no servidor.');
@@ -913,6 +921,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Alertas de Vencimento
         document.getElementById('closeDueAlertsModalBtn').addEventListener('click', () => {
             document.getElementById('dueAlertsModal').style.display = 'none';
+        });
+
+        // Importar do Trello
+        document.getElementById('closeImportTrelloModalBtn').addEventListener('click', () => {
+            document.getElementById('importTrelloModal').style.display = 'none';
+        });
+
+        document.getElementById('startTrelloImportBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('trelloImportFile');
+            const file = fileInput.files[0];
+            const progressEl = document.getElementById('trelloImportProgress');
+
+            if (!file) {
+                showToast('Escolha o arquivo .json exportado do Trello primeiro.');
+                return;
+            }
+
+            const includeArchived = document.getElementById('importArchivedToggle').checked;
+
+            try {
+                progressEl.textContent = 'Lendo arquivo...';
+                const text = await file.text();
+                const trelloData = JSON.parse(text);
+                await importFromTrello(trelloData, includeArchived, progressEl);
+            } catch (err) {
+                console.error('Erro ao importar do Trello:', err);
+                progressEl.textContent = 'Falha ao ler o arquivo. Confira se é mesmo um export .json do Trello.';
+                logError('Falha ao importar do Trello', 'Confira se o arquivo é um export JSON válido (menu do Trello → Exportar como JSON).');
+            }
         });
 
         // Backup no Servidor
@@ -1298,11 +1335,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('searchInput').addEventListener('input', renderBoard);
         document.getElementById('filterPriority').addEventListener('change', renderBoard);
+        document.getElementById('filterAssignee').addEventListener('change', renderBoard);
         document.getElementById('filterOverdue').addEventListener('change', renderBoard);
         document.getElementById('filterStarred').addEventListener('change', renderBoard);
         document.getElementById('clearFiltersBtn').addEventListener('click', () => {
             document.getElementById('searchInput').value = '';
             document.getElementById('filterPriority').value = '';
+            document.getElementById('filterAssignee').value = '';
             document.getElementById('filterOverdue').checked = false;
             document.getElementById('filterStarred').checked = false;
             renderBoard();
@@ -2403,7 +2442,13 @@ function computeDeliveryStatsByPerson() {
                 onTimePct: withDueDate > 0 ? Math.round((s.onTime / withDueDate) * 100) : null
             };
         })
-        .sort((a, b) => b.total - a.total);
+        .sort((a, b) => {
+            // Quem tem % calculado vem primeiro, do melhor pro pior. Sem prazo definido fica por último.
+            if (a.onTimePct === null && b.onTimePct === null) return b.total - a.total;
+            if (a.onTimePct === null) return 1;
+            if (b.onTimePct === null) return -1;
+            return b.onTimePct - a.onTimePct;
+        });
 }
 
 function exportDeliveryReportCsv() {
@@ -2464,12 +2509,25 @@ function renderDeliveryReport() {
         return;
     }
 
-    personContainer.innerHTML = byPerson.map(p => {
+    const ranked = byPerson.filter(p => p.onTimePct !== null);
+    const worstPct = ranked.length > 1 ? ranked[ranked.length - 1].onTimePct : null;
+
+    personContainer.innerHTML = byPerson.map((p, idx) => {
         const pctColor = p.onTimePct === null ? 'var(--text-muted)' : (p.onTimePct >= 70 ? 'var(--green)' : p.onTimePct >= 40 ? 'var(--gold)' : 'var(--red)');
         const pctLabel = p.onTimePct === null ? 'sem prazo definido' : `${p.onTimePct}% no prazo`;
+
+        let rankIcon = '';
+        if (p.onTimePct !== null) {
+            const rankPos = ranked.indexOf(p);
+            if (rankPos === 0 && ranked.length > 1) rankIcon = '🥇 ';
+            else if (rankPos === 1) rankIcon = '🥈 ';
+            else if (rankPos === 2) rankIcon = '🥉 ';
+            else if (p.onTimePct === worstPct && worstPct < 50) rankIcon = '⚠️ ';
+        }
+
         return `
             <div class="member-row">
-                <span class="member-row-name">${escapeHtml(p.name)}</span>
+                <span class="member-row-name">${rankIcon}${escapeHtml(p.name)}</span>
                 <span style="display:flex; align-items:center; gap:0.6rem; font-size:0.8rem;">
                     <span style="color:var(--text-muted);">${p.total} concluído${p.total > 1 ? 's' : ''}</span>
                     <span style="color:${pctColor}; font-weight:600;">${pctLabel}</span>
@@ -2855,6 +2913,100 @@ async function renderBackupsList() {
     });
 }
 
+// ==========================================
+// IMPORTAR DO TRELLO
+// ==========================================
+
+async function importFromTrello(trelloData, includeArchived, progressEl) {
+    if (!trelloData.lists || !trelloData.cards) {
+        progressEl.textContent = 'Esse arquivo não parece ser um export de quadro do Trello (faltam "lists" e "cards").';
+        return;
+    }
+
+    const lists = trelloData.lists.filter(l => includeArchived || !l.closed);
+    const listIdToPersonId = {};
+
+    progressEl.textContent = `Criando ${lists.length} coluna(s)...`;
+
+    for (const list of lists) {
+        const newPersonId = addPerson(list.name || 'Sem nome', null, false);
+        listIdToPersonId[list.id] = newPersonId;
+        await new Promise(r => setTimeout(r, 30)); // pequena pausa pra não afogar o servidor
+    }
+
+    const cardsToImport = trelloData.cards.filter(c => {
+        if (!listIdToPersonId[c.idList]) return false; // lista foi pulada (arquivada e includeArchived=false)
+        if (!includeArchived && c.closed) return false;
+        return true;
+    });
+
+    progressEl.textContent = `Importando ${cardsToImport.length} post-it(s)...`;
+    let done = 0;
+
+    for (const trelloCard of cardsToImport) {
+        const personId = listIdToPersonId[trelloCard.idList];
+
+        // Junta itens de checklist do Trello (se tiver) como linhas do post-it
+        let lines = [];
+        if (Array.isArray(trelloData.checklists)) {
+            const cardChecklists = trelloData.checklists.filter(cl => cl.idCard === trelloCard.id);
+            cardChecklists.forEach(cl => {
+                (cl.checkItems || []).forEach(item => lines.push(item.name));
+            });
+        }
+        if (lines.length === 0 && trelloCard.desc) {
+            lines = trelloCard.desc.split('\n').map(l => l.trim()).filter(Boolean);
+        }
+
+        const dueDate = trelloCard.due ? new Date(trelloCard.due).toISOString().slice(0, 10) : '';
+
+        const newCardId = addCard({
+            personId,
+            title: trelloCard.name || 'Sem título',
+            lines,
+            color: 'yellow',
+            priority: 'media',
+            dueDate,
+            author: `Importado do Trello por ${deriveNameFromEmail(currentUserName)}`,
+            attachments: [],
+            customValues: {},
+            labelIds: [],
+            stickerId: null,
+            coverImage: null
+        });
+
+        // Restaura o estado (marcado/desmarcado) real dos itens do checklist do Trello
+        if (Array.isArray(trelloData.checklists) && lines.length > 0) {
+            const card = state.cards.find(c => c.id === newCardId);
+            if (card) {
+                const cardChecklists = trelloData.checklists.filter(cl => cl.idCard === trelloCard.id);
+                let idx = 0;
+                cardChecklists.forEach(cl => {
+                    (cl.checkItems || []).forEach(item => {
+                        if (card.checklist[idx]) {
+                            card.checklist[idx].checked = item.state === 'complete';
+                        }
+                        idx++;
+                    });
+                });
+                if (trelloCard.closed) card.archived = true;
+                saveCardToServer(card);
+            }
+        }
+
+        done++;
+        if (done % 5 === 0 || done === cardsToImport.length) {
+            progressEl.textContent = `Importando post-its... (${done}/${cardsToImport.length})`;
+        }
+        await new Promise(r => setTimeout(r, 20));
+    }
+
+    renderBoard();
+    logAudit(`Importou ${lists.length} colunas e ${cardsToImport.length} post-its do Trello`);
+    progressEl.textContent = `✅ Pronto! ${lists.length} coluna(s) e ${cardsToImport.length} post-it(s) importados.`;
+    showToast('Importação do Trello concluída!', 'success');
+}
+
 function exportBoardData() {
     const payload = {
         exportedAt: new Date().toISOString(),
@@ -3215,7 +3367,8 @@ function getFilters() {
         text: (document.getElementById('searchInput').value || '').toLowerCase().trim(),
         priority: document.getElementById('filterPriority').value,
         overdueOnly: document.getElementById('filterOverdue').checked,
-        starredOnly: document.getElementById('filterStarred').checked
+        starredOnly: document.getElementById('filterStarred').checked,
+        assignee: document.getElementById('filterAssignee') ? document.getElementById('filterAssignee').value : ''
     };
 }
 
@@ -3328,15 +3481,35 @@ function cardMatchesFilters(card, filters) {
         const haystack = [
             card.title,
             card.author,
+            ...(card.assignees || []),
             ...card.checklist.map(i => i.text)
         ].join(' ').toLowerCase();
         if (!haystack.includes(filters.text)) return false;
     }
 
+    if (filters.assignee && !(card.assignees || []).includes(filters.assignee)) return false;
+
     return true;
 }
 
+function populateAssigneeFilter() {
+    const select = document.getElementById('filterAssignee');
+    if (!select) return;
+
+    const currentValue = select.value;
+    const allAssignees = new Set();
+    state.cards.forEach(c => (c.assignees || []).forEach(a => allAssignees.add(a)));
+
+    const sorted = [...allAssignees].sort((a, b) => deriveNameFromEmail(a).localeCompare(deriveNameFromEmail(b)));
+
+    select.innerHTML = '<option value="">Responsável: Todos</option>' +
+        sorted.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(deriveNameFromEmail(a))}</option>`).join('');
+
+    if (sorted.includes(currentValue)) select.value = currentValue;
+}
+
 function renderBoard() {
+    populateAssigneeFilter();
     const grid = document.getElementById('peopleGrid');
     const altContainer = document.getElementById('alternateViewContainer');
 
@@ -3381,6 +3554,13 @@ function renderBoard() {
                     cardMatchesFilters(c, filters)
                 );
                 cardsForLane.forEach(card => container.appendChild(buildPostItElement(card)));
+
+                // "Em Espera" e "Concluído" minimizam sozinhos quando estão vazios,
+                // dando mais espaço pra "A Fazer" mostrar mais post-its de uma vez
+                if (status !== 'todo') {
+                    const laneEl = container.closest('.lane');
+                    if (laneEl) laneEl.classList.toggle('lane-collapsed', cardsForLane.length === 0);
+                }
             });
         }
     });
@@ -3616,7 +3796,7 @@ function buildColumn(person) {
             { key: 'done', label: 'Concluído' }
         ];
         bodyHtml = lanes.map(lane => `
-            <div class="lane lane-${lane.key}">
+            <div class="lane lane-${lane.key}" id="lanewrap_${personId}__${lane.key}" ondragover="allowDrop(event)" ondrop="drop(event)">
                 <div class="lane-header">
                     <span>${lane.label}</span>
                     <span class="lane-count" id="count_${personId}__${lane.key}">0</span>
@@ -4166,7 +4346,7 @@ function allowDrop(e) {
 }
 
 document.addEventListener('dragleave', (e) => {
-    if (e.target.classList.contains('cards-container')) {
+    if (e.target.classList.contains('cards-container') || e.target.classList.contains('lane')) {
         e.target.classList.remove('drag-over');
     }
 });
@@ -4177,7 +4357,7 @@ function drop(e) {
     container.classList.remove('drag-over');
 
     const cardId = e.dataTransfer.getData('text/plain');
-    const raw = container.id.replace('cards_', '');
+    const raw = container.id.replace('cards_', '').replace('lanewrap_', '');
     let newPersonId = raw;
     let newStatus = null;
 
