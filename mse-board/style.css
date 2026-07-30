@@ -32,9 +32,9 @@
     --radius-l: 14px;
 
     /* Densidade (personalizável em Preferências) */
-    --density-card-pad: 0.9rem;
+    --density-card-pad: 0.7rem;
     --density-col-pad: 1rem;
-    --density-gap: 0.9rem;
+    --density-gap: 0.6rem;
 
     /* Post-its em tons suaves, coerentes com a paleta */
     --postit-yellow: #F3E9D2;
@@ -472,29 +472,34 @@ h1, h2, h3, h4 {
     padding-bottom: 1.5rem;
     flex: 1;
     min-height: 0;
+    scrollbar-width: auto;
+    scrollbar-color: var(--accent) var(--border);
 }
 
 .columns-grid::-webkit-scrollbar {
-    height: 8px;
+    height: 14px;
 }
 .columns-grid::-webkit-scrollbar-track {
-    background: var(--bg);
+    background: var(--border);
+    border-radius: 7px;
 }
 .columns-grid::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 5px;
+    background: var(--accent);
+    border-radius: 7px;
+    border: 3px solid var(--border);
 }
 .columns-grid::-webkit-scrollbar-thumb:hover {
-    background: var(--accent);
+    background: var(--carmine, var(--accent));
+    opacity: 0.85;
 }
 
 .column {
     background-color: var(--card);
     border-radius: var(--radius-m);
     padding: var(--density-col-pad);
-    min-width: 240px;
-    max-width: 240px;
-    flex: 0 0 240px;
+    min-width: 320px;
+    max-width: 320px;
+    flex: 0 0 320px;
     border: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -523,7 +528,7 @@ h1, h2, h3, h4 {
 .column-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 1rem;
     padding-bottom: 0.6rem;
     border-bottom: 2px solid var(--border);
@@ -592,15 +597,28 @@ h1, h2, h3, h4 {
     font-size: 0.92rem;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: break-word;
+    line-height: 1.3;
 }
 
 .column-header-actions {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+}
+
+/* Raia minimizada (Em Espera/Concluído vazias) — dá mais espaço pra "A Fazer" */
+.lane-collapsed {
+    flex: 0 0 auto !important;
+}
+
+.lane-collapsed .cards-container {
+    display: none;
+}
+
+.lane-collapsed .lane-header {
+    opacity: 0.55;
 }
 
 .delete-person-btn {
@@ -658,6 +676,12 @@ h1, h2, h3, h4 {
     border: 1px dashed var(--accent);
 }
 
+.lane-collapsed.drag-over .lane-header {
+    background-color: var(--bg);
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius-s);
+}
+
 .postit {
     padding: var(--density-card-pad);
     border-radius: var(--radius-l);
@@ -670,7 +694,7 @@ h1, h2, h3, h4 {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .postit:hover {
@@ -2155,7 +2179,7 @@ body.observer-mode .cards-container.drag-over {
 }
 
 .postit-compact-top h4 {
-    font-size: 0.86rem;
+    font-size: 0.84rem;
     font-weight: 700;
     line-height: 1.3;
     margin: 0;
