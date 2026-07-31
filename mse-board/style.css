@@ -567,6 +567,34 @@ h1, h2, h3, h4 {
     min-width: 0;
 }
 
+.column-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    line-height: 1;
+    flex-shrink: 0;
+    padding: 0.1rem 0.15rem;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.column-drag-handle:hover {
+    color: var(--accent);
+}
+
+.column-drag-handle:active {
+    cursor: grabbing;
+}
+
+.column.column-dragging {
+    opacity: 0.45;
+}
+
+.column.column-drop-target {
+    border: 2px dashed var(--accent);
+    background-color: var(--bg);
+}
+
 .column-avatar {
     width: 28px;
     height: 28px;
@@ -2198,6 +2226,16 @@ body.observer-mode .cards-container.drag-over {
     opacity: 1;
 }
 
+.postit-dates {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .postit-compact-meta {
     display: flex;
     align-items: center;
@@ -2633,4 +2671,783 @@ body.observer-mode .cards-container.drag-over {
         box-shadow: none !important;
         max-width: 100% !important;
     }
+}
+
+/* ==========================================
+   DASHBOARD DE ENTREGAS — RANKING VISUAL
+   ========================================== */
+.dashboard-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.ranking-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.7rem 0.9rem;
+    background-color: var(--bg);
+    border-radius: var(--radius-m);
+    border: 1px solid var(--border);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ranking-row:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.rank-badge {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border-radius: 50%;
+}
+
+.rank-badge-gold { background: linear-gradient(135deg, #FFD966, #E8B800); font-size: 1.25rem; }
+.rank-badge-silver { background: linear-gradient(135deg, #E2E2E2, #B8B8B8); font-size: 1.25rem; }
+.rank-badge-bronze { background: linear-gradient(135deg, #E3A25E, #C97F3B); font-size: 1.25rem; }
+.rank-badge-warning { background: rgba(210, 59, 59, 0.12); font-size: 1.1rem; }
+.rank-badge-plain { background: var(--card); color: var(--text-muted); font-size: 0.8rem; border: 1px solid var(--border); }
+
+.ranking-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--card);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.ranking-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--navy, #1f3a63));
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.ranking-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.ranking-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ranking-bar-track {
+    width: 100%;
+    height: 6px;
+    background-color: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ranking-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.ranking-stats {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.1rem;
+}
+
+.ranking-pct {
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.ranking-total {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* --- Tarefas em andamento por pessoa (id reaproveitado como tbody agora — sem restrições de altura) --- */
+
+.active-tasks-group {
+    background-color: var(--bg);
+    border-radius: var(--radius-m);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.active-tasks-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    background-color: var(--card);
+    border-bottom: 1px solid var(--border);
+}
+
+.active-tasks-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.active-tasks-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--navy, #1f3a63));
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.68rem;
+}
+
+.active-tasks-group-name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex: 1;
+}
+
+.active-tasks-group-count {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.5rem;
+    border-radius: 10px;
+}
+
+.active-tasks-group-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.active-task-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.8rem;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.active-task-item:first-child {
+    border-top: none;
+}
+
+.active-task-item:hover {
+    background-color: var(--card);
+}
+
+.active-task-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.active-task-due {
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ==========================================
+   DASHBOARD DE ENTREGAS — IDENTIDADE "MSE CAPEX SEGURO"
+   Tokens oficiais do design system: fundo cinza claro, cartões brancos,
+   navy só no cabeçalho/hero, rótulos mono maiúsculos, azul=ativo,
+   verde=saudável, âmbar=atenção, vermelho=raro (só quando é crítico mesmo).
+   ========================================== */
+.dashboard-modal-content {
+    --dsg-bg: #e8eaee;
+    --dsg-card: #fff;
+    --dsg-line: #e4e7ec;
+    --dsg-line-2: #eef0f3;
+    --dsg-ink: #192231;
+    --dsg-body: #4d5868;
+    --dsg-mut: #98a1b0;
+    --dsg-mut-2: #aab2bf;
+    --dsg-blue: #2563eb;
+    --dsg-green: #1f9d57;
+    --dsg-amber: #d9911a;
+    --dsg-red: #d23b3b;
+    --dsg-r: 14px;
+    --dsg-shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+
+    max-width: 1180px;
+    width: 96vw;
+    background-color: var(--dsg-bg) !important;
+    color: var(--dsg-ink);
+    font-family: "IBM Plex Sans", sans-serif;
+    border-radius: 16px;
+    padding: 0;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.dashboard-close-btn {
+    color: rgba(255,255,255,.7);
+    z-index: 5;
+}
+.dashboard-close-btn:hover { color: #fff; }
+
+/* --- Hero navy (só aqui, igual ao cabeçalho do design system) --- */
+.dashboard-hero {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    background:
+        radial-gradient(640px 360px at 85% -30%, rgba(64,120,210,.5), transparent 62%),
+        linear-gradient(118deg, #13223b 0%, #193053 68%, #1f3a63 100%);
+    padding: 1.6rem 1.8rem;
+    border-radius: 16px 16px 0 0;
+}
+.dashboard-hero .dashboard-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-bottom: 5px;
+}
+.dashboard-hero .dashboard-title b { color: #5b9bf0; }
+.dashboard-hero .dashboard-subtitle {
+    font-family: "IBM Plex Mono";
+    font-size: 12.5px;
+    letter-spacing: .6px;
+    color: rgba(255,255,255,.55);
+}
+
+.dashboard-section { padding: 1.6rem 1.8rem; }
+.dashboard-section:first-of-type { padding-top: 1.8rem; }
+
+/* --- Rótulo de seção (eyebrow mono maiúsculo) --- */
+.dsg-sec {
+    font-family: "IBM Plex Mono";
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dsg-mut);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.dsg-sec .ct {
+    margin-left: auto;
+    color: var(--dsg-mut-2);
+    letter-spacing: .5px;
+    font-weight: 500;
+}
+
+/* --- Filtro de período --- */
+.dashboard-filter-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    box-shadow: var(--dsg-shadow);
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+}
+
+.dashboard-filter-field { display: flex; flex-direction: column; gap: .35rem; }
+
+.dashboard-filter-field label {
+    font-family: "IBM Plex Mono";
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--dsg-mut);
+}
+
+.dashboard-filter-field input[type="date"] {
+    background-color: #fff;
+    border: 1px solid var(--dsg-line);
+    color: var(--dsg-ink);
+    padding: .5rem .7rem;
+    border-radius: 9px;
+    font-family: "IBM Plex Sans";
+    font-size: .95rem;
+}
+
+.dashboard-clear-btn {
+    background-color: #fff;
+    border: 1px solid var(--dsg-line);
+    color: var(--dsg-body);
+    padding: .55rem 1rem;
+    border-radius: 9px;
+    font-family: "IBM Plex Sans";
+    font-size: .9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: .15s;
+}
+.dashboard-clear-btn:hover { background-color: #f1f3f5; }
+
+.dashboard-filter-note {
+    margin-left: auto;
+    font-family: "IBM Plex Mono";
+    font-size: 12px;
+    letter-spacing: .3px;
+    color: var(--dsg-mut-2);
+}
+
+/* --- Tabela de ranking --- */
+.dashboard-table-wrap {
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    box-shadow: var(--dsg-shadow);
+    overflow: hidden;
+    overflow-x: auto;
+}
+
+.dashboard-table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+
+.dashboard-table thead th {
+    text-align: left;
+    padding: .8rem 1rem;
+    font-family: "IBM Plex Mono";
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--dsg-mut);
+    background-color: #fbfcfd;
+    border-bottom: 1px solid var(--dsg-line);
+    white-space: nowrap;
+}
+
+.dashboard-table tbody tr { border-top: 1px solid var(--dsg-line-2); transition: background-color .15s; }
+.dashboard-table tbody tr:hover { background-color: #fbfcfd; }
+.dashboard-table td { padding: .85rem 1rem; vertical-align: middle; white-space: nowrap; }
+
+.dash-rank-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 7px;
+    font-family: "IBM Plex Mono"; font-weight: 600; font-size: .75rem;
+}
+.dash-rank-gold   { background: linear-gradient(135deg, #f0c040, #c9941a); color: #2b1d00; }
+.dash-rank-silver { background: linear-gradient(135deg, #d6dae2, #a3a9b7); color: #1a1d24; }
+.dash-rank-bronze { background: linear-gradient(135deg, #d99456, #a86a34); color: #2b1a00; }
+.dash-rank-plain  { background-color: var(--dsg-line-2); color: var(--dsg-mut); }
+
+.dash-person-cell { display: flex; align-items: center; gap: .6rem; font-weight: 600; color: var(--dsg-ink); }
+
+.dash-table-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.dash-table-avatar-fallback {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--dsg-blue), #1a4fd6);
+    color: #fff; font-family: "IBM Plex Sans"; font-weight: 700; font-size: .88rem;
+}
+
+.dash-ontime-num { color: var(--dsg-green); font-weight: 700; }
+.dash-late-num   { color: var(--dsg-red); font-weight: 700; }
+.dash-total-num  { color: var(--dsg-ink); font-weight: 600; }
+
+.dash-proportion-bar {
+    display: flex; width: 130px; height: 8px; border-radius: 4px; overflow: hidden;
+    background-color: var(--dsg-line-2);
+}
+.dash-proportion-ontime { background-color: var(--dsg-green); }
+.dash-proportion-late   { background-color: var(--dsg-red); }
+
+.dash-pct-label { font-family: "IBM Plex Mono"; font-weight: 600; font-size: .95rem; }
+
+/* --- Colunas de atividades em andamento (o que a pessoa está "Fazendo") --- */
+.dashboard-active-columns { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .8rem; }
+
+.dash-person-column {
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    box-shadow: var(--dsg-shadow);
+    min-width: 260px; max-width: 260px; flex-shrink: 0; overflow: hidden;
+}
+
+.dash-person-column-header {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .85rem 1rem;
+    background-color: #fbfcfd;
+    border-bottom: 1px solid var(--dsg-line);
+}
+
+.dash-col-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.dash-col-avatar-fallback {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--dsg-blue), #1a4fd6);
+    color: #fff; font-family: "IBM Plex Sans"; font-weight: 700; font-size: .88rem;
+}
+
+.dash-col-name {
+    font-weight: 700; font-size: .95rem; color: var(--dsg-ink); flex: 1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.dash-col-count {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; font-weight: 500; letter-spacing: .5px;
+    color: var(--dsg-mut); background-color: #fff; border: 1px solid var(--dsg-line);
+    padding: .1rem .5rem; border-radius: 10px;
+}
+
+.dash-person-column-body {
+    display: flex; flex-direction: column; gap: .7rem; padding: .8rem;
+    max-height: 420px; overflow-y: auto;
+}
+
+.dash-task-card {
+    background-color: #fff;
+    border: 1px solid var(--dsg-line);
+    border-radius: 11px;
+    padding: .75rem .85rem;
+    cursor: pointer;
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.dash-task-card:hover {
+    border-color: var(--dsg-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -8px rgba(16,24,40,.18);
+}
+
+.dash-task-category {
+    font-family: "IBM Plex Mono"; font-size: 12px; font-weight: 500; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--dsg-blue); margin-bottom: .35rem;
+}
+
+.dash-task-title { font-size: .95rem; font-weight: 700; color: var(--dsg-ink); line-height: 1.3; margin-bottom: .4rem; }
+
+.dash-task-dates {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; color: var(--dsg-mut);
+    margin-bottom: .5rem;
+}
+
+.dash-task-note {
+    font-size: .92rem; color: var(--dsg-body); background-color: #fbfcfd;
+    border: 1px solid var(--dsg-line-2); border-radius: 8px;
+    padding: .4rem .55rem; margin-bottom: .55rem; line-height: 1.35;
+}
+
+/* --- Status de entrega (tag no estilo .st do design system) --- */
+.dash-task-status {
+    display: inline-block;
+    font-family: "IBM Plex Mono"; font-size: 12px; font-weight: 600; letter-spacing: .3px;
+    padding: 2px 8px; border-radius: 6px; margin-bottom: .5rem;
+}
+.dash-task-status.on-time  { background: rgba(31,157,87,.1); color: #197a45; }
+.dash-task-status.due-soon { background: rgba(217,145,26,.12); color: #b8780f; }
+.dash-task-status.late     { background: rgba(210,59,59,.09); color: #bf3a3a; }
+
+.dash-task-progress-row { display: flex; align-items: center; gap: .5rem; }
+.dash-task-progress-track { flex: 1; height: 6px; background-color: var(--dsg-line-2); border-radius: 4px; overflow: hidden; }
+.dash-task-progress-fill { height: 100%; border-radius: 4px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
+.dash-task-progress-pct {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; font-weight: 600; color: var(--dsg-ink); flex-shrink: 0;
+}
+
+/* --- Ajustes de contraste pra componentes reaproveitados dentro do dashboard claro --- */
+.dashboard-modal-content .stat-card {
+    background-color: var(--dsg-card);
+    border-color: var(--dsg-line);
+    box-shadow: var(--dsg-shadow);
+}
+.dashboard-modal-content .stat-value { color: var(--dsg-ink); }
+.dashboard-modal-content .stat-label {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--dsg-mut);
+}
+
+.dashboard-modal-content .corner-options {
+    background-color: #dde1e7;
+    border-radius: 10px;
+    padding: 3px;
+    border: none;
+}
+.dashboard-modal-content .report-period-btn {
+    background-color: transparent;
+    border-color: transparent;
+    color: #5a6573;
+    font-family: "IBM Plex Sans";
+}
+.dashboard-modal-content .report-period-btn.is-current {
+    background-color: var(--dsg-blue);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(37,99,235,.4);
+}
+.dashboard-modal-content .report-period-btn:hover:not(.is-current) {
+    background-color: rgba(0,0,0,.04);
+}
+
+.dashboard-modal-content .input-group label {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; font-weight: 500; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--dsg-mut);
+}
+
+.dashboard-modal-content .btn-secondary {
+    background-color: #fff;
+    border-color: var(--dsg-line);
+    color: var(--dsg-ink);
+    font-family: "IBM Plex Sans";
+}
+.dashboard-modal-content .btn-secondary:hover {
+    background-color: #f1f3f5;
+    border-color: var(--dsg-blue);
+}
+
+.dashboard-modal-content .chart-row-label,
+.dashboard-modal-content .chart-row-count {
+    font-family: "IBM Plex Mono";
+    color: var(--dsg-body);
+}
+.dashboard-modal-content .chart-row-track { background-color: var(--dsg-line-2); }
+.dashboard-modal-content .chart-row-fill { background-color: var(--dsg-blue); }
+
+/* --- Pódios "Mais Pontuais" / "Mais Atrasos" (anel de score, estilo MSE) --- */
+.dashboard-podiums {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.dashboard-podium-col {
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    box-shadow: var(--dsg-shadow);
+    padding: 1rem 1.1rem;
+}
+
+.dashboard-podium-heading {
+    font-family: "IBM Plex Mono";
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: .8rem;
+}
+.dashboard-podium-heading-warn { color: var(--red); }
+
+.podium-entry {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .5rem 0;
+}
+.podium-entry + .podium-entry {
+    border-top: 1px solid var(--dsg-line-2);
+}
+
+.podium-ring { position: relative; flex-shrink: 0; }
+.podium-ring .pr-txt {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; line-height: 1;
+}
+.podium-ring .pr-n { font-family: "IBM Plex Sans"; font-weight: 700; font-size: 13px; color: var(--dsg-ink); }
+
+.podium-entry-avatar {
+    width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+}
+.podium-entry-avatar-fallback {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #fff; font-family: "IBM Plex Sans"; font-weight: 700; font-size: .88rem;
+}
+
+.podium-entry-info { flex: 1; min-width: 0; }
+.podium-entry-name {
+    font-family: "IBM Plex Sans"; font-weight: 600; font-size: .92rem; color: var(--dsg-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.podium-entry-sub {
+    font-family: "IBM Plex Mono"; font-size: 12.5px; color: var(--dsg-mut); margin-top: 1px;
+}
+
+.dashboard-podium-empty {
+    font-family: "IBM Plex Mono"; font-size: 11.5px; color: var(--dsg-mut-2); padding: .5rem 0;
+}
+
+@media (max-width: 700px) {
+    .dashboard-podiums { grid-template-columns: 1fr; }
+}
+
+/* ==========================================
+   MODO "SOMENTE DASHBOARD" — pra quem não foi convidado ao quadro.
+   Esconde a barra lateral e o quadro inteiro; o dashboard vira a página inteira
+   (não um modal flutuando por cima), sem botão de fechar (não tem pra onde voltar).
+   ========================================== */
+.dashboard-only-logout-btn {
+    position: absolute;
+    top: 1.4rem;
+    right: 1.8rem;
+    background-color: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    color: #fff;
+    font-family: "IBM Plex Sans";
+    font-size: .88rem;
+    font-weight: 600;
+    padding: .45rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color .15s;
+}
+.dashboard-only-logout-btn:hover {
+    background-color: rgba(255,255,255,.18);
+}
+
+body.dashboard-only-mode .sidebar,
+body.dashboard-only-mode .board-shell {
+    display: none !important;
+}
+
+body.dashboard-only-mode #deliveryReportModal {
+    display: flex !important;
+    position: static;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg);
+    backdrop-filter: none;
+    overflow-y: auto;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+body.dashboard-only-mode .dashboard-close-btn {
+    display: none;
+}
+
+body.dashboard-only-mode .dashboard-modal-content {
+    margin: 2rem auto;
+    max-height: none;
+}
+
+/* --- Tabela "Tarefas por Pessoa" (planilha) --- */
+.dashboard-spreadsheet .dash-person-group-row td {
+    background-color: var(--dsg-line-2);
+    font-family: "IBM Plex Mono";
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: var(--dsg-ink);
+    padding: .55rem 1rem;
+    border-top: 1px solid var(--dsg-line);
+}
+.dash-person-group-count {
+    font-weight: 400;
+    color: var(--dsg-mut);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: .4rem;
+}
+
+.dash-task-row {
+    cursor: pointer;
+    transition: background-color .15s;
+}
+.dash-task-row:hover td { background-color: #fbfcfd; }
+.dash-task-row td {
+    padding: .6rem 1rem;
+    font-size: .88rem;
+    vertical-align: top;
+    white-space: normal;
+}
+
+.dash-task-title-cell {
+    font-weight: 600;
+    color: var(--dsg-ink);
+    max-width: 220px;
+}
+
+.dash-mono-cell {
+    font-family: "IBM Plex Mono";
+    font-size: .84rem;
+    color: var(--dsg-body);
+    white-space: nowrap;
+}
+
+.dash-lane-tag {
+    display: inline-block;
+    font-family: "IBM Plex Mono";
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.dash-lane-todo    { background: rgba(37,99,235,.1);  color: #1a4fd6; }
+.dash-lane-testing { background: rgba(217,145,26,.12); color: #b8780f; }
+.dash-lane-paused  { background: rgba(152,161,176,.18); color: #5a6573; }
+.dash-lane-done    { background: rgba(31,157,87,.1);  color: #197a45; }
+
+.dash-table-progress-track {
+    width: 90px;
+    margin: 0;
+}
+
+.dash-obs-cell {
+    font-size: .92rem;
+    color: var(--dsg-body);
+    line-height: 1.5;
+    max-width: 260px;
+}
+
+/* --- Caixa de observação editável, por post-it, no dashboard --- */
+.dash-obs-checklist {
+    font-size: .9rem;
+    color: var(--dsg-mut);
+    line-height: 1.5;
+    margin-bottom: .4rem;
+}
+
+.dash-obs-box {
+    width: 100%;
+    min-height: 44px;
+    resize: vertical;
+    border: 1px solid var(--dsg-line);
+    border-radius: 8px;
+    padding: .4rem .55rem;
+    font-family: "IBM Plex Sans";
+    font-size: .84rem;
+    color: var(--dsg-ink);
+    background-color: #fff;
+    outline: none;
+    transition: border-color .15s;
+}
+.dash-obs-box:focus {
+    border-color: var(--dsg-blue);
+}
+.dash-obs-box::placeholder {
+    color: var(--dsg-mut-2);
 }

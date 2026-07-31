@@ -113,6 +113,7 @@ function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }
 function saveCardToServer(card) { return apiCall('save_card.php', card); }
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
 function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt }); }
+function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
 function toggleChecklistItemOnServer(cardId, itemIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex }); }
 function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.php', { cardId, author, text }); }
 
@@ -540,7 +541,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const userData = JSON.parse(localStorage.getItem('mse_user'));
 
         if (!userData) {
-            window.location.href = 'login.html';
+            document.body.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:center; height:100vh; text-align:center; font-family:'IBM Plex Sans', sans-serif; padding:2rem;">
+                    <div>
+                        <h2 style="margin-bottom:0.8rem;">Acesso não autorizado</h2>
+                        <p style="color:#666; max-width:420px;">Esta página só pode ser acessada através do Portal MSE. Volte ao portal e clique novamente no MSE Board.</p>
+                    </div>
+                </div>
+            `;
             return;
         }
 
@@ -911,6 +919,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
+        document.getElementById('reportDateFrom').addEventListener('change', renderDeliveryReport);
+        document.getElementById('reportDateTo').addEventListener('change', renderDeliveryReport);
+        document.getElementById('reportClearPeriodBtn').addEventListener('click', () => {
+            document.getElementById('reportDateFrom').value = '';
+            document.getElementById('reportDateTo').value = '';
+            renderDeliveryReport();
+        });
+
+        document.getElementById('taskSearchInput').addEventListener('input', renderDeliveryReport);
+        document.getElementById('taskFilterPerson').addEventListener('change', renderDeliveryReport);
+        document.getElementById('taskFilterLane').addEventListener('change', renderDeliveryReport);
+        document.getElementById('taskFilterClearBtn').addEventListener('click', () => {
+            document.getElementById('taskSearchInput').value = '';
+            document.getElementById('taskFilterPerson').value = '';
+            document.getElementById('taskFilterLane').value = '';
+            renderDeliveryReport();
+        });
+
         document.getElementById('exportReportCsvBtn').addEventListener('click', exportDeliveryReportCsv);
         document.getElementById('printReportBtn').addEventListener('click', () => {
             document.body.classList.add('printing-report');
@@ -1023,10 +1049,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             localStorage.removeItem('mse_user');
-            window.location.href = 'login.html';
+            window.location.reload();
         });
 
         await loadState();
+
+        // Quem NÃO está cadastrado em "Membros e Permissões" não foi convidado — só pode
+        // ver o Dashboard, e nada mais (sem acessar o quadro, colunas ou post-its).
+        const isInvited = !!state.members[userData.name];
+
+        if (!isInvited) {
+            if (!state.visitorLog) state.visitorLog = {};
+            state.visitorLog[userData.name] = Date.now();
+            saveState();
+            document.body.classList.add('dashboard-only-mode');
+            renderDeliveryReport();
+            document.getElementById('deliveryReportModal').style.display = 'flex';
+            const logoutBtn = document.getElementById('dashboardOnlyLogoutBtn');
+            logoutBtn.style.display = 'inline-block';
+            logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('mse_user');
+                window.location.reload();
+            });
+            return;
+        }
+
+        const effectiveRole = getMemberRole(userData.name);
+        if (effectiveRole !== userData.role) {
+            userData.role = effectiveRole;
+            localStorage.setItem('mse_user', JSON.stringify(userData));
+            userBadge.textContent = effectiveRole;
+            userBadge.classList.remove('badge-admin', 'badge-membro');
+            userBadge.classList.add(effectiveRole === 'Admin' ? 'badge-admin' : 'badge-membro');
+            document.getElementById('sidebarFootRole').textContent = effectiveRole;
+        }
+
         renderOnlineUsers(userData.name);
         applyBoardInfo();
         updatePendingApprovalsBadge();
@@ -1270,9 +1327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const color = document.getElementById('cardColor').value;
             const priority = document.getElementById('cardPriority').value;
             const dueDate = document.getElementById('cardDueDate').value;
-            const project = document.getElementById('cardProject').value.trim();
-            const estimatedHours = document.getElementById('cardEstimatedHours').value ? parseFloat(document.getElementById('cardEstimatedHours').value) : null;
-            const workedHours = document.getElementById('cardWorkedHours').value ? parseFloat(document.getElementById('cardWorkedHours').value) : null;
+            const startDate = document.getElementById('cardStartDate').value;
             const fileInput = document.getElementById('cardAttachments');
 
             const newAttachments = await processFiles(fileInput.files);
@@ -1283,9 +1338,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const coverImage = selectedCoverImage;
 
             if (editingId) {
-                updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, project, estimatedHours, workedHours });
+                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate });
             } else {
-                addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, project, estimatedHours, workedHours });
+                await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate });
             }
 
             renderBoard();
@@ -1502,26 +1557,6 @@ async function loadState() {
         personIdCounter = state.people.reduce((max, p) => Math.max(max, parseInt((p.id.split('_')[1])) || 0), 0);
         cardIdCounter = state.cards.reduce((max, c) => Math.max(max, parseInt((c.id.split('_')[1])) || 0), 0);
 
-        // Migração: garante que exista ao menos uma aba de "Concluído"
-        const hasDoneColumn = state.people.some(p => p.isDone);
-        const hasDoneCards = state.cards.some(c => c.personId === 'done');
-        if (!hasDoneColumn) {
-            if (hasDoneCards && !state.people.some(p => p.id === 'done')) {
-                const doneFallback = { id: 'done', name: 'Concluído', avatarUrl: null, isDone: true };
-                state.people.push(doneFallback);
-                savePersonToServer(doneFallback);
-            } else {
-                addPerson('Concluído', null, true);
-            }
-        }
-
-        // Garante que exista a coluna fixa "💡 Sugestões" (recebe post-its do GPT Maker também)
-        if (!state.people.some(p => p.id === 'suggestions')) {
-            const suggestionsFallback = { id: 'suggestions', name: '💡 Sugestões', avatarUrl: null, isDone: false };
-            state.people.push(suggestionsFallback);
-            savePersonToServer(suggestionsFallback);
-        }
-
         // Migração: novas estruturas (membros, campos personalizados, automação, auditoria)
         if (!state.members) state.members = {};
         if (!state.customFields) state.customFields = [];
@@ -1540,11 +1575,14 @@ async function loadState() {
         if (!state.loginAttempts) state.loginAttempts = {};
         if (!state.boardInfo) state.boardInfo = { name: 'Quadro Geral de Equipe', description: 'Adicione pessoas e atribua tarefas com checklists e anexos' };
         if (!state.errorLog) state.errorLog = [];
-        state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.project === undefined) c.project = null; if (c.estimatedHours === undefined) c.estimatedHours = null; if (c.workedHours === undefined) c.workedHours = null; });
+        state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.startDate === undefined) c.startDate = null; if (c.observacao === undefined) c.observacao = ''; });
         if (currentUserName && !state.knownUsers.includes(currentUserName)) state.knownUsers.push(currentUserName);
 
-        // Migração: cartões antigos ganham a raia "A Fazer" por padrão
-        state.cards.forEach(c => { if (!c.status) c.status = 'todo'; });
+        // Migração: cartões antigos ganham a raia "Fazendo" por padrão.
+        // "Em Espera" não existe mais — quem estava lá volta pra "Fazendo".
+        state.cards.forEach(c => {
+            if (!c.status || c.status === 'waiting') c.status = 'todo';
+        });
 
         isObserver = getMemberRole(currentUserName) === 'Observador';
         saveState();
@@ -2066,8 +2104,8 @@ function applyBoardInfo() {
 }
 
 function getMemberRole(name) {
-    if (!name || !state.members) return 'Editor';
-    return state.members[name] || 'Editor';
+    if (!name || !state.members) return 'Observador';
+    return state.members[name] || 'Observador';
 }
 
 function setMemberRole(name, role) {
@@ -2287,39 +2325,75 @@ function renderMembersList() {
     const names = Object.keys(state.members);
 
     if (names.length === 0) {
-        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum membro configurado ainda — todos usam o nível "Editor" por padrão.</p>';
+        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum membro convidado ainda — quem não estiver aqui só vê o Dashboard, sem acesso ao quadro.</p>';
+    } else {
+        list.innerHTML = '';
+        names.forEach(name => {
+            const row = document.createElement('div');
+            row.className = 'member-row';
+            row.innerHTML = `
+                <span class="member-row-name">${escapeHtml(name)}${name === currentUserName ? ' (você)' : ''}</span>
+                <div class="member-row-actions">
+                    <select class="member-role-select">
+                        <option value="Editor">Editor</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Observador">Observador</option>
+                    </select>
+                    <button type="button" class="remove-row-btn" title="Remover">&times;</button>
+                </div>
+            `;
+            row.querySelector('.member-role-select').value = state.members[name];
+            row.querySelector('.member-role-select').addEventListener('change', (e) => {
+                setMemberRole(name, e.target.value);
+                if (name === currentUserName) location.reload();
+            });
+            row.querySelector('.remove-row-btn').addEventListener('click', () => {
+                showConfirm(`Remover "${name}" do quadro? Essa pessoa perde o acesso imediatamente (volta a só ver o Dashboard).`, () => {
+                    removeMember(name);
+                    renderMembersList();
+                    if (name === currentUserName) location.reload();
+                });
+            });
+            list.appendChild(row);
+        });
+    }
+
+    // Visitantes que abriram o quadro (via SSO) mas ainda não foram convidados —
+    // hoje eles só enxergam o Dashboard. Um clique aqui já convida com o papel escolhido.
+    const visitorsList = document.getElementById('uninvitedVisitorsList');
+    if (!visitorsList) return;
+
+    const visitorEmails = Object.keys(state.visitorLog || {}).filter(email => !state.members[email]);
+
+    if (visitorEmails.length === 0) {
+        visitorsList.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Ninguém esperando convite no momento.</p>';
         return;
     }
 
-    list.innerHTML = '';
-    names.forEach(name => {
-        const row = document.createElement('div');
-        row.className = 'member-row';
-        row.innerHTML = `
-            <span class="member-row-name">${escapeHtml(name)}${name === currentUserName ? ' (você)' : ''}</span>
-            <div class="member-row-actions">
-                <select class="member-role-select">
-                    <option value="Editor">Editor</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Observador">Observador</option>
-                </select>
-                <button type="button" class="remove-row-btn" title="Remover">&times;</button>
-            </div>
-        `;
-        row.querySelector('.member-role-select').value = state.members[name];
-        row.querySelector('.member-role-select').addEventListener('change', (e) => {
-            setMemberRole(name, e.target.value);
-            if (name === currentUserName) location.reload();
-        });
-        row.querySelector('.remove-row-btn').addEventListener('click', () => {
-            showConfirm(`Remover "${name}" do quadro? Essa pessoa perde o acesso imediatamente.`, () => {
-                removeMember(name);
+    visitorsList.innerHTML = '';
+    visitorEmails
+        .sort((a, b) => state.visitorLog[b] - state.visitorLog[a])
+        .forEach(email => {
+            const lastSeen = new Date(state.visitorLog[email]).toLocaleDateString('pt-BR');
+            const row = document.createElement('div');
+            row.className = 'member-row';
+            row.innerHTML = `
+                <span class="member-row-name">${escapeHtml(email)}<br><span style="color:var(--text-muted); font-size:0.72rem;">Só viu o Dashboard — último acesso ${lastSeen}</span></span>
+                <div class="member-row-actions">
+                    <select class="invite-visitor-role-select">
+                        <option value="Observador">Convidar: Observador</option>
+                        <option value="Editor">Convidar: Editor</option>
+                        <option value="Admin">Convidar: Admin</option>
+                    </select>
+                </div>
+            `;
+            row.querySelector('.invite-visitor-role-select').addEventListener('change', (e) => {
+                setMemberRole(email, e.target.value);
+                showToast(`${email} convidado como ${e.target.value}!`, 'success');
                 renderMembersList();
-                if (name === currentUserName) location.reload();
             });
+            visitorsList.appendChild(row);
         });
-        list.appendChild(row);
-    });
 }
 
 // ==========================================
@@ -2356,8 +2430,23 @@ function computeAnalytics() {
 
 let currentReportPeriod = 'day';
 
+function getReportDateRange() {
+    const fromEl = document.getElementById('reportDateFrom');
+    const toEl = document.getElementById('reportDateTo');
+    const from = fromEl && fromEl.value ? new Date(fromEl.value + 'T00:00:00').getTime() : null;
+    const to = toEl && toEl.value ? new Date(toEl.value + 'T23:59:59').getTime() : null;
+    return { from, to };
+}
+
+function inReportDateRange(completedAt, range) {
+    if (range.from && completedAt < range.from) return false;
+    if (range.to && completedAt > range.to) return false;
+    return true;
+}
+
 function computeDeliveryStats() {
-    const completed = state.cards.filter(c => c.completedAt);
+    const range = getReportDateRange();
+    const completed = state.cards.filter(c => c.completedAt && inReportDateRange(c.completedAt, range));
     let onTime = 0, late = 0, noDueDate = 0;
 
     completed.forEach(c => {
@@ -2412,30 +2501,54 @@ function groupCompletionsByPeriod(period) {
     return buckets;
 }
 
+// Anel de score circular (0-100%), no padrão do design system MSE Capex Seguro
+function dashRing(pct, { size = 46, stroke = 5 } = {}) {
+    const r = (size - stroke) / 2 - 1;
+    const C = 2 * Math.PI * r;
+    const off = C * (1 - Math.max(0, Math.min(1, pct / 100)));
+    const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red)';
+    return `<div class="podium-ring" style="width:${size}px;height:${size}px">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+            <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#e7eaef" stroke-width="${stroke}"/>
+            <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+                stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+        </svg>
+        <div class="pr-txt"><span class="pr-n">${pct}%</span></div>
+    </div>`;
+}
+
 function computeDeliveryStatsByPerson() {
-    const completed = state.cards.filter(c => c.completedAt);
+    const range = getReportDateRange();
+    const completed = state.cards.filter(c => c.completedAt && inReportDateRange(c.completedAt, range));
     const byPerson = {};
 
     completed.forEach(c => {
-        const names = (c.assignees && c.assignees.length > 0) ? c.assignees : ['Sem responsável atribuído'];
+        const person = state.people.find(p => p.id === c.personId);
+        const personId = person ? person.id : '__sem_coluna__';
         const isLate = c.dueDate && c.completedAt > new Date(c.dueDate + 'T23:59:59').getTime();
         const hasDueDate = !!c.dueDate;
 
-        names.forEach(name => {
-            if (!byPerson[name]) byPerson[name] = { total: 0, onTime: 0, late: 0 };
-            byPerson[name].total++;
-            if (hasDueDate) {
-                if (isLate) byPerson[name].late++;
-                else byPerson[name].onTime++;
-            }
-        });
+        if (!byPerson[personId]) {
+            byPerson[personId] = {
+                total: 0, onTime: 0, late: 0,
+                displayName: person ? person.name : 'Sem coluna',
+                avatarKey: person ? (person.memberEmail || person.avatarUrl || null) : null
+            };
+        }
+        byPerson[personId].total++;
+        if (hasDueDate) {
+            if (isLate) byPerson[personId].late++;
+            else byPerson[personId].onTime++;
+        }
     });
 
     return Object.entries(byPerson)
-        .map(([name, s]) => {
+        .map(([personId, s]) => {
             const withDueDate = s.onTime + s.late;
             return {
-                name,
+                personId,
+                name: s.displayName,
+                avatarKey: s.avatarKey,
                 total: s.total,
                 onTime: s.onTime,
                 late: s.late,
@@ -2488,6 +2601,16 @@ function renderDeliveryReport() {
     document.getElementById('reportOnTimePct').textContent = `${stats.onTimePct}%`;
     document.getElementById('reportLatePct').textContent = `${stats.latePct}%`;
 
+    const range = getReportDateRange();
+    const noteEl = document.getElementById('reportPeriodNote');
+    if (range.from || range.to) {
+        const fromLabel = range.from ? new Date(range.from).toLocaleDateString('pt-BR') : '…';
+        const toLabel = range.to ? new Date(range.to).toLocaleDateString('pt-BR') : '…';
+        noteEl.textContent = `Entregas de ${fromLabel} até ${toLabel}`;
+    } else {
+        noteEl.textContent = 'Todas as entregas registradas';
+    }
+
     const buckets = groupCompletionsByPeriod(currentReportPeriod);
     const max = Math.max(1, ...buckets.map(b => b.count));
 
@@ -2501,40 +2624,202 @@ function renderDeliveryReport() {
 
     document.getElementById('reportChart').innerHTML = rows;
 
+    // ---------- Ranking em tabela, com foto de perfil ----------
     const byPerson = computeDeliveryStatsByPerson();
-    const personContainer = document.getElementById('reportByPerson');
+    const tableBody = document.getElementById('reportByPerson');
+
+    // ---------- Pódios: Mais Pontuais / Mais Atrasos ----------
+    const withPct = byPerson.filter(p => p.onTimePct !== null);
+    const bestThree = [...withPct].sort((a, b) => b.onTimePct - a.onTimePct).slice(0, 3);
+    const worstThree = [...withPct].sort((a, b) => a.onTimePct - b.onTimePct).slice(0, 3);
+
+    function buildPodiumEntry(p, isWorst) {
+        const avatarSrc = p.avatarKey
+            ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 64) : p.avatarKey)
+            : null;
+        const avatarHtml = avatarSrc
+            ? `<img src="${avatarSrc}" class="podium-entry-avatar" alt="">`
+            : `<span class="podium-entry-avatar podium-entry-avatar-fallback">${getInitials(p.name)}</span>`;
+        const subLabel = isWorst ? `${p.late} atrasada${p.late > 1 ? 's' : ''} de ${p.onTime + p.late}` : `${p.onTime} de ${p.onTime + p.late} no prazo`;
+        return `
+            <div class="podium-entry">
+                ${dashRing(p.onTimePct, { size: 44, stroke: 5 })}
+                ${avatarHtml}
+                <div class="podium-entry-info">
+                    <div class="podium-entry-name">${escapeHtml(p.name)}</div>
+                    <div class="podium-entry-sub">${subLabel}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    const podiumBestEl = document.getElementById('reportPodiumBest');
+    const podiumWorstEl = document.getElementById('reportPodiumWorst');
+
+    podiumBestEl.innerHTML = bestThree.length > 0
+        ? bestThree.map(p => buildPodiumEntry(p, false)).join('')
+        : '<div class="dashboard-podium-empty">SEM DADOS SUFICIENTES NESSE PERÍODO</div>';
+
+    podiumWorstEl.innerHTML = worstThree.length > 0
+        ? worstThree.map(p => buildPodiumEntry(p, true)).join('')
+        : '<div class="dashboard-podium-empty">SEM DADOS SUFICIENTES NESSE PERÍODO</div>';
 
     if (byPerson.length === 0) {
-        personContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Ainda não há post-its concluídos com responsável atribuído.</p>';
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS CONCLUÍDAS COM RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
+    } else {
+        tableBody.innerHTML = byPerson.map((p, idx) => {
+            const pctColor = p.onTimePct === null ? 'var(--text-muted)' : (p.onTimePct >= 70 ? 'var(--green)' : p.onTimePct >= 40 ? 'var(--gold)' : 'var(--red)');
+            const pctLabel = p.onTimePct === null ? '—' : `${p.onTimePct}%`;
+            const onTimeWidth = p.onTimePct === null ? 0 : p.onTimePct;
+            const lateWidth = p.onTimePct === null ? 0 : (100 - p.onTimePct);
+
+            const rankBadgeClass = idx === 0 ? 'dash-rank-gold' : idx === 1 ? 'dash-rank-silver' : idx === 2 ? 'dash-rank-bronze' : 'dash-rank-plain';
+
+            const avatarSrc = p.avatarKey
+                ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 60) : p.avatarKey)
+                : null;
+            const avatarHtml = avatarSrc
+                ? `<img src="${avatarSrc}" class="dash-table-avatar" alt="">`
+                : `<span class="dash-table-avatar dash-table-avatar-fallback">${getInitials(p.name)}</span>`;
+            const displayName = p.name;
+
+            return `
+                <tr>
+                    <td><span class="dash-rank-badge ${rankBadgeClass}">${idx + 1}</span></td>
+                    <td>
+                        <div class="dash-person-cell">
+                            ${avatarHtml}
+                            <span>${escapeHtml(displayName)}</span>
+                        </div>
+                    </td>
+                    <td class="dash-ontime-num">${p.onTime}</td>
+                    <td class="dash-late-num">${p.late}</td>
+                    <td class="dash-total-num">${p.total}</td>
+                    <td>
+                        <div class="dash-proportion-bar">
+                            <div class="dash-proportion-ontime" style="width:${onTimeWidth}%;"></div>
+                            <div class="dash-proportion-late" style="width:${lateWidth}%;"></div>
+                        </div>
+                    </td>
+                    <td><span class="dash-pct-label" style="color:${pctColor};">${pctLabel}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // ---------- Tarefas por pessoa, em formato de planilha (todas as raias) ----------
+    const activeContainer = document.getElementById('reportActiveTasksByPerson');
+    const byColumn = {};
+    const laneLabels = { todo: 'Fazendo', testing: 'Em Teste', paused: 'Pausado', done: 'Concluída' };
+
+    // Filtros da tabela (busca por texto, pessoa, raia)
+    const taskSearchTerm = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
+    const taskFilterPersonId = document.getElementById('taskFilterPerson')?.value || '';
+    const taskFilterLane = document.getElementById('taskFilterLane')?.value || '';
+
+    // Popula o dropdown de pessoas (só na primeira vez / se mudou)
+    const personFilterSelect = document.getElementById('taskFilterPerson');
+    if (personFilterSelect) {
+        const currentValue = personFilterSelect.value;
+        const peopleWithCards = [...new Set(state.cards.filter(c => !c.archived).map(c => c.personId))]
+            .map(pid => state.people.find(p => p.id === pid))
+            .filter(Boolean)
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        personFilterSelect.innerHTML = '<option value="">Todas</option>' +
+            peopleWithCards.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        if ([...personFilterSelect.options].some(o => o.value === currentValue)) {
+            personFilterSelect.value = currentValue;
+        }
+    }
+
+    state.cards.filter(c => !c.archived).forEach(card => {
+        const person = state.people.find(p => p.id === card.personId);
+        const personId = person ? person.id : '__sem_coluna__';
+
+        // Aplica os filtros — pula o cartão se não bater
+        if (taskFilterPersonId && personId !== taskFilterPersonId) return;
+        if (taskFilterLane && (card.status || 'todo') !== taskFilterLane) return;
+        if (taskSearchTerm) {
+            const haystack = `${card.title} ${person ? person.name : ''}`.toLowerCase();
+            if (!haystack.includes(taskSearchTerm)) return;
+        }
+
+        if (!byColumn[personId]) {
+            byColumn[personId] = {
+                displayName: person ? person.name : 'Sem coluna',
+                cards: []
+            };
+        }
+        byColumn[personId].cards.push(card);
+    });
+
+    const columnIds = Object.keys(byColumn).sort((a, b) => {
+        if (a === '__sem_coluna__') return 1;
+        if (b === '__sem_coluna__') return -1;
+        return byColumn[a].displayName.localeCompare(byColumn[b].displayName, 'pt-BR');
+    });
+
+    if (columnIds.length === 0) {
+        activeContainer.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUM POST-IT ENCONTRADO COM ESSE FILTRO.</td></tr>`;
         return;
     }
 
-    const ranked = byPerson.filter(p => p.onTimePct !== null);
-    const worstPct = ranked.length > 1 ? ranked[ranked.length - 1].onTimePct : null;
+    activeContainer.innerHTML = columnIds.map(personId => {
+        const group = byColumn[personId];
+        const cards = group.cards.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'pt-BR'));
 
-    personContainer.innerHTML = byPerson.map((p, idx) => {
-        const pctColor = p.onTimePct === null ? 'var(--text-muted)' : (p.onTimePct >= 70 ? 'var(--green)' : p.onTimePct >= 40 ? 'var(--gold)' : 'var(--red)');
-        const pctLabel = p.onTimePct === null ? 'sem prazo definido' : `${p.onTimePct}% no prazo`;
-
-        let rankIcon = '';
-        if (p.onTimePct !== null) {
-            const rankPos = ranked.indexOf(p);
-            if (rankPos === 0 && ranked.length > 1) rankIcon = '🥇 ';
-            else if (rankPos === 1) rankIcon = '🥈 ';
-            else if (rankPos === 2) rankIcon = '🥉 ';
-            else if (p.onTimePct === worstPct && worstPct < 50) rankIcon = '⚠️ ';
-        }
-
-        return `
-            <div class="member-row">
-                <span class="member-row-name">${rankIcon}${escapeHtml(p.name)}</span>
-                <span style="display:flex; align-items:center; gap:0.6rem; font-size:0.8rem;">
-                    <span style="color:var(--text-muted);">${p.total} concluído${p.total > 1 ? 's' : ''}</span>
-                    <span style="color:${pctColor}; font-weight:600;">${pctLabel}</span>
-                </span>
-            </div>
+        const personHeaderRow = `
+            <tr class="dash-person-group-row">
+                <td colspan="7">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} post-it${cards.length > 1 ? 's' : ''}</span></td>
+            </tr>
         `;
+
+        const taskRows = cards.map(c => {
+            const progress = getProgress(c);
+            const startLabel = c.startDate ? formatDateBR(c.startDate) : (c.createdAt ? new Date(c.createdAt).toLocaleDateString('pt-BR') : '—');
+            const endLabel = c.dueDate ? formatDateBR(c.dueDate) : 'sem prazo';
+            const laneLabel = laneLabels[c.status || 'todo'] || 'Fazendo';
+
+            let barColor;
+            if (c.status === 'done') barColor = 'var(--green)';
+            else if (c.dueDate && isOverdue(c)) barColor = 'var(--red)';
+            else if (c.dueDate && isDueSoon(c)) barColor = 'var(--gold)';
+            else barColor = 'var(--accent)';
+
+            // Contexto do checklist (só leitura) + caixa de observação editável
+            const checklistLines = (c.checklist || []).map(i => `${i.checked ? '✅' : '☐'} ${escapeHtml(i.text)}`).join('<br>');
+
+            return `
+                <tr class="dash-task-row" onclick="document.getElementById('deliveryReportModal').style.display='none'; openViewModal('${c.id}')">
+                    <td class="dash-task-title-cell">${escapeHtml(c.title)}</td>
+                    <td><span class="dash-lane-tag dash-lane-${c.status || 'todo'}">${laneLabel}</span></td>
+                    <td class="dash-mono-cell">${startLabel}</td>
+                    <td class="dash-mono-cell">${endLabel}</td>
+                    <td class="dash-mono-cell">${progress.percent}%</td>
+                    <td>
+                        <div class="dash-task-progress-track dash-table-progress-track">
+                            <div class="dash-task-progress-fill" style="width:${progress.percent}%; background:${barColor};"></div>
+                        </div>
+                    </td>
+                    <td class="dash-obs-cell">
+                        ${checklistLines ? `<div class="dash-obs-checklist">${checklistLines}</div>` : ''}
+                        <textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        return personHeaderRow + taskRows;
     }).join('');
+}
+
+function saveDashboardObservation(cardId, value) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+    if (card.observacao === value) return; // nada mudou, evita salvar à toa
+    card.observacao = value;
+    saveCardToServer(card);
+    showToast('Observação salva!', 'success');
 }
 
 function renderAnalytics() {
@@ -3116,7 +3401,7 @@ function deletePerson(personId) {
 // CRUD: POST-ITS (CARDS)
 // ==========================================
 
-function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, project, estimatedHours, workedHours }) {
+function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate }) {
     cardIdCounter++;
     const id = `c_${cardIdCounter}`;
 
@@ -3124,9 +3409,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         id, personId, title, color,
         priority: priority || 'media',
         dueDate: dueDate || '',
-        project: project || null,
-        estimatedHours: estimatedHours ?? null,
-        workedHours: workedHours ?? null,
+        startDate: startDate || null,
         author,
         status: 'todo',
         checklist: lines.map(text => ({ text, checked: false })),
@@ -3150,7 +3433,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     return id;
 }
 
-function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, project, estimatedHours, workedHours }) {
+async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate }) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -3165,9 +3448,7 @@ function updateCard(cardId, { personId, title, lines, color, priority, dueDate, 
     card.color = color;
     card.priority = priority;
     card.dueDate = dueDate;
-    card.project = project || null;
-    card.estimatedHours = estimatedHours ?? null;
-    card.workedHours = workedHours ?? null;
+    card.startDate = startDate || null;
     card.checklist = newChecklist;
     card.attachments = [...card.attachments, ...newAttachments];
     if (customValues) card.customValues = customValues;
@@ -3175,7 +3456,9 @@ function updateCard(cardId, { personId, title, lines, color, priority, dueDate, 
     card.stickerId = stickerId || null;
     card.coverImage = coverImage || null;
 
-    saveCardToServer(card);
+    // Espera o salvamento terminar de verdade no servidor antes de seguir — evita que a
+    // atualização automática (a cada 6s) busque um dado antigo e sobrescreva essa edição.
+    await saveCardToServer(card);
     logAudit(`Editou o post-it "${title}"`);
 }
 
@@ -3215,12 +3498,12 @@ function checkAutomationAutoMove(card) {
 
     const currentPerson = state.people.find(p => p.id === card.personId);
     if (currentPerson && currentPerson.isDone) return;
-    if (card.status === 'waiting') return;
+    if (card.status === 'done') return;
 
-    card.status = 'waiting';
+    card.status = 'done';
     saveCardToServer(card);
-    logAudit(`Automação moveu "${card.title}" para a raia Em Espera (checklist 100%)`);
-    showToast(`"${card.title}" foi movido automaticamente para Em Espera`, 'success');
+    logAudit(`Automação moveu "${card.title}" para a raia Concluído (checklist 100%)`);
+    showToast(`"${card.title}" foi movido automaticamente para Concluído`, 'success');
 }
 
 function moveCard(cardId, newPersonId, newStatus) {
@@ -3545,7 +3828,7 @@ function renderBoard() {
             const cardsForPerson = state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters));
             cardsForPerson.forEach(card => container.appendChild(buildPostItElement(card)));
         } else {
-            ['todo', 'waiting', 'done'].forEach(status => {
+            ['todo', 'testing', 'paused', 'done'].forEach(status => {
                 const container = document.getElementById(`cards_${person.id}__${status}`);
                 if (!container) return;
                 const cardsForLane = state.cards.filter(c =>
@@ -3772,6 +4055,38 @@ function buildColumn(person) {
     const column = document.createElement('div');
     column.className = isDone ? 'column column-done' : 'column';
     column.id = `col_${personId}`;
+    column.draggable = true;
+    column.dataset.personId = personId;
+
+    column.addEventListener('dragstart', (e) => {
+        if (e.target !== column) return; // deixa o drag do post-it (ou qualquer coisa interna) seguir normal
+        if (column.dataset.dragFromHandle !== 'true') {
+            e.preventDefault();
+            return;
+        }
+        e.dataTransfer.setData('application/x-mse-column', personId);
+        e.dataTransfer.effectAllowed = 'move';
+        column.classList.add('column-dragging');
+    });
+    column.addEventListener('dragend', () => {
+        delete column.dataset.dragFromHandle;
+        column.classList.remove('column-dragging');
+        document.querySelectorAll('.column.column-drop-target').forEach(c => c.classList.remove('column-drop-target'));
+    });
+    column.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('application/x-mse-column')) {
+            e.preventDefault();
+            column.classList.add('column-drop-target');
+        }
+    });
+    column.addEventListener('dragleave', () => column.classList.remove('column-drop-target'));
+    column.addEventListener('drop', (e) => {
+        if (!e.dataTransfer.types.includes('application/x-mse-column')) return;
+        e.preventDefault();
+        column.classList.remove('column-drop-target');
+        const draggedId = e.dataTransfer.getData('application/x-mse-column');
+        if (draggedId && draggedId !== personId) reorderColumns(draggedId, personId);
+    });
 
     const deleteBtn = `<button class="delete-person-btn" title="Excluir Coluna" onclick="event.stopPropagation(); handleDeletePerson('${personId}')">🗑️</button>`;
 
@@ -3784,16 +4099,18 @@ function buildColumn(person) {
         avatarHtml = `<span class="column-avatar-fallback" onclick="openPersonModalForEdit('${personId}')">${getInitials(person.name)}</span>`;
     }
 
-    const headerClickable = `<div class="column-person-header">${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
+    const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna">⠿</span>`;
+    const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
     let bodyHtml;
     if (isDone) {
         bodyHtml = `<div class="cards-container" id="cards_${personId}" ondragover="allowDrop(event)" ondrop="drop(event)"></div>`;
     } else {
         const lanes = [
-            { key: 'todo', label: 'A Fazer' },
-            { key: 'waiting', label: 'Em Espera' },
-            { key: 'done', label: 'Concluído' }
+            { key: 'todo', label: 'Fazendo' },
+            { key: 'testing', label: 'Em Teste' },
+            { key: 'paused', label: 'Pausado' },
+            { key: 'done', label: 'Concluída' }
         ];
         bodyHtml = lanes.map(lane => `
             <div class="lane lane-${lane.key}" id="lanewrap_${personId}__${lane.key}" ondragover="allowDrop(event)" ondrop="drop(event)">
@@ -3817,7 +4134,26 @@ function buildColumn(person) {
         ${bodyHtml}
     `;
 
+    const handleEl = column.querySelector('.column-drag-handle');
+    if (handleEl) {
+        handleEl.addEventListener('mousedown', () => { column.dataset.dragFromHandle = 'true'; });
+    }
+
     return column;
+}
+
+function reorderColumns(draggedId, targetId) {
+    const draggedIdx = state.people.findIndex(p => p.id === draggedId);
+    const targetIdx = state.people.findIndex(p => p.id === targetId);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const [draggedPerson] = state.people.splice(draggedIdx, 1);
+    const newTargetIdx = state.people.findIndex(p => p.id === targetId);
+    state.people.splice(newTargetIdx, 0, draggedPerson);
+
+    renderBoard();
+    reorderPeopleOnServer(state.people.map(p => p.id));
+    logAudit(`Reordenou as colunas do quadro`);
 }
 
 function handleDeletePerson(personId) {
@@ -3909,6 +4245,19 @@ function buildPostItElement(card) {
     const stickerHtml = sticker ? `<span class="postit-sticker-stamp" title="${escapeHtml(sticker.label)}">${sticker.emoji}</span>` : '';
     const coverHtml = card.coverImage ? `<img src="${card.coverImage}" class="postit-cover" alt="Capa">` : '';
 
+    let datesHtml = '';
+    if (card.startDate || card.dueDate) {
+        const startLabel = card.startDate ? formatDateBR(card.startDate) : '—';
+        const dueLabel = card.dueDate ? formatDateBR(card.dueDate) : '—';
+        let dueColor = '';
+        if (card.dueDate) {
+            if (isOverdue(card)) dueColor = 'color:var(--red); font-weight:700;';
+            else if (isDueSoon(card)) dueColor = 'color:var(--gold); font-weight:700;';
+            else dueColor = 'color:var(--green); font-weight:700;';
+        }
+        datesHtml = `<div class="postit-dates">🟢 ${startLabel} &nbsp;→&nbsp; <span style="${dueColor}">📅 ${dueLabel}</span></div>`;
+    }
+
     el.innerHTML = `
         ${coverHtml}
         ${stickerHtml}
@@ -3920,6 +4269,7 @@ function buildPostItElement(card) {
             </div>
         </div>
         ${labelsHtml}
+        ${datesHtml}
         <div class="postit-compact-meta">
             <span class="tag tag-priority-${card.priority}">${priorityLabel}</span>
             <span class="postit-compact-percent">${percentLabel}</span>
@@ -4111,9 +4461,7 @@ function openCardModalForEdit(cardId) {
     document.getElementById('cardColor').value = card.color;
     document.getElementById('cardPriority').value = card.priority;
     document.getElementById('cardDueDate').value = card.dueDate || '';
-    document.getElementById('cardProject').value = card.project || '';
-    document.getElementById('cardEstimatedHours').value = card.estimatedHours ?? '';
-    document.getElementById('cardWorkedHours').value = card.workedHours ?? '';
+    document.getElementById('cardStartDate').value = card.startDate || '';
     document.getElementById('cardAttachments').value = '';
 
     renderExistingAttachments(card);
@@ -4182,13 +4530,9 @@ function openViewModal(cardId) {
         const [y, m, d] = card.dueDate.split('-');
         tagsHtml += `<span class="tag ${dueClass}">📅 ${d}/${m}/${y}</span>`;
     }
-    if (card.project) {
-        tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);">🏗️ ${escapeHtml(card.project)}</span>`;
-    }
-    if (card.estimatedHours || card.workedHours) {
-        const est = card.estimatedHours ?? '?';
-        const work = card.workedHours ?? 0;
-        tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);">⏱️ ${work}/${est}h</span>`;
+    if (card.startDate) {
+        const [ys, ms, ds] = card.startDate.split('-');
+        tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);">🟢 Início: ${ds}/${ms}/${ys}</span>`;
     }
     document.getElementById('viewCardTags').innerHTML = tagsHtml;
 

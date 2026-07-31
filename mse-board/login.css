@@ -48,13 +48,14 @@
 }
 
 .login-logo-img {
-    width: 56px;
-    height: 56px;
+    width: 180px;
+    height: auto;
+    aspect-ratio: 944 / 356;
     margin: 0 auto 1.3rem;
     display: block;
-    border-radius: 14px;
-    object-fit: cover;
-    box-shadow: 0 6px 16px rgba(184, 12, 35, 0.18);
+    border-radius: 0;
+    object-fit: contain;
+    box-shadow: none;
 }
 
 .text-carmine {

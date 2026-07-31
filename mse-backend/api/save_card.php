@@ -32,17 +32,18 @@ $pdo = getDbConnection();
 
 $stmt = $pdo->prepare(
     "INSERT INTO cards
-        (id, person_id, title, color, priority, due_date, estimated_hours, worked_hours, project, author, status, sticker_id, cover_image,
-         starred, archived, checklist, attachments, comments, assignees, label_ids, custom_values, created_at, completed_at)
+        (id, person_id, title, color, priority, due_date, start_date, estimated_hours, worked_hours, project, author, status, sticker_id, cover_image,
+         starred, archived, checklist, attachments, comments, assignees, label_ids, custom_values, created_at, completed_at, observacao)
      VALUES
-        (:id, :person_id, :title, :color, :priority, :due_date, :estimated_hours, :worked_hours, :project, :author, :status, :sticker_id, :cover_image,
-         :starred, :archived, :checklist, :attachments, :comments, :assignees, :label_ids, :custom_values, :created_at, :completed_at)
+        (:id, :person_id, :title, :color, :priority, :due_date, :start_date, :estimated_hours, :worked_hours, :project, :author, :status, :sticker_id, :cover_image,
+         :starred, :archived, :checklist, :attachments, :comments, :assignees, :label_ids, :custom_values, :created_at, :completed_at, :observacao)
      ON DUPLICATE KEY UPDATE
         person_id = VALUES(person_id),
         title = VALUES(title),
         color = VALUES(color),
         priority = VALUES(priority),
         due_date = VALUES(due_date),
+        start_date = VALUES(start_date),
         estimated_hours = VALUES(estimated_hours),
         worked_hours = VALUES(worked_hours),
         project = VALUES(project),
@@ -57,7 +58,8 @@ $stmt = $pdo->prepare(
         assignees = VALUES(assignees),
         label_ids = VALUES(label_ids),
         custom_values = VALUES(custom_values),
-        completed_at = VALUES(completed_at)"
+        completed_at = VALUES(completed_at),
+        observacao = VALUES(observacao)"
 );
 
 $stmt->execute([
@@ -67,6 +69,7 @@ $stmt->execute([
     'color' => $c['color'] ?? 'yellow',
     'priority' => $c['priority'] ?? 'media',
     'due_date' => $c['dueDate'] ?? null,
+    'start_date' => $c['startDate'] ?? null,
     'estimated_hours' => $c['estimatedHours'] ?? null,
     'worked_hours' => $c['workedHours'] ?? null,
     'project' => $c['project'] ?? null,
@@ -83,7 +86,8 @@ $stmt->execute([
     'label_ids' => json_encode($c['labelIds'] ?? []),
     'custom_values' => json_encode($c['customValues'] ?? (object)[]),
     'created_at' => $c['createdAt'] ?? round(microtime(true) * 1000),
-    'completed_at' => $c['completedAt'] ?? null
+    'completed_at' => $c['completedAt'] ?? null,
+    'observacao' => $c['observacao'] ?? ''
 ]);
 
 echo json_encode(['success' => true]);

@@ -12,18 +12,10 @@
 </head>
 <body class="login-body">
 
-    <!-- Enquanto o SSO é validado, mostramos só um carregando. O login manual
-         (abaixo) fica escondido e só aparece se o SSO não funcionar. -->
-    <div id="ssoLoading" class="sso-loading" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:inherit;">
-        <div style="width:40px;height:40px;border:3px solid rgba(0,0,0,0.12);border-top-color:#b3122b;border-radius:50%;animation:sso-spin 0.8s linear infinite;"></div>
-        <p style="font-family:'IBM Plex Sans',sans-serif;color:#666;margin:0;font-size:15px;">Entrando…</p>
-    </div>
-    <style>@keyframes sso-spin{to{transform:rotate(360deg);}}</style>
-
-    <div class="login-card" id="loginCard" style="display:none;">
+    <div class="login-card">
 
         <div class="logo-area">
-            <img src="logo-mse.jpeg" alt="MSE" class="login-logo-img">
+            <img src="logo-mse-wordmark.png" alt="MSE" class="login-logo-img">
 
             <h1 class="brand-title"><span class="text-carmine">MSE</span> BOARD</h1>
             <p class="brand-subtitle">Plataforma de Gestão &amp; Projetos</p>
@@ -65,18 +57,6 @@
         <p class="login-footer"><span class="text-carmine">MSE</span> Engenharia — Acesso restrito à equipe</p>
     </div>
 
-    <script>
-        // Rede de segurança: se em 10s o SSO não tiver resolvido (ex.: erro de
-        // script), mostra o login manual para o usuário não ficar preso.
-        setTimeout(function () {
-            var loader = document.getElementById('ssoLoading');
-            var card = document.getElementById('loginCard');
-            if (loader && loader.style.display !== 'none') {
-                loader.style.display = 'none';
-                if (card) card.style.display = '';
-            }
-        }, 10000);
-    </script>
     <script src="config.js.php"></script>
     <script src="script.js"></script>
 </body>
