@@ -29,6 +29,7 @@ try {
             'color' => $r['color'],
             'priority' => $r['priority'],
             'dueDate' => $r['due_date'],
+            'startDate' => $r['start_date'] ?? null,
             'estimatedHours' => $r['estimated_hours'] !== null ? (float) $r['estimated_hours'] : null,
             'workedHours' => $r['worked_hours'] !== null ? (float) $r['worked_hours'] : null,
             'project' => $r['project'],
@@ -45,7 +46,8 @@ try {
             'labelIds' => json_decode($r['label_ids'] ?? '[]', true) ?? [],
             'customValues' => json_decode($r['custom_values'] ?? '{}', true) ?? (object)[],
             'createdAt' => $r['created_at'] !== null ? (int) $r['created_at'] : null,
-            'completedAt' => $r['completed_at'] !== null ? (int) $r['completed_at'] : null
+            'completedAt' => $r['completed_at'] !== null ? (int) $r['completed_at'] : null,
+            'observacao' => $r['observacao'] ?? ''
         ];
     }, $rows);
 

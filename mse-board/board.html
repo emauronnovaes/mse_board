@@ -18,7 +18,7 @@
 
         <div class="sidebar-head">
             <div class="sidebar-mark">
-                <img src="logo-mse.jpeg" alt="MSE" class="sidebar-logo-img">
+                <img src="logo-mse-wordmark.png" alt="MSE" class="sidebar-logo-img">
                 <span class="sidebar-wordmark"><span class="mse-red">MSE</span> <em>Board</em></span>
             </div>
             <button class="sidebar-toggle" id="sidebarToggle" aria-label="Recolher menu">
@@ -27,6 +27,20 @@
         </div>
 
         <nav class="sidebar-nav">
+
+            <div class="nav-section">
+                <p class="nav-section-label"><span>Dashboard</span></p>
+
+                <a class="nav-item" href="#" data-tooltip="Dashboard de Entregas (Admin)" data-action="delivery-report">
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 20 20" fill="none"><path d="M3 3v14h14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M6 13.5v-4M9.5 13.5v-7M13 13.5v-2.5M16.5 13.5V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    </span>
+                    <span class="nav-labels">
+                        <span class="nav-title">Dashboard de Entregas</span>
+                        <span class="nav-desc">Ranking, prazos e tarefas em andamento</span>
+                    </span>
+                </a>
+            </div>
 
             <div class="nav-section">
                 <p class="nav-section-label"><span>Gerenciamento do Quadro</span></p>
@@ -139,16 +153,6 @@
                         <span class="nav-desc">O que falhou e como resolver</span>
                     </span>
                     <span id="errorLogBadge" class="nav-pending-badge" style="display:none;"></span>
-                </a>
-
-                <a class="nav-item" href="#" data-tooltip="Relatório de Entregas (Admin)" data-action="delivery-report">
-                    <span class="nav-icon">
-                        <svg viewBox="0 0 20 20" fill="none"><path d="M3 3v14h14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M6 13.5v-4M9.5 13.5v-7M13 13.5v-2.5M16.5 13.5V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                    </span>
-                    <span class="nav-labels">
-                        <span class="nav-title">Relatório de Entregas</span>
-                        <span class="nav-desc">Prazos e produtividade da equipe</span>
-                    </span>
                 </a>
 
                 <a class="nav-item" href="#" data-tooltip="Alertas de Vencimento" data-action="due-alerts">
@@ -409,26 +413,16 @@
                             <option value="alta">🔴 Alta</option>
                         </select>
                     </div>
-
-                    <div class="input-group">
-                        <label for="cardDueDate">Prazo</label>
-                        <input type="date" id="cardDueDate">
-                    </div>
-                </div>
-
-                <div class="input-group">
-                    <label for="cardProject">Obra / Projeto</label>
-                    <input type="text" id="cardProject" placeholder="Ex: Residencial Vista Verde">
                 </div>
 
                 <div class="form-row">
                     <div class="input-group">
-                        <label for="cardEstimatedHours">Horas Estimadas</label>
-                        <input type="number" id="cardEstimatedHours" min="0" step="0.5" placeholder="Ex: 8">
+                        <label for="cardStartDate">Data de Início</label>
+                        <input type="date" id="cardStartDate">
                     </div>
                     <div class="input-group">
-                        <label for="cardWorkedHours">Horas Trabalhadas</label>
-                        <input type="number" id="cardWorkedHours" min="0" step="0.5" placeholder="Ex: 5.5">
+                        <label for="cardDueDate">Data de Finalização (Prazo)</label>
+                        <input type="date" id="cardDueDate">
                     </div>
                 </div>
 
@@ -602,6 +596,12 @@
             </form>
 
             <div id="membersList" class="members-list"></div>
+
+            <div class="input-group" style="margin-top:1.4rem;">
+                <label>👀 Visitantes aguardando convite</label>
+                <p class="settings-subtitle" style="margin-bottom:0.6rem;">Pessoas que já abriram o quadro (via SSO) mas ainda não foram convidadas — hoje elas só veem o Dashboard.</p>
+                <div id="uninvitedVisitorsList" class="members-list"></div>
+            </div>
         </div>
     </div>
 
@@ -868,38 +868,129 @@
         </div>
     </div>
 
-    <!-- Modal: Relatório de Entregas (Admin) -->
+    <!-- Modal: Dashboard de Entregas (Admin) -->
     <div id="deliveryReportModal" class="modal">
-        <div class="modal-content view-modal-content" style="max-width:640px;">
-            <span class="close-btn" id="closeDeliveryReportModalBtn">&times;</span>
-            <h3>Relatório de Entregas</h3>
-            <p class="settings-subtitle">Visível só pra Admin. Baseado nos post-its já concluídos (movidos pra uma raia/coluna "Concluído").</p>
+        <div class="modal-content dashboard-modal-content">
+            <span class="close-btn dashboard-close-btn" id="closeDeliveryReportModalBtn">&times;</span>
 
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="reportTotalDone">0</div><div class="stat-label">Concluídos (total)</div></div>
-                <div class="stat-card"><div class="stat-value" id="reportOnTimePct" style="color:var(--green);">0%</div><div class="stat-label">No prazo</div></div>
-                <div class="stat-card"><div class="stat-value" id="reportLatePct" style="color:var(--red);">0%</div><div class="stat-label">Atrasados</div></div>
+            <div class="dashboard-hero">
+                <div class="dashboard-title">Dashboard <b>de Entregas</b></div>
+                <div class="dashboard-subtitle">O QUE CADA PESSOA ESTÁ FAZENDO E O QUE JÁ ENTREGOU</div>
+                <button type="button" id="dashboardOnlyLogoutBtn" class="dashboard-only-logout-btn" style="display:none;">Sair</button>
             </div>
 
-            <div class="input-group" style="margin-top:1.2rem;">
-                <label>Tarefas concluídas por período</label>
-                <div class="corner-options">
-                    <button type="button" class="report-period-btn is-current" data-period="day">Dia</button>
-                    <button type="button" class="report-period-btn" data-period="week">Semana</button>
-                    <button type="button" class="report-period-btn" data-period="month">Mês</button>
+            <div class="dashboard-section">
+                <div class="dsg-sec">Ranking de Entregas <span class="ct">no prazo × atrasado</span></div>
+
+                <div class="dashboard-podiums">
+                    <div class="dashboard-podium-col">
+                        <div class="dashboard-podium-heading">🏆 Mais Pontuais</div>
+                        <div id="reportPodiumBest"></div>
+                    </div>
+                    <div class="dashboard-podium-col">
+                        <div class="dashboard-podium-heading dashboard-podium-heading-warn">⚠️ Mais Atrasos</div>
+                        <div id="reportPodiumWorst"></div>
+                    </div>
+                </div>
+
+                <div class="dashboard-filter-bar">
+                    <div class="dashboard-filter-field">
+                        <label>Entregue de</label>
+                        <input type="date" id="reportDateFrom">
+                    </div>
+                    <div class="dashboard-filter-field">
+                        <label>Entregue até</label>
+                        <input type="date" id="reportDateTo">
+                    </div>
+                    <button type="button" id="reportClearPeriodBtn" class="dashboard-clear-btn">Limpar período</button>
+                    <span class="dashboard-filter-note" id="reportPeriodNote">Todas as entregas registradas</span>
+                </div>
+
+                <div class="dashboard-table-wrap">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Pessoa</th>
+                                <th>No Prazo</th>
+                                <th>Atrasadas</th>
+                                <th>Total Entregue</th>
+                                <th>Proporção</th>
+                                <th>% No Prazo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportByPerson"></tbody>
+                    </table>
                 </div>
             </div>
 
-            <div id="reportChart" class="chart-section" style="margin-top:0.8rem;"></div>
+            <div class="dashboard-section">
+                <div class="dsg-sec">Tarefas por Pessoa <span class="ct">em ordem alfabética · todas as raias</span></div>
 
-            <div class="input-group" style="margin-top:1.2rem;">
-                <label>Ranking de Entregas no Prazo (🥇 melhor → ⚠️ pior)</label>
-                <div id="reportByPerson" class="members-list"></div>
+                <div class="dashboard-filter-bar">
+                    <div class="dashboard-filter-field" style="flex:1; min-width:180px;">
+                        <label>Buscar</label>
+                        <input type="text" id="taskSearchInput" placeholder="Post-it ou pessoa...">
+                    </div>
+                    <div class="dashboard-filter-field">
+                        <label>Pessoa</label>
+                        <select id="taskFilterPerson">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="dashboard-filter-field">
+                        <label>Raia</label>
+                        <select id="taskFilterLane">
+                            <option value="">Todas</option>
+                            <option value="todo">Fazendo</option>
+                            <option value="testing">Em Teste</option>
+                            <option value="paused">Pausado</option>
+                            <option value="done">Concluída</option>
+                        </select>
+                    </div>
+                    <button type="button" id="taskFilterClearBtn" class="dashboard-clear-btn">Limpar filtros</button>
+                </div>
+
+                <div class="dashboard-table-wrap">
+                    <table class="dashboard-table dashboard-spreadsheet">
+                        <thead>
+                            <tr>
+                                <th>Post-it</th>
+                                <th>Raia</th>
+                                <th>Início</th>
+                                <th>Prazo</th>
+                                <th>%</th>
+                                <th>Avanço</th>
+                                <th>Observações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportActiveTasksByPerson"></tbody>
+                    </table>
+                </div>
             </div>
 
-            <div style="display:flex; gap:0.6rem; margin-top:1.2rem;">
-                <button type="button" id="exportReportCsvBtn" class="btn-secondary" style="flex:1;">⬇️ Exportar Excel (CSV)</button>
-                <button type="button" id="printReportBtn" class="btn-secondary" style="flex:1;">🖨️ Imprimir / Salvar PDF</button>
+            <div class="dashboard-section" style="margin-top:0.5rem;">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value" id="reportTotalDone">0</div><div class="stat-label">Concluídos (total)</div></div>
+                    <div class="stat-card"><div class="stat-value" id="reportOnTimePct" style="color:var(--green);">0%</div><div class="stat-label">No prazo</div></div>
+                    <div class="stat-card"><div class="stat-value" id="reportLatePct" style="color:var(--red);">0%</div><div class="stat-label">Atrasados</div></div>
+                </div>
+
+                <div class="input-group" style="margin-top:1.2rem;">
+                    <label>Tarefas concluídas por período</label>
+                    <div class="corner-options">
+                        <button type="button" class="report-period-btn is-current" data-period="day">Dia</button>
+                        <button type="button" class="report-period-btn" data-period="week">Semana</button>
+                        <button type="button" class="report-period-btn" data-period="month">Mês</button>
+                    </div>
+                </div>
+
+                <div id="reportChart" class="chart-section" style="margin-top:0.8rem;"></div>
+
+                <div style="display:flex; gap:0.6rem; margin-top:1.2rem;">
+                    <button type="button" id="exportReportCsvBtn" class="btn-secondary" style="flex:1;">⬇️ Exportar Excel (CSV)</button>
+                    <button type="button" id="printReportBtn" class="btn-secondary" style="flex:1;">🖨️ Imprimir / Salvar PDF</button>
+                </div>
             </div>
         </div>
     </div>
