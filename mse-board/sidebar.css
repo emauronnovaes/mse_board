@@ -71,6 +71,13 @@
     overflow: hidden;
 }
 
+.sidebar-mark a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    line-height: 0;
+}
+
 .mark-dot {
     width: 9px;
     height: 9px;
