@@ -2,6 +2,9 @@
 // ==========================================
 // MSE Board — POST: move um post-it (arrastar entre colunas/raias)
 // Endpoint leve — só troca person_id/status/completed_at, não reenvia o post-it inteiro.
+//
+// Agora com try/catch: se der erro, devolve a mensagem real do banco em vez
+// de uma tela em branco (500 sem corpo) — facilita muito o diagnóstico.
 // ==========================================
 
 require_once __DIR__ . '/../config.php';
@@ -23,19 +26,27 @@ if (!$p || empty($p['id']) || empty($p['personId'])) {
     exit;
 }
 
-$pdo = getDbConnection();
+try {
+    $pdo = getDbConnection();
 
-$stmt = $pdo->prepare(
-    "UPDATE cards SET person_id = :person_id,
-     status = COALESCE(:status, status),
-     completed_at = :completed_at
-     WHERE id = :id"
-);
-$stmt->execute([
-    'person_id' => $p['personId'],
-    'status' => $p['status'] ?? null,
-    'completed_at' => array_key_exists('completedAt', $p) ? $p['completedAt'] : null,
-    'id' => $p['id']
-]);
+    $stmt = $pdo->prepare(
+        "UPDATE cards SET person_id = :person_id,
+         status = COALESCE(:status, status),
+         completed_at = :completed_at
+         WHERE id = :id"
+    );
+    $stmt->execute([
+        'person_id' => $p['personId'],
+        'status' => $p['status'] ?? null,
+        'completed_at' => array_key_exists('completedAt', $p) ? $p['completedAt'] : null,
+        'id' => $p['id']
+    ]);
 
-echo json_encode(['success' => true]);
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Falha ao mover o post-it.',
+        'details' => $e->getMessage()
+    ]);
+}
