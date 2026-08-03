@@ -4876,7 +4876,7 @@ function renderOnlineUsers(currentUser) {
         .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL || u === currentUser);
     list.innerHTML = '';
 
-    users.slice(0, 6).forEach(user => {
+    users.slice(0, 5).forEach(user => {
         const avatar = document.createElement('div');
         avatar.className = 'user-avatar';
         avatar.title = user === currentUser ? `${user} (você)` : user;
@@ -4884,11 +4884,11 @@ function renderOnlineUsers(currentUser) {
         list.appendChild(avatar);
     });
 
-    if (users.length > 6) {
+    if (users.length > 5) {
         const more = document.createElement('div');
         more.className = 'user-avatar';
-        more.title = `+${users.length - 6} outros`;
-        more.textContent = `+${users.length - 6}`;
+        more.title = `+${users.length - 5} outros`;
+        more.textContent = `+${users.length - 5}`;
         list.appendChild(more);
     }
 }
