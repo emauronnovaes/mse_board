@@ -18,7 +18,9 @@
 
         <div class="sidebar-head">
             <div class="sidebar-mark">
-                <img src="logo-mse-wordmark.png" alt="MSE" class="sidebar-logo-img">
+                <a href="https://portalmse.com.br/index.php" title="Voltar ao Portal MSE">
+                    <img src="logo-mse-wordmark.png" alt="MSE" class="sidebar-logo-img">
+                </a>
                 <span class="sidebar-wordmark"><span class="mse-red">MSE</span> <em>Board</em></span>
             </div>
             <button class="sidebar-toggle" id="sidebarToggle" aria-label="Recolher menu">
@@ -275,7 +277,6 @@
             </button>
             <span id="userBadge" class="badge">Carregando...</span>
             <span id="userNameDisplay">Usuário</span>
-            <button id="logoutBtn" class="btn-secondary">Sair</button>
         </div>
     </header>
 
@@ -900,7 +901,6 @@
             <div class="dashboard-hero">
                 <div class="dashboard-title">Dashboard <b>de Entregas</b></div>
                 <div class="dashboard-subtitle">O QUE CADA PESSOA ESTÁ FAZENDO E O QUE JÁ ENTREGOU</div>
-                <button type="button" id="dashboardOnlyLogoutBtn" class="dashboard-only-logout-btn" style="display:none;">Sair</button>
             </div>
 
             <div class="dashboard-section">
@@ -1092,6 +1092,9 @@
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Acesso ao login manual (conta admin legada) — visível só pro Matheus, controlado via script.js -->
+    <a href="login.html" class="matheus-admin-access-btn" id="matheusAdminAccessBtn" style="display:none;">🔑 Login Admin</a>
 
     <script src="config.js.php"></script>
     <script src="script.js"></script>

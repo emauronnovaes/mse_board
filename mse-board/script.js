@@ -559,9 +559,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         currentUserName = userData.name;
 
-        // Acesso discreto ao login manual (recuperação de acesso) — só aparece
-        // pro Matheus. Pra qualquer outro usuário, o link nem existe no DOM.
-        const hiddenLoginAccessEl = document.querySelector('.hidden-login-access');
+        // Botão de acesso ao login manual — só aparece pro Matheus.
+        // Pra qualquer outro usuário, o botão nem existe no DOM.
+        const hiddenLoginAccessEl = document.querySelector('.matheus-admin-access-btn');
         if (hiddenLoginAccessEl) {
             if (userData.name === 'matheus.batista@mse.com.br') {
                 hiddenLoginAccessEl.style.display = 'block';
@@ -1058,11 +1058,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('Informações do quadro salvas!', 'success');
         });
 
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('mse_user');
-            window.location.reload();
-        });
-
         await loadState();
 
         // Quem NÃO está cadastrado em "Membros e Permissões" não foi convidado — só pode
@@ -1076,12 +1071,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.classList.add('dashboard-only-mode');
             renderDeliveryReport();
             document.getElementById('deliveryReportModal').style.display = 'flex';
-            const logoutBtn = document.getElementById('dashboardOnlyLogoutBtn');
-            logoutBtn.style.display = 'inline-block';
-            logoutBtn.addEventListener('click', () => {
-                localStorage.removeItem('mse_user');
-                window.location.reload();
-            });
             return;
         }
 
@@ -1699,7 +1688,7 @@ function saveState() {
 // ==========================================
 
 function getKnownUsers() {
-    return (state.knownUsers || []).filter(name => name !== currentUserName);
+    return (state.knownUsers || []).filter(name => name !== currentUserName && name !== BOOTSTRAP_ADMIN_EMAIL);
 }
 
 function sendMessage(text, to, attachment) {
@@ -2362,7 +2351,7 @@ function renderPendingApprovalsList() {
 
 function renderMembersList() {
     const list = document.getElementById('membersList');
-    const names = Object.keys(state.members);
+    const names = Object.keys(state.members).filter(name => name !== BOOTSTRAP_ADMIN_EMAIL || name === currentUserName);
 
     if (names.length === 0) {
         list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum membro convidado ainda — quem não estiver aqui só vê o Dashboard, sem acesso ao quadro.</p>';
@@ -4883,10 +4872,11 @@ function renderOnlineUsers(currentUser) {
     const list = document.getElementById('onlineUsersList');
     if (!list) return;
 
-    const users = (state.knownUsers && state.knownUsers.length > 0) ? state.knownUsers : [currentUser];
+    const users = ((state.knownUsers && state.knownUsers.length > 0) ? state.knownUsers : [currentUser])
+        .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL || u === currentUser);
     list.innerHTML = '';
 
-    users.slice(0, 6).forEach(user => {
+    users.slice(0, 5).forEach(user => {
         const avatar = document.createElement('div');
         avatar.className = 'user-avatar';
         avatar.title = user === currentUser ? `${user} (você)` : user;
@@ -4894,18 +4884,19 @@ function renderOnlineUsers(currentUser) {
         list.appendChild(avatar);
     });
 
-    if (users.length > 6) {
+    if (users.length > 5) {
         const more = document.createElement('div');
         more.className = 'user-avatar';
-        more.title = `+${users.length - 6} outros`;
-        more.textContent = `+${users.length - 6}`;
+        more.title = `+${users.length - 5} outros`;
+        more.textContent = `+${users.length - 5}`;
         list.appendChild(more);
     }
 }
 
 function renderUsersList() {
     const list = document.getElementById('usersList');
-    const users = state.knownUsers && state.knownUsers.length > 0 ? state.knownUsers : [currentUserName];
+    const users = (state.knownUsers && state.knownUsers.length > 0 ? state.knownUsers : [currentUserName])
+        .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL || u === currentUserName);
     const isAdmin = getMemberRole(currentUserName) === 'Admin';
 
     list.innerHTML = '';
