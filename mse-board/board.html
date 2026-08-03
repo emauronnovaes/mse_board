@@ -1093,8 +1093,10 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Acesso ao login manual (conta admin legada) — visível só pro Matheus, controlado via script.js -->
-    <a href="login.html" class="matheus-admin-access-btn" id="matheusAdminAccessBtn" style="display:none;">🔑 Login Admin</a>
+    <!-- Acesso ao login manual (conta admin legada) — visível só pro Matheus, controlado via script.js.
+         Limpa a sessão SSO atual antes de navegar, senão o login.html redireciona de volta
+         pro board sozinho (porque já existe uma sessão ativa). -->
+    <a href="login.html" class="matheus-admin-access-btn" id="matheusAdminAccessBtn" style="display:none;" onclick="localStorage.removeItem('mse_user');">🔑 Login Admin</a>
 
     <script src="config.js.php"></script>
     <script src="script.js"></script>
