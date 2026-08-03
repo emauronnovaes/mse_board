@@ -2467,6 +2467,25 @@ body.observer-mode .cards-container.drag-over {
     transform: rotate(-90deg);
 }
 
+/* Acesso discreto ao login manual (recuperação de acesso admin) —
+   um quadradinho quase invisível no canto, some no resto da tela */
+.hidden-login-access {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 22px;
+    height: 22px;
+    z-index: 9999;
+    opacity: 0.03;
+    transition: opacity 0.2s ease;
+}
+
+.hidden-login-access:hover {
+    opacity: 0.25;
+    background-color: var(--text-muted);
+}
+
 .lane-container {
     min-height: 90px;
     gap: 0.6rem;

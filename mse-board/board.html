@@ -110,15 +110,6 @@
                     </span>
                 </a>
 
-                <a class="nav-item" href="#" data-tooltip="Dashboard e Analytics" data-action="analytics">
-                    <span class="nav-icon">
-                        <svg viewBox="0 0 20 20" fill="none"><path d="M2.5 17.2V2.8M2.5 17.2h15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><rect x="5" y="10.5" width="2.4" height="5.2" stroke="currentColor" stroke-width="1.3"/><rect x="9.2" y="6.8" width="2.4" height="8.9" stroke="currentColor" stroke-width="1.3"/><rect x="13.4" y="4" width="2.4" height="11.7" stroke="currentColor" stroke-width="1.3"/></svg>
-                    </span>
-                    <span class="nav-labels">
-                        <span class="nav-title">Dashboard &amp; Analytics</span>
-                        <span class="nav-desc">Lead time, gargalos, produtividade</span>
-                    </span>
-                </a>
             </div>
 
             <div class="nav-section">
@@ -291,9 +282,9 @@
     <!-- Área Principal do Quadro -->
     <main class="board-container">
 
-        <!-- Barra de Ações Rápidas -->
-        <section class="board-actions">
-            <div>
+        <!-- Barra compacta: botões numa linha, busca+filtros na outra -->
+        <section class="board-actions board-actions-compact">
+            <div style="display:none;">
                 <h2 id="boardTitleDisplay">Quadro Geral de Equipe</h2>
                 <p class="subtitle" id="boardDescDisplay">Adicione pessoas e atribua tarefas com checklists e anexos</p>
             </div>
@@ -301,12 +292,17 @@
                 <button id="aboutBoardBtn" class="btn-secondary" title="Sobre este quadro">ℹ Sobre</button>
                 <button id="addPersonBtn" class="btn-secondary">+ Adicionar Pessoa</button>
                 <button id="addDoneTabBtn" class="btn-secondary">+ Aba Concluído</button>
+                <span class="action-buttons-divider"></span>
+                <button id="openQuickAssignModalBtn" class="btn-secondary">📋 Atribuir Tarefas</button>
                 <button id="openModalBtn" class="btn-primary">+ Novo Post-it</button>
             </div>
         </section>
 
-        <!-- Barra de Busca e Filtros -->
-        <section class="filter-bar">
+        <button type="button" id="toggleFiltersBtn" class="toggle-filters-btn">
+            <span id="toggleFiltersIcon">▲</span> Busca e Filtros
+        </button>
+
+        <section class="filter-bar filter-bar-compact" id="filterBarContent">
             <input type="text" id="searchInput" placeholder="🔎 Buscar por título, checklist ou responsável..." class="search-input">
 
             <select id="filterPriority" class="filter-select">
@@ -322,12 +318,12 @@
 
             <label class="filter-checkbox">
                 <input type="checkbox" id="filterOverdue">
-                Somente atrasados
+                Atrasados
             </label>
 
             <label class="filter-checkbox">
                 <input type="checkbox" id="filterStarred">
-                ★ Somente favoritos
+                ★ Favoritos
             </label>
 
             <button id="clearFiltersBtn" class="btn-secondary">Limpar filtros</button>
@@ -816,6 +812,34 @@
         </div>
     </div>
 
+    <!-- Modal: Atribuir Tarefas (formato de planilha) -->
+    <div id="quickAssignModal" class="modal">
+        <div class="modal-content quick-assign-modal-content">
+            <span class="close-btn" id="closeQuickAssignModalBtn">&times;</span>
+            <h3>📋 Atribuir Tarefas</h3>
+            <p class="settings-subtitle">Preencha as linhas abaixo e clique em "Salvar Tudo" — cada linha preenchida vira um post-it novo.</p>
+
+            <div class="quick-assign-table-wrap">
+                <table class="quick-assign-table">
+                    <thead>
+                        <tr>
+                            <th>Título da Tarefa</th>
+                            <th>Adicionar à (Responsável)</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="quickAssignRows"></tbody>
+                </table>
+            </div>
+
+            <button type="button" id="addQuickAssignRowBtn" class="btn-secondary" style="margin-top:0.8rem;">+ Linha</button>
+
+            <div style="display:flex; gap:0.6rem; margin-top:1.4rem;">
+                <button type="button" id="saveQuickAssignBtn" class="btn-primary" style="flex:1;">💾 Salvar Tudo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Importar do Trello -->
     <div id="importTrelloModal" class="modal">
         <div class="modal-content">
@@ -911,7 +935,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Pessoa</th>
+                                <th>Responsável</th>
                                 <th>No Prazo</th>
                                 <th>Atrasadas</th>
                                 <th>Total Entregue</th>
@@ -925,23 +949,24 @@
             </div>
 
             <div class="dashboard-section">
-                <div class="dsg-sec">Tarefas por Pessoa <span class="ct">em ordem alfabética · todas as raias</span></div>
+                <div class="dsg-sec">Tarefas por Responsável <span class="ct">em ordem alfabética · todos os status</span></div>
 
                 <div class="dashboard-filter-bar">
                     <div class="dashboard-filter-field" style="flex:1; min-width:180px;">
                         <label>Buscar</label>
-                        <input type="text" id="taskSearchInput" placeholder="Post-it ou pessoa...">
+                        <input type="text" id="taskSearchInput" placeholder="Post-it ou responsável...">
                     </div>
                     <div class="dashboard-filter-field">
-                        <label>Pessoa</label>
+                        <label>Responsável</label>
                         <select id="taskFilterPerson">
                             <option value="">Todas</option>
                         </select>
                     </div>
                     <div class="dashboard-filter-field">
-                        <label>Raia</label>
+                        <label>Status</label>
                         <select id="taskFilterLane">
                             <option value="">Todas</option>
+                            <option value="afazer">A Fazer</option>
                             <option value="todo">Fazendo</option>
                             <option value="testing">Em Teste</option>
                             <option value="paused">Pausado</option>
@@ -956,7 +981,7 @@
                         <thead>
                             <tr>
                                 <th>Post-it</th>
-                                <th>Raia</th>
+                                <th>Status</th>
                                 <th>Início</th>
                                 <th>Prazo</th>
                                 <th>%</th>

@@ -559,6 +559,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         currentUserName = userData.name;
 
+        // Acesso discreto ao login manual (recuperação de acesso) — só aparece
+        // pro Matheus. Pra qualquer outro usuário, o link nem existe no DOM.
+        const hiddenLoginAccessEl = document.querySelector('.hidden-login-access');
+        if (hiddenLoginAccessEl) {
+            if (userData.name === 'matheus.batista@mse.com.br') {
+                hiddenLoginAccessEl.style.display = 'block';
+            } else {
+                hiddenLoginAccessEl.remove();
+            }
+        }
+
         // Rodapé do menu lateral
         document.getElementById('sidebarFootName').textContent = userData.name;
         document.getElementById('sidebarFootRole').textContent = userData.role;

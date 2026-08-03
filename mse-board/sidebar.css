@@ -103,12 +103,7 @@
 }
 
 .sidebar-wordmark {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 700;
-    font-size: 1.05rem;
-    color: var(--sb-text-primary);
-    letter-spacing: 0.01em;
-    white-space: nowrap;
+    display: none;
 }
 
 .sidebar-wordmark em {
@@ -168,6 +163,10 @@
 
 .nav-section {
     margin-bottom: 1.9rem;
+}
+
+.sidebar.is-collapsed .nav-section {
+    margin-bottom: 0.4rem;
 }
 
 .nav-section:last-child {
