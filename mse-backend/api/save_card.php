@@ -1,6 +1,15 @@
 <?php
 // ==========================================
 // MSE Board — POST: cria ou atualiza um post-it inteiro
+//
+// Esta versão descobre sozinha quais colunas existem de verdade na tabela
+// `cards` antes de montar a query (usando SHOW COLUMNS). Isso evita o erro
+// "Unknown column" quando o banco tem uma estrutura diferente da esperada
+// (por exemplo, depois que "Obra/Projeto" e "Horas Estimadas/Trabalhadas"
+// foram removidos e substituídos por "start_date"/"observacao").
+//
+// Também devolve a mensagem de erro real em caso de falha, em vez de uma
+// tela em branco (erro 500 sem corpo) — facilita muito o diagnóstico.
 // ==========================================
 
 require_once __DIR__ . '/../config.php';
@@ -28,66 +37,80 @@ if (!$c || empty($c['id']) || empty($c['personId'])) {
     exit;
 }
 
-$pdo = getDbConnection();
+try {
+    $pdo = getDbConnection();
 
-$stmt = $pdo->prepare(
-    "INSERT INTO cards
-        (id, person_id, title, color, priority, due_date, start_date, estimated_hours, worked_hours, project, author, status, sticker_id, cover_image,
-         starred, archived, checklist, attachments, comments, assignees, label_ids, custom_values, created_at, completed_at, observacao)
-     VALUES
-        (:id, :person_id, :title, :color, :priority, :due_date, :start_date, :estimated_hours, :worked_hours, :project, :author, :status, :sticker_id, :cover_image,
-         :starred, :archived, :checklist, :attachments, :comments, :assignees, :label_ids, :custom_values, :created_at, :completed_at, :observacao)
-     ON DUPLICATE KEY UPDATE
-        person_id = VALUES(person_id),
-        title = VALUES(title),
-        color = VALUES(color),
-        priority = VALUES(priority),
-        due_date = VALUES(due_date),
-        start_date = VALUES(start_date),
-        estimated_hours = VALUES(estimated_hours),
-        worked_hours = VALUES(worked_hours),
-        project = VALUES(project),
-        status = VALUES(status),
-        sticker_id = VALUES(sticker_id),
-        cover_image = VALUES(cover_image),
-        starred = VALUES(starred),
-        archived = VALUES(archived),
-        checklist = VALUES(checklist),
-        attachments = VALUES(attachments),
-        comments = VALUES(comments),
-        assignees = VALUES(assignees),
-        label_ids = VALUES(label_ids),
-        custom_values = VALUES(custom_values),
-        completed_at = VALUES(completed_at),
-        observacao = VALUES(observacao)"
-);
+    // Descobre dinamicamente quais colunas existem de verdade na tabela `cards`
+    // hoje. Assim, se o banco de produção tiver colunas diferentes das que o
+    // código espera (renomeadas, removidas, adicionadas), a gente só usa as
+    // que realmente existem, em vez de travar com "Unknown column".
+    $existingColumns = array_column(
+        $pdo->query("SHOW COLUMNS FROM cards")->fetchAll(PDO::FETCH_ASSOC),
+        'Field'
+    );
 
-$stmt->execute([
-    'id' => $c['id'],
-    'person_id' => $c['personId'],
-    'title' => $c['title'],
-    'color' => $c['color'] ?? 'yellow',
-    'priority' => $c['priority'] ?? 'media',
-    'due_date' => $c['dueDate'] ?? null,
-    'start_date' => $c['startDate'] ?? null,
-    'estimated_hours' => $c['estimatedHours'] ?? null,
-    'worked_hours' => $c['workedHours'] ?? null,
-    'project' => $c['project'] ?? null,
-    'author' => $c['author'] ?? null,
-    'status' => $c['status'] ?? 'todo',
-    'sticker_id' => $c['stickerId'] ?? null,
-    'cover_image' => $c['coverImage'] ?? null,
-    'starred' => !empty($c['starred']) ? 1 : 0,
-    'archived' => !empty($c['archived']) ? 1 : 0,
-    'checklist' => json_encode($c['checklist'] ?? []),
-    'attachments' => json_encode($c['attachments'] ?? []),
-    'comments' => json_encode($c['comments'] ?? []),
-    'assignees' => json_encode($c['assignees'] ?? []),
-    'label_ids' => json_encode($c['labelIds'] ?? []),
-    'custom_values' => json_encode($c['customValues'] ?? (object)[]),
-    'created_at' => $c['createdAt'] ?? round(microtime(true) * 1000),
-    'completed_at' => $c['completedAt'] ?? null,
-    'observacao' => $c['observacao'] ?? ''
-]);
+    // Candidatos: nome_da_coluna => valor a gravar. Cobre tanto os campos
+    // antigos (project/estimated_hours/worked_hours) quanto os novos
+    // (start_date/observacao) — só entra na query o que existir de verdade.
+    $candidates = [
+        'person_id'       => $c['personId'],
+        'title'           => $c['title'],
+        'color'           => $c['color'] ?? 'yellow',
+        'priority'        => $c['priority'] ?? 'media',
+        'due_date'        => $c['dueDate'] ?? null,
+        'start_date'      => $c['startDate'] ?? null,
+        'observacao'      => $c['observacao'] ?? '',
+        'estimated_hours' => $c['estimatedHours'] ?? null,
+        'worked_hours'    => $c['workedHours'] ?? null,
+        'project'         => $c['project'] ?? null,
+        'author'          => $c['author'] ?? null,
+        'status'          => $c['status'] ?? 'todo',
+        'sticker_id'      => $c['stickerId'] ?? null,
+        'cover_image'     => $c['coverImage'] ?? null,
+        'starred'         => !empty($c['starred']) ? 1 : 0,
+        'archived'        => !empty($c['archived']) ? 1 : 0,
+        'checklist'       => json_encode($c['checklist'] ?? []),
+        'attachments'     => json_encode($c['attachments'] ?? []),
+        'comments'        => json_encode($c['comments'] ?? []),
+        'assignees'       => json_encode($c['assignees'] ?? []),
+        'label_ids'       => json_encode($c['labelIds'] ?? []),
+        'custom_values'   => json_encode($c['customValues'] ?? (object)[]),
+        'created_at'      => $c['createdAt'] ?? round(microtime(true) * 1000),
+        'completed_at'    => $c['completedAt'] ?? null
+    ];
 
-echo json_encode(['success' => true]);
+    // id sempre entra (é a chave primária); os demais só se existirem na tabela
+    $fields = ['id' => $c['id']];
+    foreach ($candidates as $column => $value) {
+        if (in_array($column, $existingColumns, true)) {
+            $fields[$column] = $value;
+        }
+    }
+
+    $columnNames = array_keys($fields);
+    $placeholders = array_map(function ($col) {
+        return ':' . $col;
+    }, $columnNames);
+
+    $updateColumns = array_filter($columnNames, function ($col) {
+        return $col !== 'id';
+    });
+    $updateParts = array_map(function ($col) {
+        return "$col = VALUES($col)";
+    }, $updateColumns);
+
+    $sql = "INSERT INTO cards (" . implode(', ', $columnNames) . ")
+            VALUES (" . implode(', ', $placeholders) . ")
+            ON DUPLICATE KEY UPDATE " . implode(', ', $updateParts);
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($fields);
+
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Falha ao salvar o post-it.',
+        'details' => $e->getMessage()
+    ]);
+}
