@@ -1270,6 +1270,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             openCardModalForCreate();
         });
 
+        document.getElementById('openQuickAssignModalBtn').addEventListener('click', () => {
+            openQuickAssignModal();
+        });
+
+        document.getElementById('closeQuickAssignModalBtn').addEventListener('click', () => {
+            document.getElementById('quickAssignModal').style.display = 'none';
+        });
+
+        document.getElementById('addQuickAssignRowBtn').addEventListener('click', () => {
+            addQuickAssignRow();
+        });
+
+        document.getElementById('saveQuickAssignBtn').addEventListener('click', () => {
+            saveAllQuickAssignRows();
+        });
+
         document.getElementById('closeModalBtn').addEventListener('click', () => {
             cardModal.style.display = 'none';
         });
@@ -1400,6 +1416,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('filterOverdue').checked = false;
             document.getElementById('filterStarred').checked = false;
             renderBoard();
+        });
+
+        // Botão de minimizar Busca e Filtros (lembra o estado entre acessos)
+        const filterBarContent = document.getElementById('filterBarContent');
+        const toggleFiltersIcon = document.getElementById('toggleFiltersIcon');
+        if (localStorage.getItem('mse_filters_hidden') === 'true') {
+            filterBarContent.classList.add('filters-hidden');
+            toggleFiltersIcon.textContent = '▼';
+        }
+        document.getElementById('toggleFiltersBtn').addEventListener('click', () => {
+            const isHidden = filterBarContent.classList.toggle('filters-hidden');
+            toggleFiltersIcon.textContent = isHidden ? '▼' : '▲';
+            localStorage.setItem('mse_filters_hidden', isHidden ? 'true' : 'false');
         });
     }
 });
@@ -2710,7 +2739,7 @@ function renderDeliveryReport() {
     // ---------- Tarefas por pessoa, em formato de planilha (todas as raias) ----------
     const activeContainer = document.getElementById('reportActiveTasksByPerson');
     const byColumn = {};
-    const laneLabels = { todo: 'Fazendo', testing: 'Em Teste', paused: 'Pausado', done: 'Concluída' };
+    const laneLabels = { afazer: 'A Fazer', todo: 'Fazendo', testing: 'Em Teste', paused: 'Pausado', done: 'Concluída' };
 
     // Filtros da tabela (busca por texto, pessoa, raia)
     const taskSearchTerm = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
@@ -2786,9 +2815,6 @@ function renderDeliveryReport() {
             else if (c.dueDate && isDueSoon(c)) barColor = 'var(--gold)';
             else barColor = 'var(--accent)';
 
-            // Contexto do checklist (só leitura) + caixa de observação editável
-            const checklistLines = (c.checklist || []).map(i => `${i.checked ? '✅' : '☐'} ${escapeHtml(i.text)}`).join('<br>');
-
             return `
                 <tr class="dash-task-row" onclick="document.getElementById('deliveryReportModal').style.display='none'; openViewModal('${c.id}')">
                     <td class="dash-task-title-cell">${escapeHtml(c.title)}</td>
@@ -2802,7 +2828,6 @@ function renderDeliveryReport() {
                         </div>
                     </td>
                     <td class="dash-obs-cell">
-                        ${checklistLines ? `<div class="dash-obs-checklist">${checklistLines}</div>` : ''}
                         <textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>
                     </td>
                 </tr>
@@ -3411,7 +3436,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         dueDate: dueDate || '',
         startDate: startDate || null,
         author,
-        status: 'todo',
+        status: 'afazer',
         checklist: lines.map(text => ({ text, checked: false })),
         attachments: attachments || [],
         comments: [],
@@ -3791,6 +3816,74 @@ function populateAssigneeFilter() {
     if (sorted.includes(currentValue)) select.value = currentValue;
 }
 
+let quickAssignRowCounter = 0;
+
+function buildPersonOptionsHtml() {
+    const allColumns = [...state.people].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    return '<option value="" disabled selected>Escolha...</option>' +
+        allColumns.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+}
+
+function addQuickAssignRow() {
+    quickAssignRowCounter++;
+    const rowId = `qar_${quickAssignRowCounter}`;
+    const tbody = document.getElementById('quickAssignRows');
+    const row = document.createElement('tr');
+    row.id = rowId;
+    row.innerHTML = `
+        <td><input type="text" class="quick-assign-title-input" placeholder="Título da tarefa..."></td>
+        <td><select class="quick-assign-person-select">${buildPersonOptionsHtml()}</select></td>
+        <td><button type="button" class="quick-assign-remove-row-btn" title="Remover linha" onclick="document.getElementById('${rowId}').remove()">&times;</button></td>
+    `;
+    tbody.appendChild(row);
+}
+
+function openQuickAssignModal() {
+    const tbody = document.getElementById('quickAssignRows');
+    tbody.innerHTML = '';
+    quickAssignRowCounter = 0;
+    // Começa com 4 linhas em branco, prontas pra preencher
+    for (let i = 0; i < 4; i++) addQuickAssignRow();
+    document.getElementById('quickAssignModal').style.display = 'flex';
+}
+
+function saveAllQuickAssignRows() {
+    const rows = [...document.querySelectorAll('#quickAssignRows tr')];
+    let count = 0;
+
+    rows.forEach(row => {
+        const title = row.querySelector('.quick-assign-title-input').value.trim();
+        const personId = row.querySelector('.quick-assign-person-select').value;
+        if (!title || !personId) return;
+
+        addCard({
+            personId,
+            title,
+            lines: [],
+            color: 'yellow',
+            priority: 'media',
+            dueDate: '',
+            author: currentUserName,
+            attachments: [],
+            customValues: {},
+            labelIds: [],
+            stickerId: null,
+            coverImage: null,
+            startDate: ''
+        });
+        count++;
+    });
+
+    if (count === 0) {
+        showToast('Preencha pelo menos uma linha com título e responsável.');
+        return;
+    }
+
+    showToast(`${count} tarefa${count > 1 ? 's' : ''} adicionada${count > 1 ? 's' : ''}!`, 'success');
+    document.getElementById('quickAssignModal').style.display = 'none';
+    renderBoard();
+}
+
 function renderBoard() {
     populateAssigneeFilter();
     const grid = document.getElementById('peopleGrid');
@@ -3828,7 +3921,7 @@ function renderBoard() {
             const cardsForPerson = state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters));
             cardsForPerson.forEach(card => container.appendChild(buildPostItElement(card)));
         } else {
-            ['todo', 'testing', 'paused', 'done'].forEach(status => {
+            ['afazer', 'todo', 'testing', 'paused', 'done'].forEach(status => {
                 const container = document.getElementById(`cards_${person.id}__${status}`);
                 if (!container) return;
                 const cardsForLane = state.cards.filter(c =>
@@ -3839,10 +3932,18 @@ function renderBoard() {
                 cardsForLane.forEach(card => container.appendChild(buildPostItElement(card)));
 
                 // "Em Espera" e "Concluído" minimizam sozinhos quando estão vazios,
-                // dando mais espaço pra "A Fazer" mostrar mais post-its de uma vez
-                if (status !== 'todo') {
-                    const laneEl = container.closest('.lane');
-                    if (laneEl) laneEl.classList.toggle('lane-collapsed', cardsForLane.length === 0);
+                // dando mais espaço pra "A Fazer" mostrar mais post-its de uma vez.
+                // Se o usuário já minimizou/expandiu essa raia manualmente (botão ▾),
+                // a escolha dele tem prioridade sobre esse comportamento automático.
+                const laneEl = container.closest('.lane');
+                if (laneEl) {
+                    const prefKey = `${person.id}__${status}`;
+                    const manualPrefs = getLaneCollapsePrefs();
+                    if (Object.prototype.hasOwnProperty.call(manualPrefs, prefKey)) {
+                        laneEl.classList.toggle('lane-collapsed', manualPrefs[prefKey]);
+                    } else if (status !== 'todo') {
+                        laneEl.classList.toggle('lane-collapsed', cardsForLane.length === 0);
+                    }
                 }
             });
         }
@@ -4049,6 +4150,29 @@ function getInitials(name) {
     return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
 }
 
+// ---------- Minimizar raia manualmente (botão ▾ no header de cada raia) ----------
+// Lembra a escolha do usuário por pessoa+raia entre acessos (mesmo padrão do
+// botão "Busca e Filtros", que usa localStorage).
+function getLaneCollapsePrefs() {
+    try {
+        return JSON.parse(localStorage.getItem('mse_lane_collapse_prefs') || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function toggleLaneCollapse(personId, status) {
+    const laneEl = document.getElementById(`lanewrap_${personId}__${status}`);
+    if (!laneEl) return;
+
+    const collapsed = !laneEl.classList.contains('lane-collapsed');
+    laneEl.classList.toggle('lane-collapsed', collapsed);
+
+    const prefs = getLaneCollapsePrefs();
+    prefs[`${personId}__${status}`] = collapsed;
+    localStorage.setItem('mse_lane_collapse_prefs', JSON.stringify(prefs));
+}
+
 function buildColumn(person) {
     const personId = person.id;
     const isDone = !!person.isDone;
@@ -4107,6 +4231,7 @@ function buildColumn(person) {
         bodyHtml = `<div class="cards-container" id="cards_${personId}" ondragover="allowDrop(event)" ondrop="drop(event)"></div>`;
     } else {
         const lanes = [
+            { key: 'afazer', label: 'A Fazer' },
             { key: 'todo', label: 'Fazendo' },
             { key: 'testing', label: 'Em Teste' },
             { key: 'paused', label: 'Pausado' },
@@ -4115,7 +4240,10 @@ function buildColumn(person) {
         bodyHtml = lanes.map(lane => `
             <div class="lane lane-${lane.key}" id="lanewrap_${personId}__${lane.key}" ondragover="allowDrop(event)" ondrop="drop(event)">
                 <div class="lane-header">
-                    <span>${lane.label}</span>
+                    <span class="lane-header-title">
+                        <button type="button" class="lane-toggle-btn" onclick="toggleLaneCollapse('${personId}', '${lane.key}')" title="Minimizar/expandir raia">▾</button>
+                        <span>${lane.label}</span>
+                    </span>
                     <span class="lane-count" id="count_${personId}__${lane.key}">0</span>
                 </div>
                 <div class="cards-container lane-container" id="cards_${personId}__${lane.key}" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
