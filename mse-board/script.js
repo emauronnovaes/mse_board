@@ -650,14 +650,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     renderErrorLogList();
                     document.getElementById('errorLogModal').style.display = 'flex';
                 } else if (action === 'delivery-report') {
-                    if (getMemberRole(currentUserName) !== 'Admin') {
-                        showToast('Somente administradores podem ver o relatório de entregas.');
-                    } else {
-                        currentReportPeriod = 'day';
-                        document.querySelectorAll('.report-period-btn').forEach(b => b.classList.toggle('is-current', b.dataset.period === 'day'));
-                        renderDeliveryReport();
-                        document.getElementById('deliveryReportModal').style.display = 'flex';
-                    }
+                    currentReportPeriod = 'day';
+                    document.querySelectorAll('.report-period-btn').forEach(b => b.classList.toggle('is-current', b.dataset.period === 'day'));
+                    renderDeliveryReport();
+                    document.getElementById('deliveryReportModal').style.display = 'flex';
                 } else if (action === 'due-alerts') {
                     renderDueAlertsList();
                     document.getElementById('dueAlertsModal').style.display = 'flex';
