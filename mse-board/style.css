@@ -2467,28 +2467,32 @@ body.observer-mode .cards-container.drag-over {
     transform: rotate(-90deg);
 }
 
-/* Botão de acesso ao login manual — só aparece pro Matheus (controlado via script.js) */
+/* Botão de acesso ao login manual — só aparece pro Matheus (controlado via script.js).
+   Bem discreto de propósito: um quadradinho quase invisível no canto. */
 .matheus-admin-access-btn {
     display: none;
     position: fixed;
-    bottom: 16px;
-    left: 16px;
+    bottom: 0;
+    left: 0;
+    width: 20px;
+    height: 20px;
     z-index: 9999;
-    background-color: var(--accent);
-    color: #fff;
-    padding: 0.6rem 1rem;
-    border-radius: 8px;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 600;
+    background-color: transparent;
+    color: transparent;
+    font-size: 0.55rem;
     text-decoration: none;
-    box-shadow: 0 6px 16px rgba(16, 24, 40, 0.25);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-align: center;
+    line-height: 20px;
+    opacity: 0.04;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity 0.2s ease, color 0.2s ease;
 }
 
 .matheus-admin-access-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 22px rgba(16, 24, 40, 0.3);
+    opacity: 0.5;
+    color: #fff;
+    background-color: var(--accent);
 }
 
 .lane-container {
