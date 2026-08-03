@@ -375,7 +375,7 @@ h1, h2, h3, h4 {
 
 /* --- ÁREA DO QUADRO --- */
 .board-container {
-    padding: 2rem 2rem 1rem;
+    padding: 0.6rem 2rem 1rem;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -385,9 +385,58 @@ h1, h2, h3, h4 {
 
 .board-actions {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    margin-bottom: 1.6rem;
+    margin-bottom: 0.6rem;
+    flex-shrink: 0;
+}
+
+.board-actions-compact {
+    margin-bottom: 0.6rem;
+}
+
+.toggle-filters-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.2rem 0;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: color 0.15s ease;
+}
+.toggle-filters-btn:hover {
+    color: var(--accent);
+}
+
+#filterBarContent.filters-hidden {
+    display: none !important;
+}
+
+.filter-bar.filter-bar-compact {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+}
+
+.filter-bar.filter-bar-compact .search-input {
+    flex: 1 1 240px;
+    min-width: 180px;
+}
+
+.filter-bar.filter-bar-compact .filter-select {
+    flex-shrink: 0;
+}
+
+.filter-bar.filter-bar-compact .filter-checkbox {
+    white-space: nowrap;
     flex-shrink: 0;
 }
 
@@ -404,6 +453,8 @@ h1, h2, h3, h4 {
 .action-buttons-group {
     display: flex;
     gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .action-buttons-group .btn-secondary,
@@ -411,18 +462,96 @@ h1, h2, h3, h4 {
     width: auto;
 }
 
-/* --- BARRA DE BUSCA E FILTROS --- */
-.filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin-bottom: 1.6rem;
-    flex-wrap: wrap;
+.action-buttons-divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border);
     flex-shrink: 0;
 }
 
+/* --- BARRA DE BUSCA E FILTROS --- */
+.filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-bottom: 1.6rem;
+    flex-shrink: 0;
+}
+
+
+
+/* --- Modal "Atribuir Tarefas" (planilha) --- */
+.quick-assign-modal-content {
+    max-width: 720px;
+    width: 92vw;
+}
+
+.quick-assign-table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    overflow: hidden;
+    margin-top: 0.8rem;
+}
+
+.quick-assign-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.quick-assign-table thead th {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background-color: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.quick-assign-table tbody tr {
+    border-top: 1px solid var(--border);
+}
+.quick-assign-table tbody tr:first-child {
+    border-top: none;
+}
+
+.quick-assign-table td {
+    padding: 0.4rem;
+    vertical-align: middle;
+}
+
+.quick-assign-table input[type="text"],
+.quick-assign-table select {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    outline: none;
+}
+.quick-assign-table input[type="text"]:focus,
+.quick-assign-table select:focus {
+    border-color: var(--accent);
+}
+
+.quick-assign-remove-row-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+    transition: color 0.15s;
+}
+.quick-assign-remove-row-btn:hover {
+    color: var(--red);
+}
+
 .search-input {
-    flex: 1 1 260px;
     padding: 0.7rem 0.9rem;
     border-radius: var(--radius-s);
     border: 1px solid var(--border);
@@ -497,9 +626,9 @@ h1, h2, h3, h4 {
     background-color: var(--card);
     border-radius: var(--radius-m);
     padding: var(--density-col-pad);
-    min-width: 320px;
-    max-width: 320px;
-    flex: 0 0 320px;
+    min-width: 370px;
+    max-width: 370px;
+    flex: 0 0 370px;
     border: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -2300,6 +2429,63 @@ body.observer-mode .cards-container.drag-over {
     font-weight: 700;
 }
 
+.lane-header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.lane-toggle-btn {
+    background: var(--border);
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.9;
+    transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+}
+
+.lane-toggle-btn:hover {
+    opacity: 1;
+    background-color: var(--accent);
+    color: #fff;
+}
+
+/* Raia minimizada manualmente (botão ▾) gira a seta pra indicar estado fechado */
+.lane-collapsed .lane-toggle-btn {
+    transform: rotate(-90deg);
+}
+
+/* Acesso discreto ao login manual (recuperação de acesso admin) —
+   um quadradinho quase invisível no canto, some no resto da tela */
+.hidden-login-access {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 22px;
+    height: 22px;
+    z-index: 9999;
+    opacity: 0.03;
+    transition: opacity 0.2s ease;
+}
+
+.hidden-login-access:hover {
+    opacity: 0.25;
+    background-color: var(--text-muted);
+}
+
 .lane-container {
     min-height: 90px;
     gap: 0.6rem;
@@ -3406,6 +3592,7 @@ body.dashboard-only-mode .dashboard-modal-content {
     border-radius: 6px;
     white-space: nowrap;
 }
+.dash-lane-afazer  { background: rgba(152,161,176,.22); color: #4d5868; }
 .dash-lane-todo    { background: rgba(37,99,235,.1);  color: #1a4fd6; }
 .dash-lane-testing { background: rgba(217,145,26,.12); color: #b8780f; }
 .dash-lane-paused  { background: rgba(152,161,176,.18); color: #5a6573; }
