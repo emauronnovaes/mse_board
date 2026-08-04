@@ -593,10 +593,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('sidebar').classList.toggle('is-collapsed');
         });
 
+        // Menu lateral em telas pequenas: vira uma gaveta (some por padrão, abre com o hambúrguer)
+        const sidebarEl = document.getElementById('sidebar');
+        const sidebarBackdropEl = document.getElementById('sidebarBackdrop');
+        const openMobileSidebar = () => {
+            sidebarEl.classList.add('is-mobile-open');
+        };
+        const closeMobileSidebar = () => {
+            sidebarEl.classList.remove('is-mobile-open');
+        };
+        document.getElementById('mobileSidebarToggle').addEventListener('click', openMobileSidebar);
+        sidebarBackdropEl.addEventListener('click', closeMobileSidebar);
+
         // Ações do menu lateral
         document.querySelectorAll('.nav-item[data-action]').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
+                closeMobileSidebar();
                 const action = item.dataset.action;
 
                 if (action === 'settings') {
@@ -1178,10 +1191,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('bgPhotoInput').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
+            // GIFs animados costumam ser grandes, e o localStorage do navegador
+            // tem um limite pequeno (geralmente uns 5 MB no total). Avisa antes
+            // de tentar, pra não falhar silenciosamente.
+            const maxSizeMb = 4;
+            if (file.size > maxSizeMb * 1024 * 1024) {
+                showToast(`Esse arquivo tem ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite é ${maxSizeMb} MB (o navegador não consegue guardar arquivos maiores como fundo). Tente um GIF/imagem menor.`, 'error');
+                e.target.value = '';
+                return;
+            }
+
             const dataUrl = await processSingleFile(file);
-            setBoardBackground('image', dataUrl);
-            document.getElementById('settingsModal').style.display = 'none';
-            showToast('Fundo atualizado com sucesso!', 'success');
+            const ok = setBoardBackground('image', dataUrl);
+            if (ok) {
+                document.getElementById('settingsModal').style.display = 'none';
+                showToast('Fundo atualizado com sucesso!', 'success');
+            } else {
+                showToast('Não foi possível salvar esse fundo — o arquivo é grande demais para o navegador guardar. Tente um menor.', 'error');
+            }
         });
 
         document.getElementById('unsplashSearchBtn').addEventListener('click', async () => {
@@ -1437,6 +1465,16 @@ const STORAGE_KEY = 'mse_board_state';
 let state = { people: [], cards: [] };
 let personIdCounter = 0;
 let cardIdCounter = 0;
+
+// Gera um ID praticamente impossível de colidir, mesmo com várias pessoas
+// criando post-its/colunas ao mesmo tempo em navegadores diferentes.
+// (Antes usava um contador local por navegador — dois usuários criando algo
+// no mesmo instante podiam gerar o MESMO id, e o segundo a chegar no servidor
+// sobrescrevia o primeiro sem avisar ninguém.)
+function generateUniqueId(prefix) {
+    const random = Math.random().toString(36).slice(2, 8);
+    return `${prefix}_${Date.now()}_${random}`;
+}
 
 // ==========================================
 // ATUALIZAÇÃO AUTOMÁTICA (mantém o quadro sincronizado com outras pessoas)
@@ -2785,7 +2823,7 @@ function renderDeliveryReport() {
     });
 
     if (columnIds.length === 0) {
-        activeContainer.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUM POST-IT ENCONTRADO COM ESSE FILTRO.</td></tr>`;
+        activeContainer.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUMA TAREFA ENCONTRADA COM ESSE FILTRO.</td></tr>`;
         return;
     }
 
@@ -3143,8 +3181,14 @@ function renderGradientPresets() {
 }
 
 function setBoardBackground(type, value) {
-    localStorage.setItem(`mse_board_bg_${currentUserName}`, JSON.stringify({ type, value }));
+    try {
+        localStorage.setItem(`mse_board_bg_${currentUserName}`, JSON.stringify({ type, value }));
+    } catch (err) {
+        console.error('Falha ao salvar o fundo (provavelmente arquivo grande demais):', err);
+        return false;
+    }
     applyBoardBackground();
+    return true;
 }
 
 function applyBoardBackground() {
@@ -3380,8 +3424,7 @@ function processSingleFile(file) {
 // ==========================================
 
 function addPerson(name, avatarUrl, isDone) {
-    personIdCounter++;
-    const id = `p_${personIdCounter}`;
+    const id = generateUniqueId('p');
     const person = { id, name, avatarUrl: avatarUrl || null, isDone: !!isDone };
     state.people.push(person);
     savePersonToServer(person);
@@ -3423,8 +3466,7 @@ function deletePerson(personId) {
 // ==========================================
 
 function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate }) {
-    cardIdCounter++;
-    const id = `c_${cardIdCounter}`;
+    const id = generateUniqueId('c');
 
     const card = {
         id, personId, title, color,
