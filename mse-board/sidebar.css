@@ -403,11 +403,64 @@
 /* ==========================================
    RESPONSIVO
    ========================================== */
+
+/* Botão hambúrguer: só existe/aparece em telas pequenas */
+.mobile-sidebar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.mobile-sidebar-toggle svg { width: 20px; height: 20px; }
+
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    z-index: 39; /* logo abaixo da sidebar (z-index: 40) */
+}
+
 @media (max-width: 900px) {
+    .mobile-sidebar-toggle {
+        display: flex;
+    }
+
+    /* A sidebar vira uma gaveta: fica fora da tela por padrão (não sobrepõe mais nada),
+       e desliza pra dentro só quando aberta pelo botão hambúrguer. */
     .sidebar {
         position: fixed;
+        top: 0;
+        left: 0;
         height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
     }
+
+    .sidebar.is-mobile-open {
+        transform: translateX(0);
+    }
+
+    .sidebar.is-mobile-open ~ .sidebar-backdrop {
+        display: block;
+    }
+
+    /* Em telas pequenas não faz sentido também "recolher" (modo ícone) — sempre larga */
+    .sidebar.is-collapsed {
+        width: 270px;
+    }
+}
+
+
+/* Itens do menu visíveis só pro admin@mse.com.br — revelados via script.js */
+.admin-only-nav-item {
+    display: none;
 }
 
 /* --- SELO DE SOLICITAÇÕES PENDENTES --- */

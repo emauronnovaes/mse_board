@@ -736,6 +736,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // Itens do menu (Campos Personalizados, Integrações e Webhooks,
+        // Backup & Exportação, Importar do Trello, Backup no Servidor) —
+        // visíveis só pro admin@mse.com.br. Pra qualquer outro usuário
+        // (mesmo Admin), o item nem existe no DOM.
+        if (userData.name === 'admin@mse.com.br') {
+            document.querySelectorAll('.admin-only-nav-item').forEach(item => {
+                item.style.display = 'flex';
+            });
+        } else {
+            document.querySelectorAll('.admin-only-nav-item').forEach(item => item.remove());
+        }
+
         // Rodapé do menu lateral
         document.getElementById('sidebarFootName').textContent = userData.name;
         document.getElementById('sidebarFootRole').textContent = userData.role;
