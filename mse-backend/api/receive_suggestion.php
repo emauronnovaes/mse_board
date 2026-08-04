@@ -1,7 +1,7 @@
 <?php
 // ==========================================
 // MSE Board — Recebe sugestões de melhoria de fora (ex: GPT Maker)
-// e cria um POST-IT DE VERDADE na coluna fixa "💡 Sugestões" do quadro.
+// e cria um POST-IT DE VERDADE na coluna fixa "💡 Sugestões Mia" do quadro.
 //
 // Chame esta URL via POST (JSON) OU GET (parâmetro na URL), com o texto da sugestão.
 // Protegida por um token PRÓPRIO (diferente da chave interna da API), configurável
@@ -47,12 +47,12 @@ $title = mb_substr($text, 0, 490);
 try {
     $pdo = getDbConnection();
 
-    // Garante que a coluna fixa "Sugestões" existe (caso o site nunca tenha carregado ainda)
+    // Garante que a coluna fixa "Sugestões Mia" existe (caso o site nunca tenha carregado ainda)
     $check = $pdo->prepare("SELECT COUNT(*) FROM people WHERE id = 'suggestions'");
     $check->execute();
     if ($check->fetchColumn() == 0) {
         $insertPerson = $pdo->prepare(
-            "INSERT INTO people (id, name, avatar_url, is_done, member_email, position) VALUES ('suggestions', '💡 Sugestões', NULL, 0, NULL, 999)"
+            "INSERT INTO people (id, name, avatar_url, is_done, member_email, position) VALUES ('suggestions', '💡 Sugestões Mia', NULL, 0, NULL, 999)"
         );
         $insertPerson->execute();
     }
@@ -74,7 +74,7 @@ try {
         'created_at' => round(microtime(true) * 1000)
     ]);
 
-    echo json_encode(['success' => true, 'mensagem' => 'Sugestão registrada como post-it na coluna Sugestões.', 'cardId' => $cardId]);
+    echo json_encode(['success' => true, 'mensagem' => 'Sugestão registrada como tarefa na coluna Sugestões Mia.', 'cardId' => $cardId]);
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Falha ao salvar a sugestão: ' . $e->getMessage()]);
