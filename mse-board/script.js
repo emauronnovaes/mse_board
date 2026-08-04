@@ -1882,7 +1882,7 @@ async function loadState() {
     const p1 = addPerson('João (Dev)');
     const p2 = addPerson('Ana (Engenharia)');
     addPerson('Concluído', null, true);
-    const suggestionsPerson = { id: 'suggestions', name: '💡 Sugestões', avatarUrl: null, isDone: false };
+    const suggestionsPerson = { id: 'suggestions', name: '💡 Sugestões Mia', avatarUrl: null, isDone: false };
     state.people.push(suggestionsPerson);
     persistPerson(suggestionsPerson);
 
