@@ -757,6 +757,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Toggle do menu lateral
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('is-collapsed');
+            // Ao mudar a largura da sidebar, o espaço visível do quadro muda —
+            // sem resetar a rolagem, sobrava um pedacinho cortado de coluna
+            // "espremido" entre a sidebar e a primeira coluna visível.
+            const peopleGridEl = document.getElementById('peopleGrid');
+            if (peopleGridEl) peopleGridEl.scrollLeft = 0;
         });
 
         // Menu lateral em telas pequenas: vira uma gaveta (some por padrão, abre com o hambúrguer)
@@ -2033,7 +2038,7 @@ function restoreFromTrash(trashId) {
 
     state.cards.push(restored);
     state.trash = state.trash.filter(t => t.id !== trashId);
-    saveCardToServer(restored);
+    persistCard(restored);
     saveState();
     logAudit(`Restaurou da lixeira o post-it "${item.title}"`);
 }
@@ -3911,7 +3916,8 @@ function restoreCard(cardId) {
 
 function deleteCardPermanently(cardId) {
     state.cards = state.cards.filter(c => c.id !== cardId);
-    deleteCardFromServer(cardId);
+    pendingCardDeletes.add(cardId);
+    persistCardDelete(cardId);
 }
 
 function renderArchivedList() {
