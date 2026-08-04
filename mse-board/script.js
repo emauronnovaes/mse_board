@@ -110,12 +110,178 @@ async function fetchCardsFromServer() {
 
 function savePersonToServer(person) { return apiCall('save_person.php', person); }
 function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }); }
+
+// Mesma proteção dos post-its, agora pras pessoas/colunas: se salvar falhar,
+// tenta de novo sozinho e nunca deixa a sincronização automática sobrescrever
+// ou apagar uma coluna que ainda não confirmou salvar no servidor.
+const pendingPersonSaves = new Set();
+
+async function persistPerson(person, attempt = 1) {
+    pendingPersonSaves.add(person.id);
+    const ok = await savePersonToServer(person);
+
+    if (ok) {
+        pendingPersonSaves.delete(person.id);
+        return true;
+    }
+
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistPerson(person, attempt + 1);
+    }
+
+    if (typeof logError === 'function') {
+        logError(
+            `Não foi possível salvar a coluna "${person.name}" no servidor depois de várias tentativas.`,
+            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho.'
+        );
+    }
+    return false;
+}
+
+async function retryPendingPersonSaves() {
+    if (pendingPersonSaves.size === 0) return;
+    for (const id of Array.from(pendingPersonSaves)) {
+        const person = state.people.find(p => p.id === id);
+        if (person) persistPerson(person);
+        else pendingPersonSaves.delete(id);
+    }
+}
+
+// Pessoas/colunas excluídas na tela mas que ainda não confirmaram a exclusão
+// no servidor — protege contra a coluna "ressuscitar" sozinha se a exclusão falhar.
+const pendingPersonDeletes = new Set();
+
+async function persistPersonDelete(personId, attempt = 1) {
+    const ok = await deletePersonFromServer(personId);
+    if (ok) {
+        pendingPersonDeletes.delete(personId);
+        return true;
+    }
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistPersonDelete(personId, attempt + 1);
+    }
+    if (typeof logError === 'function') {
+        logError(
+            'Não foi possível confirmar a exclusão de uma coluna no servidor.',
+            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+        );
+    }
+    return false;
+}
+
+async function retryPendingPersonDeletes() {
+    if (pendingPersonDeletes.size === 0) return;
+    for (const id of Array.from(pendingPersonDeletes)) {
+        persistPersonDelete(id);
+    }
+}
+
 function saveCardToServer(card) { return apiCall('save_card.php', card); }
+
+// Post-its com um salvamento em andamento ou que falhou e está sendo tentado de
+// novo. Enquanto o id estiver aqui, a sincronização automática NUNCA sobrescreve
+// esse post-it com a versão do servidor — sem isso, se o salvamento falhasse
+// (rede instável, servidor lento) e a sincronização automática rodasse logo
+// depois (a cada 6s), o post-it sumia ou voltava como estava antes, sem aviso.
+const pendingCardSaves = new Set();
+
+async function persistCard(card, attempt = 1) {
+    pendingCardSaves.add(card.id);
+    const ok = await saveCardToServer(card);
+
+    if (ok) {
+        pendingCardSaves.delete(card.id);
+        return true;
+    }
+
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistCard(card, attempt + 1);
+    }
+
+    // Falhou depois de várias tentativas: mantém marcado como pendente (protege
+    // contra sumir na próxima sincronização) e avisa de forma bem visível.
+    // A sincronização automática vai continuar tentando salvar sozinha.
+    if (typeof logError === 'function') {
+        logError(
+            `Não foi possível salvar "${card.title}" no servidor depois de várias tentativas.`,
+            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho — não fecha essa aba até confirmar.'
+        );
+    }
+    return false;
+}
+
+// Tenta salvar de novo qualquer post-it que ainda esteja pendente (falhou antes).
+// Chamado a cada ciclo da sincronização automática.
+async function retryPendingCardSaves() {
+    if (pendingCardSaves.size === 0) return;
+    const idsToRetry = Array.from(pendingCardSaves);
+    for (const id of idsToRetry) {
+        const card = state.cards.find(c => c.id === id);
+        if (card) persistCard(card);
+        else pendingCardSaves.delete(id); // o post-it não existe mais localmente (foi excluído)
+    }
+}
+
+// Move um post-it no servidor com o mesmo esquema de proteção: se falhar, marca
+// como pendente (protege de "voltar" pro lugar antigo na próxima sincronização)
+// e deixa o retryPendingCardSaves tentar de novo sozinho depois (usando o
+// salvamento completo, que também grava a coluna/status atual).
+async function persistCardMove(cardId, personId, status, completedAt) {
+    pendingCardSaves.add(cardId);
+    const ok = await moveCardOnServer(cardId, personId, status, completedAt);
+    if (ok) {
+        pendingCardSaves.delete(cardId);
+        return true;
+    }
+    if (typeof logError === 'function') {
+        logError(
+            'Não foi possível confirmar a movimentação de um post-it no servidor.',
+            'Verifique sua internet/conexão. O sistema vai tentar salvar de novo sozinho.'
+        );
+    }
+    return false;
+}
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
 function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt }); }
 function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
 function toggleChecklistItemOnServer(cardId, itemIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex }); }
 function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.php', { cardId, author, text }); }
+
+// Marcar um item de checklist e comentar são mudanças pequenas dentro de um
+// post-it, mas usam endpoints próprios — se falharem, protege do mesmo jeito
+// (marca o post-it como pendente, o que impede a sincronização automática de
+// sobrescrever, e deixa o retryPendingCardSaves recuperar depois com um
+// salvamento completo, que já leva o checklist/comentário atual).
+async function persistChecklistToggle(cardId, itemIndex, attempt = 1) {
+    pendingCardSaves.add(cardId);
+    const ok = await toggleChecklistItemOnServer(cardId, itemIndex);
+    if (ok) {
+        pendingCardSaves.delete(cardId);
+        return true;
+    }
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistChecklistToggle(cardId, itemIndex, attempt + 1);
+    }
+    return false; // fica pendente; retryPendingCardSaves tenta de novo com o post-it inteiro
+}
+
+async function persistComment(cardId, author, text, attempt = 1) {
+    pendingCardSaves.add(cardId);
+    const ok = await addCommentOnServer(cardId, author, text);
+    if (ok) {
+        pendingCardSaves.delete(cardId);
+        return true;
+    }
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistComment(cardId, author, text, attempt + 1);
+    }
+    return false; // fica pendente; retryPendingCardSaves tenta de novo com o post-it inteiro
+}
 
 async function sha256Hex(str) {
     const data = new TextEncoder().encode(str);
@@ -1499,24 +1665,70 @@ async function refreshBoardFromServer() {
 
     isAutoRefreshing = true;
     try {
-        const [freshPeople, freshCards, freshBlob] = await Promise.all([
+        // Antes de buscar a versão do servidor, tenta salvar/excluir de novo
+        // qualquer post-it ou pessoa/coluna que tenha falhado antes (rede caiu,
+        // servidor lento, etc).
+        retryPendingCardSaves();
+        retryPendingCardDeletes();
+        retryPendingPersonSaves();
+        retryPendingPersonDeletes();
+
+        const [freshPeopleRaw, freshCards, freshBlob] = await Promise.all([
             fetchPeopleFromServer(),
             fetchCardsFromServer(),
             fetchBoardStateFromServer()
         ]);
 
-        if (freshPeople === null || freshCards === null) return; // servidor fora do ar — tenta de novo no próximo ciclo
+        if (freshPeopleRaw === null || freshCards === null) return; // servidor fora do ar — tenta de novo no próximo ciclo
+
+        // Mesma proteção de post-its, agora pras pessoas/colunas: mantém a versão
+        // local se tiver um salvamento pendente, e nunca deixa uma coluna excluída
+        // reaparecer sozinha se a exclusão ainda não foi confirmada.
+        const freshPeople = freshPeopleRaw
+            .filter(fp => !pendingPersonDeletes.has(fp.id))
+            .map(fp => {
+                if (pendingPersonSaves.has(fp.id)) {
+                    const localVersion = state.people.find(p => p.id === fp.id);
+                    return localVersion || fp;
+                }
+                return fp;
+            });
+        state.people.forEach(p => {
+            if (pendingPersonSaves.has(p.id) && !freshPeople.some(fp => fp.id === p.id)) {
+                freshPeople.push(p); // coluna criada localmente, ainda não confirmada no servidor
+            }
+        });
+
+        // Post-its com salvamento pendente/falho: mantém a versão local em vez da
+        // que veio do servidor, pra não perder uma mudança que ainda não foi
+        // confirmada como salva (ex: acabou de criar e a rede caiu na hora do save).
+        // Post-its com exclusão pendente: nunca deixa reaparecer, mesmo que o
+        // servidor ainda devolva ele (exclusão que falhou não "ressuscita" sozinha).
+        const mergedCards = freshCards
+            .filter(fc => !pendingCardDeletes.has(fc.id))
+            .map(fc => {
+                if (pendingCardSaves.has(fc.id)) {
+                    const localVersion = state.cards.find(c => c.id === fc.id);
+                    return localVersion || fc;
+                }
+                return fc;
+            });
+        state.cards.forEach(c => {
+            if (pendingCardSaves.has(c.id) && !mergedCards.some(mc => mc.id === c.id)) {
+                mergedCards.push(c); // post-it criado localmente, ainda não confirmado no servidor
+            }
+        });
 
         const changed =
             JSON.stringify(freshPeople) !== JSON.stringify(state.people) ||
-            JSON.stringify(freshCards) !== JSON.stringify(state.cards);
+            JSON.stringify(mergedCards) !== JSON.stringify(state.cards);
 
         if (changed) {
             const oldSuggestionIds = new Set(state.cards.filter(c => c.personId === 'suggestions').map(c => c.id));
-            const newSuggestionCards = freshCards.filter(c => c.personId === 'suggestions' && !oldSuggestionIds.has(c.id));
+            const newSuggestionCards = mergedCards.filter(c => c.personId === 'suggestions' && !oldSuggestionIds.has(c.id));
 
             state.people = freshPeople;
-            state.cards = freshCards;
+            state.cards = mergedCards;
             personIdCounter = state.people.reduce((max, p) => Math.max(max, parseInt((p.id.split('_')[1])) || 0), 0);
             cardIdCounter = state.cards.reduce((max, c) => Math.max(max, parseInt((c.id.split('_')[1])) || 0), 0);
             renderBoard();
@@ -1677,7 +1889,7 @@ async function loadState() {
     addPerson('Concluído', null, true);
     const suggestionsPerson = { id: 'suggestions', name: '💡 Sugestões', avatarUrl: null, isDone: false };
     state.people.push(suggestionsPerson);
-    savePersonToServer(suggestionsPerson);
+    persistPerson(suggestionsPerson);
 
     addCard({
         personId: p1, title: 'Revisão Estrutural',
@@ -2156,7 +2368,7 @@ function toggleStar(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.starred = !card.starred;
-    saveCardToServer(card);
+    persistCard(card);
 }
 
 function applyBoardInfo() {
@@ -2877,7 +3089,7 @@ function saveDashboardObservation(cardId, value) {
     if (!card) return;
     if (card.observacao === value) return; // nada mudou, evita salvar à toa
     card.observacao = value;
-    saveCardToServer(card);
+    persistCard(card);
     showToast('Observação salva!', 'success');
 }
 
@@ -3340,7 +3552,7 @@ async function importFromTrello(trelloData, includeArchived, progressEl) {
                     });
                 });
                 if (trelloCard.closed) card.archived = true;
-                saveCardToServer(card);
+                persistCard(card);
             }
         }
 
@@ -3427,7 +3639,7 @@ function addPerson(name, avatarUrl, isDone) {
     const id = generateUniqueId('p');
     const person = { id, name, avatarUrl: avatarUrl || null, isDone: !!isDone };
     state.people.push(person);
-    savePersonToServer(person);
+    persistPerson(person);
     logAudit(`Criou a coluna "${name}"`);
     return id;
 }
@@ -3438,7 +3650,7 @@ function updatePerson(personId, { name, avatarUrl }) {
     const oldName = person.name;
     person.name = name;
     if (avatarUrl) person.avatarUrl = avatarUrl;
-    savePersonToServer(person);
+    persistPerson(person);
     if (oldName !== name) logAudit(`Renomeou a coluna "${oldName}" para "${name}"`);
 }
 
@@ -3446,17 +3658,21 @@ function removePersonAvatar(personId) {
     const person = state.people.find(p => p.id === personId);
     if (!person) return;
     person.avatarUrl = null;
-    savePersonToServer(person);
+    persistPerson(person);
 }
 
 function deletePerson(personId) {
     const person = state.people.find(p => p.id === personId);
     const cardsToTrash = state.cards.filter(c => c.personId === personId);
     cardsToTrash.forEach(c => moveCardToTrash(c, `Coluna "${person ? person.name : ''}" excluída`));
-    cardsToTrash.forEach(c => deleteCardFromServer(c.id));
+    cardsToTrash.forEach(c => {
+        pendingCardDeletes.add(c.id);
+        persistCardDelete(c.id);
+    });
     state.people = state.people.filter(p => p.id !== personId);
     state.cards = state.cards.filter(c => c.personId !== personId);
-    deletePersonFromServer(personId);
+    pendingPersonDeletes.add(personId);
+    persistPersonDelete(personId);
     saveState();
     if (person) logAudit(`Excluiu a coluna "${person.name}"`);
 }
@@ -3490,7 +3706,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     };
 
     state.cards.push(card);
-    saveCardToServer(card);
+    persistCard(card);
     logAudit(`Criou o post-it "${title}"`);
     fireWebhook('card_created', { title });
     return id;
@@ -3521,7 +3737,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
 
     // Espera o salvamento terminar de verdade no servidor antes de seguir — evita que a
     // atualização automática (a cada 6s) busque um dado antigo e sobrescreva essa edição.
-    await saveCardToServer(card);
+    await persistCard(card);
     logAudit(`Editou o post-it "${title}"`);
 }
 
@@ -3531,11 +3747,44 @@ function moveCardToTrash(card, reason) {
     saveState();
 }
 
+// Post-its que foram excluídos na tela mas ainda não confirmaram a exclusão no
+// servidor. Enquanto o id estiver aqui, a sincronização automática NUNCA deixa
+// esse post-it reaparecer, mesmo que o servidor ainda o devolva (exclusão com
+// falha de rede não vira um post-it "ressuscitando" sozinho).
+const pendingCardDeletes = new Set();
+
+async function persistCardDelete(cardId, attempt = 1) {
+    const ok = await deleteCardFromServer(cardId);
+    if (ok) {
+        pendingCardDeletes.delete(cardId);
+        return true;
+    }
+    if (attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        return persistCardDelete(cardId, attempt + 1);
+    }
+    if (typeof logError === 'function') {
+        logError(
+            'Não foi possível confirmar a exclusão de um post-it no servidor.',
+            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+        );
+    }
+    return false;
+}
+
+async function retryPendingCardDeletes() {
+    if (pendingCardDeletes.size === 0) return;
+    for (const id of Array.from(pendingCardDeletes)) {
+        persistCardDelete(id);
+    }
+}
+
 function deleteCardById(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (card) moveCardToTrash(card, 'Excluído do quadro');
     state.cards = state.cards.filter(c => c.id !== cardId);
-    deleteCardFromServer(cardId);
+    pendingCardDeletes.add(cardId);
+    persistCardDelete(cardId);
     if (card) logAudit(`Excluiu o post-it "${card.title}" (foi para a lixeira)`);
 }
 
@@ -3543,14 +3792,14 @@ function removeAttachment(cardId, attachmentIndex) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.attachments.splice(attachmentIndex, 1);
-    saveCardToServer(card);
+    persistCard(card);
 }
 
 function toggleChecklistItem(cardId, itemIndex) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.checklist[itemIndex].checked = !card.checklist[itemIndex].checked;
-    toggleChecklistItemOnServer(cardId, itemIndex);
+    persistChecklistToggle(cardId, itemIndex);
     checkAutomationAutoMove(card);
 }
 
@@ -3564,7 +3813,7 @@ function checkAutomationAutoMove(card) {
     if (card.status === 'done') return;
 
     card.status = 'done';
-    saveCardToServer(card);
+    persistCard(card);
     logAudit(`Automação moveu "${card.title}" para a raia Concluído (checklist 100%)`);
     showToast(`"${card.title}" foi movido automaticamente para Concluído`, 'success');
 }
@@ -3584,7 +3833,7 @@ function moveCard(cardId, newPersonId, newStatus) {
         card.completedAt = null;
     }
 
-    moveCardOnServer(cardId, newPersonId, newStatus, card.completedAt);
+    persistCardMove(cardId, newPersonId, newStatus, card.completedAt);
 
     if (isNowDone) {
         fireWebhook('card_completed', { title: card.title });
@@ -3600,7 +3849,7 @@ function addComment(cardId, author, text) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.comments.push({ author, text, date: Date.now() });
-    addCommentOnServer(cardId, author, text);
+    persistComment(cardId, author, text);
 
     const tokens = extractMentionTokens(text);
     if (tokens.length > 0) {
@@ -3641,14 +3890,14 @@ function toggleAssignee(cardId, userName) {
         card.assignees.splice(idx, 1);
         showToast(`Você foi removido de "${card.title}"`);
     }
-    saveCardToServer(card);
+    persistCard(card);
 }
 
 function archiveCard(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.archived = true;
-    saveCardToServer(card);
+    persistCard(card);
     logAudit(`Arquivou o post-it "${card.title}"`);
 }
 
@@ -3656,7 +3905,7 @@ function restoreCard(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.archived = false;
-    saveCardToServer(card);
+    persistCard(card);
     logAudit(`Restaurou o post-it "${card.title}"`);
 }
 
@@ -4469,7 +4718,7 @@ function startInlineEditCardTitle(event, cardId) {
             const newTitle = el.textContent.trim();
             if (newTitle) {
                 const card = state.cards.find(c => c.id === cardId);
-                if (card) { card.title = newTitle; saveCardToServer(card); }
+                if (card) { card.title = newTitle; persistCard(card); }
             }
         }
         renderBoard();
@@ -4500,7 +4749,7 @@ function startInlineEditColumnName(event, personId) {
             const newName = el.textContent.trim();
             if (newName) {
                 const person = state.people.find(p => p.id === personId);
-                if (person) { person.name = newName; savePersonToServer(person); }
+                if (person) { person.name = newName; persistPerson(person); }
             }
         }
         renderBoard();
