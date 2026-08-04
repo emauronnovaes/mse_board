@@ -939,12 +939,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 15 * 1024 * 1024) {
-                showToast('Arquivo grande demais (limite de 15 MB).');
-                e.target.value = '';
-                return;
-            }
-
             showToast('Enviando arquivo...');
             const isImage = file.type.startsWith('image/');
             const dataUrl = await processSingleFile(file);
