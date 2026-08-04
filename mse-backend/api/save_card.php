@@ -23,11 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 requireApiKey();
 
 $raw = file_get_contents('php://input');
-if (strlen($raw) > 10 * 1024 * 1024) {
-    http_response_code(413);
-    echo json_encode(['error' => 'Post-it grande demais (limite de 10 MB, provavelmente por causa de anexos/capa).']);
-    exit;
-}
 
 $c = json_decode($raw, true);
 

@@ -15,11 +15,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 requireApiKey();
 
 $raw = file_get_contents('php://input');
-if (strlen($raw) > 15 * 1024 * 1024) {
-    http_response_code(413);
-    echo json_encode(['error' => 'Arquivo grande demais (limite de 15 MB).']);
-    exit;
-}
 
 $p = json_decode($raw, true);
 if (!$p || empty($p['filename']) || empty($p['dataUrl'])) {
@@ -42,24 +37,29 @@ if ($binaryData === false) {
     exit;
 }
 
-$uploadsDir = __DIR__ . '/../uploads';
-if (!is_dir($uploadsDir)) {
-    mkdir($uploadsDir, 0755, true);
-}
+try {
+    $uploadsDir = __DIR__ . '/../uploads';
+    if (!is_dir($uploadsDir)) {
+        mkdir($uploadsDir, 0755, true);
+    }
 
-// Nome de arquivo seguro e único (evita sobrescrever e evita caracteres perigosos)
-$safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($p['filename']));
-$uniqueName = uniqid() . '_' . $safeName;
-$fullPath = $uploadsDir . '/' . $uniqueName;
+    // Nome de arquivo seguro e único (evita sobrescrever e evita caracteres perigosos)
+    $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($p['filename']));
+    $uniqueName = uniqid() . '_' . $safeName;
+    $fullPath = $uploadsDir . '/' . $uniqueName;
 
-if (file_put_contents($fullPath, $binaryData) === false) {
+    if (file_put_contents($fullPath, $binaryData) === false) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Falha ao salvar o arquivo no servidor. Confira permissões da pasta uploads/.']);
+        exit;
+    }
+
+    $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'];
+    $publicUrl = "$scheme://$host/mse-backend/uploads/$uniqueName";
+
+    echo json_encode(['success' => true, 'url' => $publicUrl]);
+} catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Falha ao salvar o arquivo no servidor. Confira permissões da pasta uploads/.']);
-    exit;
+    echo json_encode(['error' => 'Falha ao processar o upload.', 'details' => $e->getMessage()]);
 }
-
-$scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'];
-$publicUrl = "$scheme://$host/mse-backend/uploads/$uniqueName";
-
-echo json_encode(['success' => true, 'url' => $publicUrl]);

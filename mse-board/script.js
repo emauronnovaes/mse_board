@@ -757,6 +757,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Toggle do menu lateral
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('is-collapsed');
+            // Ao mudar a largura da sidebar, o espaço visível do quadro muda —
+            // sem resetar a rolagem, sobrava um pedacinho cortado de coluna
+            // "espremido" entre a sidebar e a primeira coluna visível.
+            const peopleGridEl = document.getElementById('peopleGrid');
+            if (peopleGridEl) peopleGridEl.scrollLeft = 0;
         });
 
         // Menu lateral em telas pequenas: vira uma gaveta (some por padrão, abre com o hambúrguer)
@@ -933,12 +938,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('chatFileInput').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
-            if (file.size > 15 * 1024 * 1024) {
-                showToast('Arquivo grande demais (limite de 15 MB).');
-                e.target.value = '';
-                return;
-            }
 
             showToast('Enviando arquivo...');
             const isImage = file.type.startsWith('image/');
@@ -1302,13 +1301,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 });
                 const namesList = Object.entries(namesCount).map(([n, c]) => `${n} (${c})`).join(', ');
-                showToast(`⚠️ Post-its atrasados/vencendo: ${namesList} — veja em Alertas de Vencimento.`);
+                showToast(`⚠️ Tarefas atrasadas/vencendo: ${namesList} — veja em Alertas de Vencimento.`);
             } else {
                 const parts = [];
                 if (dueAlerts.overdue.length > 0) parts.push(`${dueAlerts.overdue.length} atrasado${dueAlerts.overdue.length > 1 ? 's' : ''}`);
                 if (dueAlerts.dueToday.length > 0) parts.push(`${dueAlerts.dueToday.length} vencendo hoje`);
                 if (dueAlerts.dueTomorrow.length > 0) parts.push(`${dueAlerts.dueTomorrow.length} vencendo amanhã`);
-                showToast(`Você tem post-its ${parts.join(', ')} — veja em Alertas de Vencimento.`);
+                showToast(`Você tem tarefas ${parts.join(', ')} — veja em Alertas de Vencimento.`);
             }
         }
 
@@ -1458,22 +1457,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('openModalBtn').addEventListener('click', () => {
             openCardModalForCreate();
-        });
-
-        document.getElementById('openQuickAssignModalBtn').addEventListener('click', () => {
-            openQuickAssignModal();
-        });
-
-        document.getElementById('closeQuickAssignModalBtn').addEventListener('click', () => {
-            document.getElementById('quickAssignModal').style.display = 'none';
-        });
-
-        document.getElementById('addQuickAssignRowBtn').addEventListener('click', () => {
-            addQuickAssignRow();
-        });
-
-        document.getElementById('saveQuickAssignBtn').addEventListener('click', () => {
-            saveAllQuickAssignRows();
         });
 
         document.getElementById('closeModalBtn').addEventListener('click', () => {
@@ -1823,7 +1806,7 @@ async function loadState() {
             parsed.people = peopleFromServer;
             parsed.cards = cardsFromServer;
         } else {
-            showToast('Não foi possível buscar pessoas/post-its das tabelas novas. Rode a migração em mse-backend/migrate.html.');
+            showToast('Não foi possível buscar pessoas/tarefas das tabelas novas. Rode a migração em mse-backend/migrate.html.');
         }
     }
 
@@ -2033,9 +2016,9 @@ function restoreFromTrash(trashId) {
 
     state.cards.push(restored);
     state.trash = state.trash.filter(t => t.id !== trashId);
-    saveCardToServer(restored);
+    persistCard(restored);
     saveState();
-    logAudit(`Restaurou da lixeira o post-it "${item.title}"`);
+    logAudit(`Restaurou da lixeira a tarefa "${item.title}"`);
 }
 
 function deleteFromTrashPermanently(trashId) {
@@ -2117,10 +2100,10 @@ function renderTrashList() {
             restoreFromTrash(item.id);
             renderTrashList();
             renderBoard();
-            showToast('Post-it restaurado!', 'success');
+            showToast('Tarefa restaurada!', 'success');
         });
         row.querySelector('[data-action="delete"]').addEventListener('click', () => {
-            showConfirm('Excluir este post-it definitivamente? Essa ação não pode ser desfeita.', () => {
+            showConfirm('Excluir esta tarefa definitivamente? Essa ação não pode ser desfeita.', () => {
                 deleteFromTrashPermanently(item.id);
                 renderTrashList();
             });
@@ -2189,7 +2172,7 @@ function removeTemplate(templateId) {
 function renderTemplatesList() {
     const list = document.getElementById('templatesList');
     if (!state.templates || state.templates.length === 0) {
-        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum modelo salvo ainda. Abra "Novo Post-it" e clique em "Salvar como Modelo".</p>';
+        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum modelo salvo ainda. Abra "Nova Tarefa" e clique em "Salvar como Modelo".</p>';
         return;
     }
 
@@ -3045,7 +3028,7 @@ function renderDeliveryReport() {
 
         const personHeaderRow = `
             <tr class="dash-person-group-row">
-                <td colspan="7">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} post-it${cards.length > 1 ? 's' : ''}</span></td>
+                <td colspan="7">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
             </tr>
         `;
 
@@ -3121,7 +3104,7 @@ function renderAnalytics() {
 
     container.innerHTML = `
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-value">${stats.total}</div><div class="stat-label">Post-its ativos</div></div>
+            <div class="stat-card"><div class="stat-value">${stats.total}</div><div class="stat-label">Tarefas ativas</div></div>
             <div class="stat-card"><div class="stat-value">${stats.done}</div><div class="stat-label">Concluídos</div></div>
             <div class="stat-card"><div class="stat-value">${stats.overdue}</div><div class="stat-label">Atrasados</div></div>
             <div class="stat-card"><div class="stat-value">${stats.avgProgress}%</div><div class="stat-label">Progresso médio</div></div>
@@ -3461,7 +3444,7 @@ async function renderBackupsList() {
     container.querySelectorAll('.restore-backup-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const filename = btn.dataset.filename;
-            showConfirm(`Restaurar "${filename}"? Isso vai SOBRESCREVER todos os dados atuais do quadro (post-its, pessoas, membros). Essa ação não pode ser desfeita.`, async () => {
+            showConfirm(`Restaurar "${filename}"? Isso vai SOBRESCREVER todos os dados atuais do quadro (tarefas, pessoas, membros). Essa ação não pode ser desfeita.`, async () => {
                 showToast('Restaurando backup...');
                 const res = await apiCall('restore_backup.php', { filename });
                 if (res && res.success) {
@@ -3502,7 +3485,7 @@ async function importFromTrello(trelloData, includeArchived, progressEl) {
         return true;
     });
 
-    progressEl.textContent = `Importando ${cardsToImport.length} post-it(s)...`;
+    progressEl.textContent = `Importando ${cardsToImport.length} tarefa(s)...`;
     let done = 0;
 
     for (const trelloCard of cardsToImport) {
@@ -3558,14 +3541,14 @@ async function importFromTrello(trelloData, includeArchived, progressEl) {
 
         done++;
         if (done % 5 === 0 || done === cardsToImport.length) {
-            progressEl.textContent = `Importando post-its... (${done}/${cardsToImport.length})`;
+            progressEl.textContent = `Importando tarefas... (${done}/${cardsToImport.length})`;
         }
         await new Promise(r => setTimeout(r, 20));
     }
 
     renderBoard();
-    logAudit(`Importou ${lists.length} colunas e ${cardsToImport.length} post-its do Trello`);
-    progressEl.textContent = `✅ Pronto! ${lists.length} coluna(s) e ${cardsToImport.length} post-it(s) importados.`;
+    logAudit(`Importou ${lists.length} colunas e ${cardsToImport.length} tarefas do Trello`);
+    progressEl.textContent = `✅ Pronto! ${lists.length} coluna(s) e ${cardsToImport.length} tarefa(s) importadas.`;
     showToast('Importação do Trello concluída!', 'success');
 }
 
@@ -3707,7 +3690,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
 
     state.cards.push(card);
     persistCard(card);
-    logAudit(`Criou o post-it "${title}"`);
+    logAudit(`Criou a tarefa "${title}"`);
     fireWebhook('card_created', { title });
     return id;
 }
@@ -3738,7 +3721,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     // Espera o salvamento terminar de verdade no servidor antes de seguir — evita que a
     // atualização automática (a cada 6s) busque um dado antigo e sobrescreva essa edição.
     await persistCard(card);
-    logAudit(`Editou o post-it "${title}"`);
+    logAudit(`Editou a tarefa "${title}"`);
 }
 
 function moveCardToTrash(card, reason) {
@@ -3765,7 +3748,7 @@ async function persistCardDelete(cardId, attempt = 1) {
     }
     if (typeof logError === 'function') {
         logError(
-            'Não foi possível confirmar a exclusão de um post-it no servidor.',
+            'Não foi possível confirmar a exclusão de uma tarefa no servidor.',
             'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
         );
     }
@@ -3785,7 +3768,7 @@ function deleteCardById(cardId) {
     state.cards = state.cards.filter(c => c.id !== cardId);
     pendingCardDeletes.add(cardId);
     persistCardDelete(cardId);
-    if (card) logAudit(`Excluiu o post-it "${card.title}" (foi para a lixeira)`);
+    if (card) logAudit(`Excluiu a tarefa "${card.title}" (foi para a lixeira)`);
 }
 
 function removeAttachment(cardId, attachmentIndex) {
@@ -3898,7 +3881,7 @@ function archiveCard(cardId) {
     if (!card) return;
     card.archived = true;
     persistCard(card);
-    logAudit(`Arquivou o post-it "${card.title}"`);
+    logAudit(`Arquivou a tarefa "${card.title}"`);
 }
 
 function restoreCard(cardId) {
@@ -3906,12 +3889,13 @@ function restoreCard(cardId) {
     if (!card) return;
     card.archived = false;
     persistCard(card);
-    logAudit(`Restaurou o post-it "${card.title}"`);
+    logAudit(`Restaurou a tarefa "${card.title}"`);
 }
 
 function deleteCardPermanently(cardId) {
     state.cards = state.cards.filter(c => c.id !== cardId);
-    deleteCardFromServer(cardId);
+    pendingCardDeletes.add(cardId);
+    persistCardDelete(cardId);
 }
 
 function renderArchivedList() {
@@ -4058,7 +4042,7 @@ function renderDueAlertsList() {
         buildSection('Vence Hoje', dueToday, 'var(--gold)') +
         buildSection('Vence Amanhã', dueTomorrow, 'var(--text-primary)');
 
-    container.innerHTML = html || '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum post-it atrasado ou vencendo nos próximos dias. 🎉</p>';
+    container.innerHTML = html || '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma tarefa atrasada ou vencendo nos próximos dias. 🎉</p>';
 }
 
 function formatDateBR(dateStr) {
@@ -4101,74 +4085,6 @@ function populateAssigneeFilter() {
         sorted.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(deriveNameFromEmail(a))}</option>`).join('');
 
     if (sorted.includes(currentValue)) select.value = currentValue;
-}
-
-let quickAssignRowCounter = 0;
-
-function buildPersonOptionsHtml() {
-    const allColumns = [...state.people].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    return '<option value="" disabled selected>Escolha...</option>' +
-        allColumns.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-}
-
-function addQuickAssignRow() {
-    quickAssignRowCounter++;
-    const rowId = `qar_${quickAssignRowCounter}`;
-    const tbody = document.getElementById('quickAssignRows');
-    const row = document.createElement('tr');
-    row.id = rowId;
-    row.innerHTML = `
-        <td><input type="text" class="quick-assign-title-input" placeholder="Título da tarefa..."></td>
-        <td><select class="quick-assign-person-select">${buildPersonOptionsHtml()}</select></td>
-        <td><button type="button" class="quick-assign-remove-row-btn" title="Remover linha" onclick="document.getElementById('${rowId}').remove()">&times;</button></td>
-    `;
-    tbody.appendChild(row);
-}
-
-function openQuickAssignModal() {
-    const tbody = document.getElementById('quickAssignRows');
-    tbody.innerHTML = '';
-    quickAssignRowCounter = 0;
-    // Começa com 4 linhas em branco, prontas pra preencher
-    for (let i = 0; i < 4; i++) addQuickAssignRow();
-    document.getElementById('quickAssignModal').style.display = 'flex';
-}
-
-function saveAllQuickAssignRows() {
-    const rows = [...document.querySelectorAll('#quickAssignRows tr')];
-    let count = 0;
-
-    rows.forEach(row => {
-        const title = row.querySelector('.quick-assign-title-input').value.trim();
-        const personId = row.querySelector('.quick-assign-person-select').value;
-        if (!title || !personId) return;
-
-        addCard({
-            personId,
-            title,
-            lines: [],
-            color: 'yellow',
-            priority: 'media',
-            dueDate: '',
-            author: currentUserName,
-            attachments: [],
-            customValues: {},
-            labelIds: [],
-            stickerId: null,
-            coverImage: null,
-            startDate: ''
-        });
-        count++;
-    });
-
-    if (count === 0) {
-        showToast('Preencha pelo menos uma linha com título e responsável.');
-        return;
-    }
-
-    showToast(`${count} tarefa${count > 1 ? 's' : ''} adicionada${count > 1 ? 's' : ''}!`, 'success');
-    document.getElementById('quickAssignModal').style.display = 'none';
-    renderBoard();
 }
 
 function renderBoard() {
@@ -4273,7 +4189,7 @@ function renderTableView(container) {
             <thead>
                 <tr><th>Título</th><th>Coluna</th><th>Prioridade</th><th>Prazo</th><th>Progresso</th><th>Autor</th></tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="6" style="color:var(--text-muted);">Nenhum post-it ainda.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma tarefa ainda.</td></tr>'}</tbody>
         </table>
     `;
 
@@ -4316,7 +4232,7 @@ function renderTimelineView(container) {
         html += withoutDate.map(buildRow).join('');
     }
     if (cards.length === 0) {
-        html += '<p style="color:var(--text-muted);">Nenhum post-it ainda.</p>';
+        html += '<p style="color:var(--text-muted);">Nenhuma tarefa ainda.</p>';
     }
     html += '</div>';
 
@@ -4844,8 +4760,8 @@ function renderPersonAvatarPreview(person) {
 }
 
 function openCardModalForCreate() {
-    document.getElementById('cardModalTitle').textContent = '📌 Criar Novo Post-it';
-    document.getElementById('cardFormSubmitBtn').textContent = 'Adicionar Post-it';
+    document.getElementById('cardModalTitle').textContent = '📌 Criar Nova Tarefa';
+    document.getElementById('cardFormSubmitBtn').textContent = 'Adicionar Tarefa';
     document.getElementById('editingCardId').value = '';
     document.getElementById('newCardForm').reset();
     document.getElementById('existingAttachmentsList').innerHTML = '';
@@ -4865,7 +4781,7 @@ function openCardModalForEdit(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
-    document.getElementById('cardModalTitle').textContent = '✏️ Editar Post-it';
+    document.getElementById('cardModalTitle').textContent = '✏️ Editar Tarefa';
     document.getElementById('cardFormSubmitBtn').textContent = 'Salvar Alterações';
     document.getElementById('editingCardId').value = card.id;
     document.getElementById('templateSelectGroup').style.display = 'none';

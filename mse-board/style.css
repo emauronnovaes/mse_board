@@ -231,8 +231,8 @@ h1, h2, h3, h4 {
 .navbar {
     position: relative;
     overflow: hidden;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     height: 58px;
     box-sizing: border-box;
@@ -242,7 +242,6 @@ h1, h2, h3, h4 {
         radial-gradient(640px 360px at 85% -30%, rgba(64, 120, 210, 0.5), transparent 62%),
         linear-gradient(118deg, #13223b 0%, #193053 68%, var(--navy-2) 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    flex-wrap: nowrap;
     gap: 1rem;
 }
 
@@ -250,6 +249,8 @@ h1, h2, h3, h4 {
     display: flex;
     align-items: center;
     gap: 0.7rem;
+    flex-shrink: 0;
+    justify-self: start;
 }
 
 .navbar-logo-img {
@@ -290,17 +291,15 @@ h1, h2, h3, h4 {
 .online-users-bar {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    justify-content: center;
+    gap: 0.5rem;
     background: rgba(57, 217, 138, 0.1);
-    padding: 0.4rem 0.9rem;
+    padding: 0.35rem 0.75rem;
     border-radius: 20px;
     border: 1px solid rgba(57, 217, 138, 0.35);
     cursor: pointer;
     transition: background-color 0.15s ease;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    justify-self: center;
 }
 
 .online-users-bar:hover {
@@ -342,6 +341,8 @@ h1, h2, h3, h4 {
     gap: 0.9rem;
     padding-left: 1rem;
     border-left: 1px solid rgba(255, 255, 255, 0.14);
+    flex-shrink: 0;
+    justify-self: end;
 }
 
 #userNameDisplay {
@@ -626,9 +627,9 @@ h1, h2, h3, h4 {
     background-color: var(--card);
     border-radius: var(--radius-m);
     padding: var(--density-col-pad);
-    min-width: 370px;
-    max-width: 370px;
-    flex: 0 0 370px;
+    min-width: 340px;
+    max-width: 340px;
+    flex: 0 0 340px;
     border: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -2589,6 +2590,32 @@ body.observer-mode .cards-container.drag-over {
 
 @media (max-width: 900px) {
     .online-users-bar { display: none; }
+
+    .navbar {
+        padding: 0.5rem 1rem;
+        gap: 0.6rem;
+    }
+
+    .navbar-brand small {
+        display: none;
+    }
+
+    .navbar-brand h1 {
+        font-size: 0.92rem;
+    }
+
+    #userNameDisplay {
+        display: none;
+    }
+
+    .user-info {
+        gap: 0.5rem;
+        padding-left: 0.6rem;
+    }
+
+    .board-container {
+        padding: 0.6rem 0.8rem 1rem;
+    }
 }
 
 /* ==========================================

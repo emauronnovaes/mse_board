@@ -108,7 +108,7 @@
                     </span>
                     <span class="nav-labels">
                         <span class="nav-title">Etiquetas</span>
-                        <span class="nav-desc">Marcadores coloridos por post-it</span>
+                        <span class="nav-desc">Marcadores coloridos por tarefa</span>
                     </span>
                 </a>
 
@@ -166,7 +166,7 @@
                     </span>
                     <span class="nav-labels">
                         <span class="nav-title">Lixeira</span>
-                        <span class="nav-desc">Post-its excluídos, recuperáveis</span>
+                        <span class="nav-desc">Tarefas excluídas, recuperáveis</span>
                     </span>
                 </a>
             </div>
@@ -174,13 +174,13 @@
             <div class="nav-section">
                 <p class="nav-section-label"><span>Produtividade</span></p>
 
-                <a class="nav-item" href="#" data-tooltip="Modelos de Post-it" data-action="templates">
+                <a class="nav-item" href="#" data-tooltip="Modelos de Tarefa" data-action="templates">
                     <span class="nav-icon">
                         <svg viewBox="0 0 20 20" fill="none"><rect x="2.5" y="2.5" width="6.2" height="6.2" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="11.3" y="2.5" width="6.2" height="6.2" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="2.5" y="11.3" width="6.2" height="6.2" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="11.3" y="11.3" width="6.2" height="6.2" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
                     </span>
                     <span class="nav-labels">
-                        <span class="nav-title">Modelos de Post-it</span>
-                        <span class="nav-desc">Salve e reutilize post-its prontos</span>
+                        <span class="nav-title">Modelos de Tarefa</span>
+                        <span class="nav-desc">Salve e reutilize tarefas prontas</span>
                     </span>
                 </a>
 
@@ -214,7 +214,7 @@
                     </span>
                     <span class="nav-labels">
                         <span class="nav-title">Importar do Trello</span>
-                        <span class="nav-desc">Traz colunas e post-its de um export .json</span>
+                        <span class="nav-desc">Traz colunas e tarefas de um export .json</span>
                     </span>
                 </a>
 
@@ -261,10 +261,10 @@
 
     <!-- Cabeçalho Principal -->
     <header class="navbar">
-        <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Abrir menu">
-            <svg viewBox="0 0 20 20" fill="none"><path d="M2.5 5h15M2.5 10h15M2.5 15h15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
         <div class="navbar-brand">
+            <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Abrir menu">
+                <svg viewBox="0 0 20 20" fill="none"><path d="M2.5 5h15M2.5 10h15M2.5 15h15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
             <h1><span class="mse-red">MSE</span> <span>Board</span> <small>(Programação)</small></h1>
         </div>
 
@@ -300,8 +300,7 @@
                 <button id="addPersonBtn" class="btn-secondary">+ Adicionar Pessoa</button>
                 <button id="addDoneTabBtn" class="btn-secondary">+ Aba Concluído</button>
                 <span class="action-buttons-divider"></span>
-                <button id="openQuickAssignModalBtn" class="btn-secondary">📋 Atribuir Tarefas</button>
-                <button id="openModalBtn" class="btn-primary">+ Novo Post-it</button>
+                <button id="openModalBtn" class="btn-primary">+ Nova Tarefa</button>
             </div>
         </section>
 
@@ -375,11 +374,11 @@
         </div>
     </div>
 
-    <!-- Modal 2: Criar/Editar Post-it com Checklist, Anexos, Prazo e Comentários -->
+    <!-- Modal 2: Criar/Editar Tarefa com Checklist, Anexos, Prazo e Comentários -->
     <div id="cardModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" id="closeModalBtn">&times;</span>
-            <h3 id="cardModalTitle">📌 Criar Novo Post-it</h3>
+            <h3 id="cardModalTitle">📌 Criar Nova Tarefa</h3>
             <form id="newCardForm">
                 <input type="hidden" id="editingCardId" value="">
 
@@ -398,7 +397,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label for="cardTitle">Título do Post-it</label>
+                    <label for="cardTitle">Título da Tarefa</label>
                     <input type="text" id="cardTitle" placeholder="Ex: Montagem do Hangar A" required>
                 </div>
 
@@ -442,7 +441,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label for="cardColor">Cor do Post-it</label>
+                    <label for="cardColor">Cor da Tarefa</label>
                     <select id="cardColor">
                         <option value="yellow">🟡 Amarelo</option>
                         <option value="blue">🔵 Azul</option>
@@ -460,11 +459,11 @@
                     <div id="stickerPicker" class="sticker-picker"></div>
                 </div>
 
-                <button type="submit" class="btn-primary" id="cardFormSubmitBtn">Adicionar Post-it</button>
+                <button type="submit" class="btn-primary" id="cardFormSubmitBtn">Adicionar Tarefa</button>
                 <button type="button" class="btn-secondary" id="saveAsTemplateBtn" style="width:100%; margin-top:0.6rem;">Salvar como Modelo</button>
             </form>
 
-            <!-- Seção de Comentários (só aparece ao editar um post-it existente) -->
+            <!-- Seção de Comentários (só aparece ao editar uma tarefa existente) -->
             <div id="commentsSection" class="comments-section" style="display:none;">
                 <h4>💬 Comentários</h4>
                 <div id="commentsList" class="comments-list"></div>
@@ -476,16 +475,16 @@
         </div>
     </div>
 
-    <!-- Modal 3: Visualizar Post-it em detalhes (leitura grande) -->
+    <!-- Modal 3: Visualizar Tarefa em detalhes (leitura grande) -->
     <div id="viewCardModal" class="modal">
         <div class="modal-content view-modal-content">
             <span class="close-btn" id="closeViewModalBtn">&times;</span>
 
-            <img id="viewCardCover" class="view-cover-img" style="display:none;" alt="Capa do post-it">
+            <img id="viewCardCover" class="view-cover-img" style="display:none;" alt="Capa da tarefa">
 
             <div class="view-header">
                 <span id="viewCardColorDot" class="view-color-dot"></span>
-                <h2 id="viewCardTitle">Título do Post-it</h2>
+                <h2 id="viewCardTitle">Título da Tarefa</h2>
                 <span id="viewCardSticker" class="view-sticker-badge" style="display:none;"></span>
                 <button type="button" id="viewStarBtn" class="postit-star-btn" title="Favoritar" style="font-size:1.3rem;">★</button>
             </div>
@@ -524,7 +523,7 @@
             </div>
 
             <div class="view-actions">
-                <button type="button" id="viewEditBtn" class="btn-primary">✏️ Editar Post-it</button>
+                <button type="button" id="viewEditBtn" class="btn-primary">✏️ Editar Tarefa</button>
             </div>
         </div>
     </div>
@@ -602,7 +601,7 @@
 
             <div class="input-group" style="margin-top:1.4rem;">
                 <label>👀 Visitantes aguardando convite</label>
-                <p class="settings-subtitle" style="margin-bottom:0.6rem;">Pessoas que já abriram o quadro (via SSO) mas ainda não foram convidadas — hoje elas só veem o Dashboard.</p>
+                <p class="settings-subtitle" style="margin-top:0; margin-bottom:0.6rem;">Pessoas que já abriram o quadro (via SSO) mas ainda não foram convidadas — hoje elas só veem o Dashboard.</p>
                 <div id="uninvitedVisitorsList" class="members-list"></div>
             </div>
         </div>
@@ -630,8 +629,8 @@
 
             <label class="switch-row">
                 <span class="switch-text">
-                    <strong>Mover para Em Teste automaticamente</strong>
-                    <p>Quando o checklist de um post-it chegar a 100%, ele é movido sozinho para a raia "Em Teste" da mesma pessoa.</p>
+                    <strong>Mover para Em Espera automaticamente</strong>
+                    <p>Quando o checklist de uma tarefa chegar a 100%, ele é movido sozinho para a raia "Em Espera" da mesma pessoa.</p>
                 </span>
                 <span class="switch">
                     <input type="checkbox" id="autoMoveToggle">
@@ -646,7 +645,7 @@
         <div class="modal-content">
             <span class="close-btn" id="closeFieldsModalBtn">&times;</span>
             <h3>Campos Personalizados</h3>
-            <p class="settings-subtitle">Adicione campos extras que passam a aparecer no formulário de todos os post-its.</p>
+            <p class="settings-subtitle">Adicione campos extras que passam a aparecer no formulário de todas as tarefas.</p>
 
             <form id="newFieldForm" class="field-add-row">
                 <input type="text" id="newFieldName" placeholder="Nome do campo (ex: Orçamento)" required>
@@ -819,34 +818,6 @@
         </div>
     </div>
 
-    <!-- Modal: Atribuir Tarefas (formato de planilha) -->
-    <div id="quickAssignModal" class="modal">
-        <div class="modal-content quick-assign-modal-content">
-            <span class="close-btn" id="closeQuickAssignModalBtn">&times;</span>
-            <h3>📋 Atribuir Tarefas</h3>
-            <p class="settings-subtitle">Preencha as linhas abaixo e clique em "Salvar Tudo" — cada linha preenchida vira um post-it novo.</p>
-
-            <div class="quick-assign-table-wrap">
-                <table class="quick-assign-table">
-                    <thead>
-                        <tr>
-                            <th>Título da Tarefa</th>
-                            <th>Adicionar à (Responsável)</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="quickAssignRows"></tbody>
-                </table>
-            </div>
-
-            <button type="button" id="addQuickAssignRowBtn" class="btn-secondary" style="margin-top:0.8rem;">+ Linha</button>
-
-            <div style="display:flex; gap:0.6rem; margin-top:1.4rem;">
-                <button type="button" id="saveQuickAssignBtn" class="btn-primary" style="flex:1;">💾 Salvar Tudo</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal: Importar do Trello -->
     <div id="importTrelloModal" class="modal">
         <div class="modal-content">
@@ -863,7 +834,7 @@
             </div>
 
             <label class="switch-row">
-                <span class="switch-text"><strong>Importar cartões arquivados</strong><p>Se desligado, pula post-its que já estavam arquivados no Trello.</p></span>
+                <span class="switch-text"><strong>Importar cartões arquivados</strong><p>Se desligado, pula tarefas que já estavam arquivadas no Trello.</p></span>
                 <span class="switch">
                     <input type="checkbox" id="importArchivedToggle">
                     <span class="switch-slider"></span>
@@ -894,7 +865,7 @@
         <div class="modal-content view-modal-content">
             <span class="close-btn" id="closeDueAlertsModalBtn">&times;</span>
             <h3>Alertas de Vencimento</h3>
-            <p class="settings-subtitle">Post-its ativos (não concluídos) com prazo atrasado ou vencendo em breve.</p>
+            <p class="settings-subtitle">Tarefas ativas (não concluídas) com prazo atrasado ou vencendo em breve.</p>
             <div id="dueAlertsContent"></div>
         </div>
     </div>
@@ -1042,17 +1013,17 @@
         <div class="modal-content">
             <span class="close-btn" id="closeTrashModalBtn">&times;</span>
             <h3>Lixeira</h3>
-            <p class="settings-subtitle">Post-its excluídos ficam aqui antes de sumir de vez.</p>
+            <p class="settings-subtitle">Tarefas excluídas ficam aqui antes de sumir de vez.</p>
             <div id="trashList" class="archived-list"></div>
         </div>
     </div>
 
-    <!-- Modal: Modelos de Post-it -->
+    <!-- Modal: Modelos de Tarefa -->
     <div id="templatesModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" id="closeTemplatesModalBtn">&times;</span>
-            <h3>Modelos de Post-it</h3>
-            <p class="settings-subtitle">Crie post-its rapidamente a partir de um modelo salvo, ou salve o post-it atual como novo modelo.</p>
+            <h3>Modelos de Tarefa</h3>
+            <p class="settings-subtitle">Crie tarefas rapidamente a partir de um modelo salvo, ou salve a tarefa atual como novo modelo.</p>
             <div id="templatesList" class="members-list"></div>
         </div>
     </div>
