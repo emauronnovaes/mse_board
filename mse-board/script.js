@@ -936,6 +936,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             input.value = '';
             renderChatChannelOptions();
             renderChatMessages();
+
+            if (channel === MIA_AI_ID && text) {
+                sendToMiaAI(text);
+            }
         }
 
         document.getElementById('chatSendBtn').addEventListener('click', () => handleSendChatMessage());
@@ -1928,6 +1932,8 @@ function saveState() {
 // CHAT / MENSAGENS PRIVADAS
 // ==========================================
 
+const MIA_AI_ID = 'mia_ai';
+
 function getKnownUsers() {
     return (state.knownUsers || []).filter(name => name !== currentUserName && name !== BOOTSTRAP_ADMIN_EMAIL);
 }
@@ -1945,6 +1951,46 @@ function sendMessage(text, to, attachment) {
     saveState();
 }
 
+// Manda a mensagem pra Mia de verdade (agente do GPT Maker, via API oficial)
+// e adiciona a resposta dela na conversa quando chegar. O GPT Maker guarda o
+// histórico da conversa sozinho (por contextId = e-mail do colaborador) e já
+// dispara a criação da tarefa automaticamente quando a intenção rodar.
+async function sendToMiaAI(userText) {
+    try {
+        const res = await fetch(`${API_BASE}/mia_chat.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            body: JSON.stringify({
+                message: userText,
+                author: currentUserName,
+                authorName: deriveNameFromEmail(currentUserName),
+                chatPicture: getAvatarUrl(currentUserName, 100)
+            })
+        });
+        const data = await res.json();
+
+        if (!data || !data.success) {
+            showToast((data && data.error) ? data.error : 'A Mia não conseguiu responder agora.', 'error');
+            return;
+        }
+
+        if (!state.messages) state.messages = [];
+        state.messages.push({
+            id: `msg_${Date.now()}_mia`,
+            from: MIA_AI_ID,
+            to: currentUserName,
+            text: data.reply,
+            attachment: null,
+            ts: Date.now()
+        });
+        saveState();
+        renderChatMessages();
+    } catch (err) {
+        console.error('Falha ao falar com a Mia:', err);
+        showToast('Não foi possível falar com a Mia agora. Verifique sua internet.', 'error');
+    }
+}
+
 function getConversation(withUser) {
     const messages = state.messages || [];
     if (!withUser) {
@@ -1959,7 +2005,7 @@ function getConversation(withUser) {
 function renderChatChannelOptions() {
     const select = document.getElementById('chatChannelSelect');
     const previousValue = select.value;
-    select.innerHTML = '<option value="">💬 Geral (todos)</option>';
+    select.innerHTML = `<option value="">💬 Geral (todos)</option><option value="${MIA_AI_ID}">🤖 Mia (Sugestões)</option>`;
 
     getKnownUsers().forEach(name => {
         const option = document.createElement('option');
@@ -4446,8 +4492,8 @@ function buildColumn(person) {
         bodyHtml = `<div class="cards-container" id="cards_${personId}" ondragover="allowDrop(event)" ondrop="drop(event)"></div>`;
     } else {
         const lanes = [
-            { key: 'afazer', label: 'A Fazer' },
             { key: 'todo', label: 'Fazendo' },
+            { key: 'afazer', label: 'A Fazer' },
             { key: 'testing', label: 'Em Teste' },
             { key: 'paused', label: 'Pausado' },
             { key: 'done', label: 'Concluída' }
