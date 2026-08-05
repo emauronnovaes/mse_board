@@ -4743,6 +4743,19 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Transforma links (http://, https://, www.) dentro de um texto já escapado
+// em links clicáveis, que abrem em nova aba.
+function linkifyText(str) {
+    const escaped = escapeHtml(str);
+    return escaped.replace(
+        /((https?:\/\/|www\.)[^\s<]+)/gi,
+        (match) => {
+            const href = match.startsWith('http') ? match : `https://${match}`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">${match}</a>`;
+        }
+    );
+}
+
 function handleToggleChecklist(cardId, itemIndex) {
     toggleChecklistItem(cardId, itemIndex);
     renderBoard();
@@ -4931,18 +4944,18 @@ function openViewModal(cardId) {
     const checklistContainer = document.getElementById('viewCardChecklist');
     checklistContainer.innerHTML = '';
     card.checklist.forEach((item, index) => {
-        const label = document.createElement('label');
-        label.className = 'checklist-item';
-        label.innerHTML = `
+        const row = document.createElement('div');
+        row.className = 'checklist-item';
+        row.innerHTML = `
             <input type="checkbox" ${item.checked ? 'checked' : ''} ${isObserver ? 'disabled' : ''}>
-            <span>${escapeHtml(item.text)}</span>
+            <span>${linkifyText(item.text)}</span>
         `;
-        label.querySelector('input').addEventListener('change', () => {
+        row.querySelector('input').addEventListener('change', () => {
             toggleChecklistItem(card.id, index);
             document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)));
             renderBoard();
         });
-        checklistContainer.appendChild(label);
+        checklistContainer.appendChild(row);
     });
 
     // Campos Personalizados
@@ -5006,7 +5019,7 @@ function renderViewCommentsList(cardId) {
                     <span class="comment-author">${escapeHtml(c.author)}</span>
                     <span>${dateStr}</span>
                 </div>
-                <div>${escapeHtml(c.text)}</div>
+                <div>${linkifyText(c.text)}</div>
             </div>
         `;
     }).join('');
@@ -5049,7 +5062,7 @@ function renderCommentsList(cardId) {
                     <span class="comment-author">${escapeHtml(c.author)}</span>
                     <span>${dateStr}</span>
                 </div>
-                <div>${escapeHtml(c.text)}</div>
+                <div>${linkifyText(c.text)}</div>
             </div>
         `;
     }).join('');
