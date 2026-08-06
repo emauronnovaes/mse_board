@@ -5099,6 +5099,7 @@ function dragEnd(e) {
 
 function allowDrop(e) {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.classList.add('drag-over');
 }
 
@@ -5110,6 +5111,7 @@ document.addEventListener('dragleave', (e) => {
 
 function drop(e) {
     e.preventDefault();
+    e.stopPropagation();
     const container = e.currentTarget;
     container.classList.remove('drag-over');
 
