@@ -247,7 +247,7 @@ async function persistCardMove(cardId, personId, status, completedAt) {
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
 function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt }); }
 function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
-function toggleChecklistItemOnServer(cardId, itemIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex }); }
+function toggleChecklistItemOnServer(cardId, itemIndex, subIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex, subIndex }); }
 function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.php', { cardId, author, text }); }
 
 // Marcar um item de checklist e comentar são mudanças pequenas dentro de um
@@ -255,16 +255,16 @@ function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.
 // (marca o post-it como pendente, o que impede a sincronização automática de
 // sobrescrever, e deixa o retryPendingCardSaves recuperar depois com um
 // salvamento completo, que já leva o checklist/comentário atual).
-async function persistChecklistToggle(cardId, itemIndex, attempt = 1) {
+async function persistChecklistToggle(cardId, itemIndex, subIndex, attempt = 1) {
     pendingCardSaves.add(cardId);
-    const ok = await toggleChecklistItemOnServer(cardId, itemIndex);
+    const ok = await toggleChecklistItemOnServer(cardId, itemIndex, subIndex);
     if (ok) {
         pendingCardSaves.delete(cardId);
         return true;
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
-        return persistChecklistToggle(cardId, itemIndex, attempt + 1);
+        return persistChecklistToggle(cardId, itemIndex, subIndex, attempt + 1);
     }
     return false; // fica pendente; retryPendingCardSaves tenta de novo com o post-it inteiro
 }
@@ -3840,7 +3840,7 @@ function toggleChecklistItem(cardId, itemIndex) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
     card.checklist[itemIndex].checked = !card.checklist[itemIndex].checked;
-    persistChecklistToggle(cardId, itemIndex);
+    persistChecklistToggle(cardId, itemIndex, null);
     checkAutomationAutoMove(card);
 }
 
@@ -4593,8 +4593,16 @@ function showToast(message, type) {
 }
 
 function getProgress(card) {
-    const total = card.checklist.length;
-    const done = card.checklist.filter(i => i.checked).length;
+    let total = 0;
+    let done = 0;
+    card.checklist.forEach(item => {
+        total++;
+        if (item.checked) done++;
+        (item.subItems || []).forEach(sub => {
+            total++;
+            if (sub.checked) done++;
+        });
+    });
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
     return { done, total, percent };
 }
@@ -4741,6 +4749,113 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function buildChecklistItemRow(card, item, itemIndex, subIndex) {
+    const row = document.createElement('div');
+    row.className = subIndex === null ? 'checklist-item' : 'checklist-item checklist-subitem';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !!item.checked;
+    if (isObserver) checkbox.disabled = true;
+    checkbox.addEventListener('change', () => {
+        persistChecklistToggle(card.id, itemIndex, subIndex);
+        toggleChecklistItemLocally(card, itemIndex, subIndex);
+        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)));
+        renderBoard();
+    });
+    row.appendChild(checkbox);
+
+    const span = document.createElement('span');
+    span.className = 'inline-editable';
+    span.innerHTML = linkifyText(item.text);
+    span.title = isObserver ? '' : 'Dois cliques para editar';
+    if (!isObserver) {
+        span.addEventListener('dblclick', (e) => startInlineEditChecklistText(e, card.id, itemIndex, subIndex));
+    }
+    row.appendChild(span);
+
+    if (!isObserver) {
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'checklist-item-delete-btn';
+        delBtn.innerHTML = '&times;';
+        delBtn.title = 'Excluir item';
+        delBtn.addEventListener('click', () => deleteChecklistItem(card.id, itemIndex, subIndex));
+        row.appendChild(delBtn);
+    }
+
+    return row;
+}
+
+// Atualiza o checked localmente (pra refletir na hora, sem esperar o servidor)
+function toggleChecklistItemLocally(card, itemIndex, subIndex) {
+    if (subIndex === null) {
+        card.checklist[itemIndex].checked = !card.checklist[itemIndex].checked;
+    } else {
+        card.checklist[itemIndex].subItems[subIndex].checked = !card.checklist[itemIndex].subItems[subIndex].checked;
+    }
+}
+
+function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
+    event.stopPropagation();
+    const el = event.currentTarget;
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    el.contentEditable = 'true';
+    el.classList.add('editing');
+    el.textContent = subIndex === null ? card.checklist[itemIndex].text : card.checklist[itemIndex].subItems[subIndex].text;
+    el.focus();
+    document.execCommand('selectAll', false, null);
+
+    const finish = (commit) => {
+        el.contentEditable = 'false';
+        el.classList.remove('editing');
+        el.removeEventListener('blur', onBlur);
+        el.removeEventListener('keydown', onKeydown);
+        if (commit) {
+            const newText = el.textContent.trim();
+            if (newText) {
+                if (subIndex === null) card.checklist[itemIndex].text = newText;
+                else card.checklist[itemIndex].subItems[subIndex].text = newText;
+                persistCard(card);
+            }
+        }
+        openViewModal(card.id);
+        renderBoard();
+    };
+    const onBlur = () => finish(true);
+    const onKeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    };
+    el.addEventListener('blur', onBlur);
+    el.addEventListener('keydown', onKeydown);
+}
+
+function addSubChecklistItem(cardId, itemIndex) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+    if (!card.checklist[itemIndex].subItems) card.checklist[itemIndex].subItems = [];
+    card.checklist[itemIndex].subItems.push({ text: 'Novo item', checked: false });
+    persistCard(card);
+    openViewModal(card.id);
+    renderBoard();
+}
+
+function deleteChecklistItem(cardId, itemIndex, subIndex) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+    if (subIndex === null) {
+        card.checklist.splice(itemIndex, 1);
+    } else {
+        card.checklist[itemIndex].subItems.splice(subIndex, 1);
+    }
+    persistCard(card);
+    openViewModal(card.id);
+    renderBoard();
 }
 
 // Ordena post-its pela posição manual (arrastar pra reordenar). Post-its
@@ -4951,22 +5066,22 @@ function openViewModal(cardId) {
 
     document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card));
 
-    // Checklist (clicável direto na visualização)
+    // Checklist (clicável direto na visualização, com edição por duplo clique e sub-checklists)
     const checklistContainer = document.getElementById('viewCardChecklist');
     checklistContainer.innerHTML = '';
     card.checklist.forEach((item, index) => {
-        const row = document.createElement('div');
-        row.className = 'checklist-item';
-        row.innerHTML = `
-            <input type="checkbox" ${item.checked ? 'checked' : ''} ${isObserver ? 'disabled' : ''}>
-            <span>${linkifyText(item.text)}</span>
-        `;
-        row.querySelector('input').addEventListener('change', () => {
-            toggleChecklistItem(card.id, index);
-            document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)));
-            renderBoard();
+        checklistContainer.appendChild(buildChecklistItemRow(card, item, index, null));
+        (item.subItems || []).forEach((subItem, subIndex) => {
+            checklistContainer.appendChild(buildChecklistItemRow(card, subItem, index, subIndex));
         });
-        checklistContainer.appendChild(row);
+        if (!isObserver) {
+            const addSubBtn = document.createElement('button');
+            addSubBtn.type = 'button';
+            addSubBtn.className = 'checklist-add-sub-btn';
+            addSubBtn.textContent = '+ Adicionar sub-item';
+            addSubBtn.addEventListener('click', () => addSubChecklistItem(card.id, index));
+            checklistContainer.appendChild(addSubBtn);
+        }
     });
 
     // Campos Personalizados

@@ -23,34 +23,52 @@ if (!$p || empty($p['cardId']) || !isset($p['itemIndex'])) {
 }
 
 $pdo = getDbConnection();
-$pdo->beginTransaction();
 
-$stmt = $pdo->prepare("SELECT checklist FROM cards WHERE id = :id FOR UPDATE");
-$stmt->execute(['id' => $p['cardId']]);
-$row = $stmt->fetch(PDO::FETCH_ASSOC);
+try {
+    $pdo->beginTransaction();
 
-if (!$row) {
-    $pdo->rollBack();
-    http_response_code(404);
-    echo json_encode(['error' => 'Post-it não encontrado.']);
-    exit;
+    $stmt = $pdo->prepare("SELECT checklist FROM cards WHERE id = :id FOR UPDATE");
+    $stmt->execute(['id' => $p['cardId']]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        $pdo->rollBack();
+        http_response_code(404);
+        echo json_encode(['error' => 'Post-it não encontrado.']);
+        exit;
+    }
+
+    $checklist = json_decode($row['checklist'] ?? '[]', true);
+    $idx = (int) $p['itemIndex'];
+    $subIdx = isset($p['subIndex']) && $p['subIndex'] !== null ? (int) $p['subIndex'] : null;
+
+    if (!isset($checklist[$idx])) {
+        $pdo->rollBack();
+        http_response_code(400);
+        echo json_encode(['error' => 'Item do checklist não existe.']);
+        exit;
+    }
+
+    if ($subIdx === null) {
+        $checklist[$idx]['checked'] = !$checklist[$idx]['checked'];
+    } else {
+        if (!isset($checklist[$idx]['subItems'][$subIdx])) {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Sub-item do checklist não existe.']);
+            exit;
+        }
+        $checklist[$idx]['subItems'][$subIdx]['checked'] = !$checklist[$idx]['subItems'][$subIdx]['checked'];
+    }
+
+    $update = $pdo->prepare("UPDATE cards SET checklist = :checklist WHERE id = :id");
+    $update->execute(['checklist' => json_encode($checklist), 'id' => $p['cardId']]);
+
+    $pdo->commit();
+
+    echo json_encode(['success' => true, 'checklist' => $checklist]);
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    http_response_code(500);
+    echo json_encode(['error' => 'Falha ao marcar o item do checklist.', 'details' => $e->getMessage()]);
 }
-
-$checklist = json_decode($row['checklist'] ?? '[]', true);
-$idx = (int) $p['itemIndex'];
-
-if (!isset($checklist[$idx])) {
-    $pdo->rollBack();
-    http_response_code(400);
-    echo json_encode(['error' => 'Item do checklist não existe.']);
-    exit;
-}
-
-$checklist[$idx]['checked'] = !$checklist[$idx]['checked'];
-
-$update = $pdo->prepare("UPDATE cards SET checklist = :checklist WHERE id = :id");
-$update->execute(['checklist' => json_encode($checklist), 'id' => $p['cardId']]);
-
-$pdo->commit();
-
-echo json_encode(['success' => true, 'checklist' => $checklist]);
