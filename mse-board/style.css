@@ -964,6 +964,56 @@ h1, h2, h3, h4 {
     color: var(--text-muted);
 }
 
+.checklist-item .inline-editable {
+    flex: 1;
+    min-width: 0;
+}
+
+.checklist-subitem {
+    margin-left: 1.5rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid var(--border);
+}
+
+.checklist-item-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 0.2rem;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.checklist-item:hover .checklist-item-delete-btn {
+    opacity: 0.7;
+}
+
+.checklist-item-delete-btn:hover {
+    opacity: 1 !important;
+    color: var(--red);
+}
+
+.checklist-add-sub-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    margin-left: 1.5rem;
+    padding: 0.15rem 0;
+    text-align: left;
+    transition: color 0.15s ease;
+}
+
+.checklist-add-sub-btn:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
 /* ANEXOS */
 .postit-attachments {
     display: flex;
