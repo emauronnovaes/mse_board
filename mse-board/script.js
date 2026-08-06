@@ -4179,17 +4179,17 @@ function renderBoard() {
 
         if (person.isDone) {
             const container = document.getElementById(`cards_${person.id}`);
-            const cardsForPerson = state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters));
+            const cardsForPerson = sortByPosition(state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters)));
             cardsForPerson.forEach(card => container.appendChild(buildPostItElement(card)));
         } else {
             ['afazer', 'todo', 'testing', 'paused', 'done'].forEach(status => {
                 const container = document.getElementById(`cards_${person.id}__${status}`);
                 if (!container) return;
-                const cardsForLane = state.cards.filter(c =>
+                const cardsForLane = sortByPosition(state.cards.filter(c =>
                     c.personId === person.id && !c.archived &&
                     (c.status || 'todo') === status &&
                     cardMatchesFilters(c, filters)
-                );
+                ));
                 cardsForLane.forEach(card => container.appendChild(buildPostItElement(card)));
 
                 // "Em Espera" e "Concluído" minimizam sozinhos quando estão vazios,
@@ -4743,6 +4743,17 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Ordena post-its pela posição manual (arrastar pra reordenar). Post-its
+// sem posição definida (criados antes dessa funcionalidade existir) caem
+// pelo horário de criação, então continuam aparecendo numa ordem estável.
+function sortByPosition(cards) {
+    return [...cards].sort((a, b) => {
+        const posA = typeof a.position === 'number' ? a.position : (a.createdAt || 0);
+        const posB = typeof b.position === 'number' ? b.position : (b.createdAt || 0);
+        return posA - posB;
+    });
+}
+
 // Transforma links (http://, https://, www.) dentro de um texto já escapado
 // em links clicáveis, que abrem em nova aba.
 function linkifyText(str) {
@@ -5111,6 +5122,43 @@ function drop(e) {
         const parts = raw.split('__');
         newPersonId = parts[0];
         newStatus = parts[1];
+    }
+
+    // Descobre entre quais post-its (já existentes nessa raia) o card foi
+    // soltado, comparando a posição vertical do mouse com cada um deles.
+    const siblings = [...container.querySelectorAll('.postit')].filter(el => el.id !== cardId);
+    let insertBeforeCard = null;
+    for (const el of siblings) {
+        const rect = el.getBoundingClientRect();
+        const middle = rect.top + rect.height / 2;
+        if (e.clientY < middle) {
+            insertBeforeCard = el.id;
+            break;
+        }
+    }
+
+    const card = state.cards.find(c => c.id === cardId);
+    if (card) {
+        const laneCards = sortByPosition(
+            state.cards.filter(c => c.id !== cardId && c.personId === newPersonId && !c.archived &&
+                (newStatus ? (c.status || 'todo') === newStatus : true))
+        );
+        const insertIndex = insertBeforeCard ? laneCards.findIndex(c => c.id === insertBeforeCard) : laneCards.length;
+        const prevCard = insertIndex > 0 ? laneCards[insertIndex - 1] : null;
+        const nextCard = insertIndex < laneCards.length ? laneCards[insertIndex] : null;
+        const prevPos = prevCard ? (typeof prevCard.position === 'number' ? prevCard.position : (prevCard.createdAt || 0)) : null;
+        const nextPos = nextCard ? (typeof nextCard.position === 'number' ? nextCard.position : (nextCard.createdAt || 0)) : null;
+
+        if (prevPos !== null && nextPos !== null) {
+            card.position = (prevPos + nextPos) / 2;
+        } else if (nextPos !== null) {
+            card.position = nextPos - 1;
+        } else if (prevPos !== null) {
+            card.position = prevPos + 1;
+        } else {
+            card.position = Date.now();
+        }
+        persistCard(card);
     }
 
     moveCard(cardId, newPersonId, newStatus);
