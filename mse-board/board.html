@@ -322,6 +322,14 @@
                 <option value="">Responsável: Todos</option>
             </select>
 
+            <select id="sortOrderSelect" class="filter-select">
+                <option value="">Ordenar: Manual (arrastar)</option>
+                <option value="dueDate_asc">📅 Prazo (mais próximo primeiro)</option>
+                <option value="dueDate_desc">📅 Prazo (mais distante primeiro)</option>
+                <option value="priority_desc">🔴 Prioridade (alta → baixa)</option>
+                <option value="priority_asc">🟢 Prioridade (baixa → alta)</option>
+            </select>
+
             <label class="filter-checkbox">
                 <input type="checkbox" id="filterOverdue">
                 Atrasados
@@ -403,7 +411,10 @@
 
                 <div class="input-group">
                     <label for="cardDesc">Checklist de Atividades (1 por linha)</label>
-                    <textarea id="cardDesc" rows="4" placeholder="Ex:&#10;Checar medições físicas&#10;Aprovar laudo técnico&#10;Enviar fotos para cliente" required></textarea>
+                    <div class="checklist-textarea-wrap">
+                        <div class="checklist-line-numbers" id="cardDescLineNumbers">1</div>
+                        <textarea id="cardDesc" rows="4" placeholder="Ex:&#10;Checar medições físicas&#10;Aprovar laudo técnico&#10;Enviar fotos para cliente" required></textarea>
+                    </div>
                 </div>
 
                 <div class="form-row">
