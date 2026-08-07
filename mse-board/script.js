@@ -1522,6 +1522,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderCoverPreview(serverUrl || dataUrl);
         });
 
+        document.getElementById('cardDesc').addEventListener('input', updateChecklistLineNumbers);
+        document.getElementById('cardDesc').addEventListener('scroll', (e) => {
+            document.getElementById('cardDescLineNumbers').scrollTop = e.target.scrollTop;
+        });
+
         document.getElementById('newCardForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -1596,6 +1601,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('searchInput').addEventListener('input', renderBoard);
         document.getElementById('filterPriority').addEventListener('change', renderBoard);
         document.getElementById('filterAssignee').addEventListener('change', renderBoard);
+        document.getElementById('sortOrderSelect').addEventListener('change', (e) => {
+            currentSortOrder = e.target.value;
+            renderBoard();
+        });
         document.getElementById('filterOverdue').addEventListener('change', renderBoard);
         document.getElementById('filterStarred').addEventListener('change', renderBoard);
         document.getElementById('clearFiltersBtn').addEventListener('click', () => {
@@ -1604,6 +1613,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('filterAssignee').value = '';
             document.getElementById('filterOverdue').checked = false;
             document.getElementById('filterStarred').checked = false;
+            document.getElementById('sortOrderSelect').value = '';
+            currentSortOrder = '';
             renderBoard();
         });
 
@@ -2207,6 +2218,7 @@ function applyTemplateToForm(templateId) {
     document.getElementById('cardDesc').value = tpl.lines.join('\n');
     document.getElementById('cardColor').value = tpl.color;
     document.getElementById('cardPriority').value = tpl.priority;
+    updateChecklistLineNumbers();
 }
 
 function populateTemplateSelect() {
@@ -2314,7 +2326,8 @@ const STICKERS = [
     { id: 'attention', emoji: '⚠️', label: 'Atenção' },
     { id: 'approved', emoji: '✅', label: 'Aprovado' },
     { id: 'well_done', emoji: '👏', label: 'Muito Bem' },
-    { id: 'redo', emoji: '🔁', label: 'Refazer' }
+    { id: 'redo', emoji: '🔁', label: 'Refazer' },
+    { id: 'siren', emoji: '🚨', label: 'Urgente' }
 ];
 
 let selectedStickerId = null;
@@ -4179,13 +4192,13 @@ function renderBoard() {
 
         if (person.isDone) {
             const container = document.getElementById(`cards_${person.id}`);
-            const cardsForPerson = sortByPosition(state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters)));
+            const cardsForPerson = sortCards(state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters)));
             cardsForPerson.forEach(card => container.appendChild(buildPostItElement(card)));
         } else {
             ['afazer', 'todo', 'testing', 'paused', 'done'].forEach(status => {
                 const container = document.getElementById(`cards_${person.id}__${status}`);
                 if (!container) return;
-                const cardsForLane = sortByPosition(state.cards.filter(c =>
+                const cardsForLane = sortCards(state.cards.filter(c =>
                     c.personId === person.id && !c.archived &&
                     (c.status || 'todo') === status &&
                     cardMatchesFilters(c, filters)
@@ -4751,6 +4764,16 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Atualiza a régua numerada (1, 2, 3...) ao lado da textarea de checklist,
+// uma linha pra cada linha de texto digitada.
+function updateChecklistLineNumbers() {
+    const textarea = document.getElementById('cardDesc');
+    const gutter = document.getElementById('cardDescLineNumbers');
+    if (!textarea || !gutter) return;
+    const lineCount = Math.max(1, textarea.value.split('\n').length);
+    gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+}
+
 function buildChecklistItemRow(card, item, itemIndex, subIndex) {
     const row = document.createElement('div');
     row.className = subIndex === null ? 'checklist-item' : 'checklist-item checklist-subitem';
@@ -4858,6 +4881,40 @@ function deleteChecklistItem(cardId, itemIndex, subIndex) {
     renderBoard();
 }
 
+let currentSortOrder = '';
+
+// Ordena post-its: se o usuário escolheu um critério (data/prioridade) no
+// seletor "Ordenar", usa esse critério; senão, usa a ordem manual de
+// arrastar (sortByPosition).
+function sortCards(cards) {
+    if (currentSortOrder === '') {
+        return sortByPosition(cards);
+    }
+
+    if (currentSortOrder === 'dueDate_asc' || currentSortOrder === 'dueDate_desc') {
+        const dir = currentSortOrder === 'dueDate_asc' ? 1 : -1;
+        return [...cards].sort((a, b) => {
+            // Post-its sem prazo sempre vão pro final, independente da direção
+            if (!a.dueDate && !b.dueDate) return 0;
+            if (!a.dueDate) return 1;
+            if (!b.dueDate) return -1;
+            return a.dueDate < b.dueDate ? -1 * dir : a.dueDate > b.dueDate ? 1 * dir : 0;
+        });
+    }
+
+    if (currentSortOrder === 'priority_asc' || currentSortOrder === 'priority_desc') {
+        const rank = { baixa: 1, media: 2, alta: 3 };
+        const dir = currentSortOrder === 'priority_asc' ? 1 : -1;
+        return [...cards].sort((a, b) => {
+            const rankA = rank[a.priority] || 0;
+            const rankB = rank[b.priority] || 0;
+            return (rankA - rankB) * dir;
+        });
+    }
+
+    return sortByPosition(cards);
+}
+
 // Ordena post-its pela posição manual (arrastar pra reordenar). Post-its
 // sem posição definida (criados antes dessa funcionalidade existir) caem
 // pelo horário de criação, então continuam aparecendo numa ordem estável.
@@ -4961,6 +5018,7 @@ function openCardModalForCreate() {
     document.getElementById('cardFormSubmitBtn').textContent = 'Adicionar Tarefa';
     document.getElementById('editingCardId').value = '';
     document.getElementById('newCardForm').reset();
+    updateChecklistLineNumbers();
     document.getElementById('existingAttachmentsList').innerHTML = '';
     document.getElementById('commentsSection').style.display = 'none';
     document.getElementById('templateSelectGroup').style.display = 'flex';
@@ -4986,6 +5044,7 @@ function openCardModalForEdit(cardId) {
     populatePersonSelect(card.personId);
     document.getElementById('cardTitle').value = card.title;
     document.getElementById('cardDesc').value = card.checklist.map(i => i.text).join('\n');
+    updateChecklistLineNumbers();
     document.getElementById('cardColor').value = card.color;
     document.getElementById('cardPriority').value = card.priority;
     document.getElementById('cardDueDate').value = card.dueDate || '';
@@ -5275,10 +5334,17 @@ function drop(e) {
         } else {
             card.position = Date.now();
         }
-        persistCard(card);
     }
 
+    // moveCard() precisa rodar ANTES de persistCard() — ele atualiza
+    // personId/status do card. Se persistCard() rodasse primeiro, ele
+    // salvaria o card com o personId/status ANTIGO (a leitura do card pra
+    // mandar pro servidor é feita na hora, antes do moveCard() atualizar),
+    // criando uma corrida entre os dois salvamentos — dependendo de qual
+    // resposta do servidor chegasse por último, o post-it podia "voltar"
+    // pro lugar de onde foi tirado.
     moveCard(cardId, newPersonId, newStatus);
+    if (card) persistCard(card);
     renderBoard();
 }
 
