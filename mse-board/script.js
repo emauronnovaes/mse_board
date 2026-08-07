@@ -2314,7 +2314,8 @@ const STICKERS = [
     { id: 'attention', emoji: '⚠️', label: 'Atenção' },
     { id: 'approved', emoji: '✅', label: 'Aprovado' },
     { id: 'well_done', emoji: '👏', label: 'Muito Bem' },
-    { id: 'redo', emoji: '🔁', label: 'Refazer' }
+    { id: 'redo', emoji: '🔁', label: 'Refazer' },
+    { id: 'siren', emoji: '🚨', label: 'Urgente' }
 ];
 
 let selectedStickerId = null;
@@ -5275,10 +5276,17 @@ function drop(e) {
         } else {
             card.position = Date.now();
         }
-        persistCard(card);
     }
 
+    // moveCard() precisa rodar ANTES de persistCard() — ele atualiza
+    // personId/status do card. Se persistCard() rodasse primeiro, ele
+    // salvaria o card com o personId/status ANTIGO (a leitura do card pra
+    // mandar pro servidor é feita na hora, antes do moveCard() atualizar),
+    // criando uma corrida entre os dois salvamentos — dependendo de qual
+    // resposta do servidor chegasse por último, o post-it podia "voltar"
+    // pro lugar de onde foi tirado.
     moveCard(cardId, newPersonId, newStatus);
+    if (card) persistCard(card);
     renderBoard();
 }
 
