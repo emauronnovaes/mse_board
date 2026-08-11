@@ -4616,18 +4616,83 @@ function getProgress(card) {
             if (sub.checked) done++;
         });
     });
+
+    // Se a pessoa definiu uma porcentagem manual, ela manda — em vez do
+    // cálculo automático baseado em quantos itens do checklist estão marcados.
+    if (typeof card.manualProgress === 'number') {
+        return { done, total, percent: card.manualProgress };
+    }
+
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
     return { done, total, percent };
 }
 
-function buildProgressBarHtml(progress) {
-    if (progress.total === 0) return '';
+function buildProgressBarHtml(progress, card) {
+    if (progress.total === 0 && !card) return '';
+
+    const isManual = card && typeof card.manualProgress === 'number';
+
+    const modeRow = card ? `
+        <div class="manual-progress-row">
+            <select class="progress-mode-select" onchange="setProgressMode('${card.id}', this.value)">
+                <option value="manual" ${isManual ? 'selected' : ''}>Definir manualmente</option>
+                <option value="automatico" ${!isManual ? 'selected' : ''}>Automático (pelo checklist)</option>
+            </select>
+            ${isManual ? `
+                <input type="number" min="0" max="100" step="1"
+                    class="manual-progress-input"
+                    value="${card.manualProgress}"
+                    onfocus="this.select()"
+                    onchange="setManualProgress('${card.id}', this.value)">
+                <span>%</span>
+            ` : ''}
+        </div>
+    ` : '';
+
+    if (progress.total === 0) {
+        return modeRow;
+    }
+
     return `
         <div class="progress-wrap">
             <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${progress.percent}%"></div></div>
             <span class="progress-label">${progress.percent}% (${progress.done}/${progress.total})</span>
         </div>
+        ${modeRow}
     `;
+}
+
+// Troca entre modo manual e automático. Ao trocar pra manual, começa com o
+// valor atual calculado automaticamente, como ponto de partida.
+function setProgressMode(cardId, mode) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    if (mode === 'automatico') {
+        delete card.manualProgress;
+    } else {
+        card.manualProgress = getProgress(card).percent;
+    }
+
+    persistCard(card);
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
+    renderBoard();
+}
+
+// Define a porcentagem manual de um post-it (só tem efeito no modo manual —
+// no modo automático, marcar/desmarcar itens do checklist é que decide).
+function setManualProgress(cardId, value) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    let num = parseInt(value, 10);
+    if (isNaN(num)) num = 0;
+    num = Math.max(0, Math.min(100, num));
+    card.manualProgress = num;
+
+    persistCard(card);
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
+    renderBoard();
 }
 
 function buildPostItElement(card) {
@@ -4785,7 +4850,7 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
     checkbox.addEventListener('change', () => {
         persistChecklistToggle(card.id, itemIndex, subIndex);
         toggleChecklistItemLocally(card, itemIndex, subIndex);
-        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)));
+        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)), card);
         renderBoard();
     });
     row.appendChild(checkbox);
@@ -5123,7 +5188,7 @@ function openViewModal(cardId) {
     }
     document.getElementById('viewCardTags').innerHTML = tagsHtml;
 
-    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card));
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
 
     // Checklist (clicável direto na visualização, com edição por duplo clique e sub-checklists)
     const checklistContainer = document.getElementById('viewCardChecklist');
