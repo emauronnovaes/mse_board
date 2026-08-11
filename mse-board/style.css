@@ -898,6 +898,7 @@ h1, h2, h3, h4 {
     gap: 0.4rem;
     overflow: hidden;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .postit:hover {
