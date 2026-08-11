@@ -111,6 +111,28 @@ async function fetchCardsFromServer() {
 function savePersonToServer(person) { return apiCall('save_person.php', person); }
 function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }); }
 
+// Evita registrar o mesmo erro repetidamente na Central de Erros a cada
+// tentativa de retry (a cada ~6s). Só registra de novo se: (a) o problema foi
+// resolvido e aconteceu de novo depois, ou (b) já se passaram 30 minutos
+// desde o último aviso — um lembrete periódico de que o problema continua,
+// sem virar uma enxurrada de avisos idênticos.
+const REAVISAR_ERRO_A_CADA_MS = 30 * 60 * 1000; // 30 minutos
+const lastLoggedErrorAt = new Map();
+
+function logErrorOnce(key, message, howToFix) {
+    const lastLoggedAt = lastLoggedErrorAt.get(key);
+    if (lastLoggedAt && (Date.now() - lastLoggedAt) < REAVISAR_ERRO_A_CADA_MS) return;
+
+    lastLoggedErrorAt.set(key, Date.now());
+    if (typeof logError === 'function') {
+        logError(message, howToFix);
+    }
+}
+
+function clearErrorOnce(key) {
+    lastLoggedErrorAt.delete(key);
+}
+
 // Mesma proteção dos post-its, agora pras pessoas/colunas: se salvar falhar,
 // tenta de novo sozinho e nunca deixa a sincronização automática sobrescrever
 // ou apagar uma coluna que ainda não confirmou salvar no servidor.
@@ -122,6 +144,7 @@ async function persistPerson(person, attempt = 1) {
 
     if (ok) {
         pendingPersonSaves.delete(person.id);
+        clearErrorOnce(`person_${person.id}`);
         return true;
     }
 
@@ -130,12 +153,11 @@ async function persistPerson(person, attempt = 1) {
         return persistPerson(person, attempt + 1);
     }
 
-    if (typeof logError === 'function') {
-        logError(
-            `Não foi possível salvar a coluna "${person.name}" no servidor depois de várias tentativas.`,
-            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho.'
-        );
-    }
+    logErrorOnce(
+        `person_${person.id}`,
+        `Não foi possível salvar a coluna "${person.name}" no servidor depois de várias tentativas.`,
+        'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho.'
+    );
     return false;
 }
 
@@ -156,18 +178,18 @@ async function persistPersonDelete(personId, attempt = 1) {
     const ok = await deletePersonFromServer(personId);
     if (ok) {
         pendingPersonDeletes.delete(personId);
+        clearErrorOnce(`person_delete_${personId}`);
         return true;
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
         return persistPersonDelete(personId, attempt + 1);
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a exclusão de uma coluna no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `person_delete_${personId}`,
+        'Não foi possível confirmar a exclusão de uma coluna no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+    );
     return false;
 }
 
@@ -193,6 +215,7 @@ async function persistCard(card, attempt = 1) {
 
     if (ok) {
         pendingCardSaves.delete(card.id);
+        clearErrorOnce(`card_${card.id}`);
         return true;
     }
 
@@ -204,12 +227,11 @@ async function persistCard(card, attempt = 1) {
     // Falhou depois de várias tentativas: mantém marcado como pendente (protege
     // contra sumir na próxima sincronização) e avisa de forma bem visível.
     // A sincronização automática vai continuar tentando salvar sozinha.
-    if (typeof logError === 'function') {
-        logError(
-            `Não foi possível salvar "${card.title}" no servidor depois de várias tentativas.`,
-            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho — não fecha essa aba até confirmar.'
-        );
-    }
+    logErrorOnce(
+        `card_${card.id}`,
+        `Não foi possível salvar "${card.title}" no servidor depois de várias tentativas.`,
+        'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho — não fecha essa aba até confirmar.'
+    );
     return false;
 }
 
@@ -234,14 +256,14 @@ async function persistCardMove(cardId, personId, status, completedAt) {
     const ok = await moveCardOnServer(cardId, personId, status, completedAt);
     if (ok) {
         pendingCardSaves.delete(cardId);
+        clearErrorOnce(`card_move_${cardId}`);
         return true;
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a movimentação de um post-it no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar salvar de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `card_move_${cardId}`,
+        'Não foi possível confirmar a movimentação de um post-it no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar salvar de novo sozinho.'
+    );
     return false;
 }
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
@@ -3811,18 +3833,18 @@ async function persistCardDelete(cardId, attempt = 1) {
     const ok = await deleteCardFromServer(cardId);
     if (ok) {
         pendingCardDeletes.delete(cardId);
+        clearErrorOnce(`card_delete_${cardId}`);
         return true;
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
         return persistCardDelete(cardId, attempt + 1);
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a exclusão de uma tarefa no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `card_delete_${cardId}`,
+        'Não foi possível confirmar a exclusão de uma tarefa no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+    );
     return false;
 }
 
