@@ -111,6 +111,28 @@ async function fetchCardsFromServer() {
 function savePersonToServer(person) { return apiCall('save_person.php', person); }
 function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }); }
 
+// Evita registrar o mesmo erro repetidamente na Central de Erros a cada
+// tentativa de retry (a cada ~6s). Só registra de novo se: (a) o problema foi
+// resolvido e aconteceu de novo depois, ou (b) já se passaram 30 minutos
+// desde o último aviso — um lembrete periódico de que o problema continua,
+// sem virar uma enxurrada de avisos idênticos.
+const REAVISAR_ERRO_A_CADA_MS = 30 * 60 * 1000; // 30 minutos
+const lastLoggedErrorAt = new Map();
+
+function logErrorOnce(key, message, howToFix) {
+    const lastLoggedAt = lastLoggedErrorAt.get(key);
+    if (lastLoggedAt && (Date.now() - lastLoggedAt) < REAVISAR_ERRO_A_CADA_MS) return;
+
+    lastLoggedErrorAt.set(key, Date.now());
+    if (typeof logError === 'function') {
+        logError(message, howToFix);
+    }
+}
+
+function clearErrorOnce(key) {
+    lastLoggedErrorAt.delete(key);
+}
+
 // Mesma proteção dos post-its, agora pras pessoas/colunas: se salvar falhar,
 // tenta de novo sozinho e nunca deixa a sincronização automática sobrescrever
 // ou apagar uma coluna que ainda não confirmou salvar no servidor.
@@ -122,6 +144,7 @@ async function persistPerson(person, attempt = 1) {
 
     if (ok) {
         pendingPersonSaves.delete(person.id);
+        clearErrorOnce(`person_${person.id}`);
         return true;
     }
 
@@ -130,12 +153,11 @@ async function persistPerson(person, attempt = 1) {
         return persistPerson(person, attempt + 1);
     }
 
-    if (typeof logError === 'function') {
-        logError(
-            `Não foi possível salvar a coluna "${person.name}" no servidor depois de várias tentativas.`,
-            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho.'
-        );
-    }
+    logErrorOnce(
+        `person_${person.id}`,
+        `Não foi possível salvar a coluna "${person.name}" no servidor depois de várias tentativas.`,
+        'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho.'
+    );
     return false;
 }
 
@@ -156,18 +178,18 @@ async function persistPersonDelete(personId, attempt = 1) {
     const ok = await deletePersonFromServer(personId);
     if (ok) {
         pendingPersonDeletes.delete(personId);
+        clearErrorOnce(`person_delete_${personId}`);
         return true;
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
         return persistPersonDelete(personId, attempt + 1);
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a exclusão de uma coluna no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `person_delete_${personId}`,
+        'Não foi possível confirmar a exclusão de uma coluna no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+    );
     return false;
 }
 
@@ -193,6 +215,7 @@ async function persistCard(card, attempt = 1) {
 
     if (ok) {
         pendingCardSaves.delete(card.id);
+        clearErrorOnce(`card_${card.id}`);
         return true;
     }
 
@@ -204,12 +227,11 @@ async function persistCard(card, attempt = 1) {
     // Falhou depois de várias tentativas: mantém marcado como pendente (protege
     // contra sumir na próxima sincronização) e avisa de forma bem visível.
     // A sincronização automática vai continuar tentando salvar sozinha.
-    if (typeof logError === 'function') {
-        logError(
-            `Não foi possível salvar "${card.title}" no servidor depois de várias tentativas.`,
-            'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho — não fecha essa aba até confirmar.'
-        );
-    }
+    logErrorOnce(
+        `card_${card.id}`,
+        `Não foi possível salvar "${card.title}" no servidor depois de várias tentativas.`,
+        'Verifique sua internet/conexão com o servidor. O sistema vai continuar tentando salvar sozinho — não fecha essa aba até confirmar.'
+    );
     return false;
 }
 
@@ -234,14 +256,14 @@ async function persistCardMove(cardId, personId, status, completedAt) {
     const ok = await moveCardOnServer(cardId, personId, status, completedAt);
     if (ok) {
         pendingCardSaves.delete(cardId);
+        clearErrorOnce(`card_move_${cardId}`);
         return true;
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a movimentação de um post-it no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar salvar de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `card_move_${cardId}`,
+        'Não foi possível confirmar a movimentação de um post-it no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar salvar de novo sozinho.'
+    );
     return false;
 }
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
@@ -3811,18 +3833,18 @@ async function persistCardDelete(cardId, attempt = 1) {
     const ok = await deleteCardFromServer(cardId);
     if (ok) {
         pendingCardDeletes.delete(cardId);
+        clearErrorOnce(`card_delete_${cardId}`);
         return true;
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
         return persistCardDelete(cardId, attempt + 1);
     }
-    if (typeof logError === 'function') {
-        logError(
-            'Não foi possível confirmar a exclusão de uma tarefa no servidor.',
-            'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
-        );
-    }
+    logErrorOnce(
+        `card_delete_${cardId}`,
+        'Não foi possível confirmar a exclusão de uma tarefa no servidor.',
+        'Verifique sua internet/conexão. O sistema vai tentar excluir de novo sozinho.'
+    );
     return false;
 }
 
@@ -4616,18 +4638,83 @@ function getProgress(card) {
             if (sub.checked) done++;
         });
     });
+
+    // Se a pessoa definiu uma porcentagem manual, ela manda — em vez do
+    // cálculo automático baseado em quantos itens do checklist estão marcados.
+    if (typeof card.manualProgress === 'number') {
+        return { done, total, percent: card.manualProgress };
+    }
+
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
     return { done, total, percent };
 }
 
-function buildProgressBarHtml(progress) {
-    if (progress.total === 0) return '';
+function buildProgressBarHtml(progress, card) {
+    if (progress.total === 0 && !card) return '';
+
+    const isManual = card && typeof card.manualProgress === 'number';
+
+    const modeRow = card ? `
+        <div class="manual-progress-row">
+            <select class="progress-mode-select" onchange="setProgressMode('${card.id}', this.value)">
+                <option value="manual" ${isManual ? 'selected' : ''}>Definir manualmente</option>
+                <option value="automatico" ${!isManual ? 'selected' : ''}>Automático (pelo checklist)</option>
+            </select>
+            ${isManual ? `
+                <input type="number" min="0" max="100" step="1"
+                    class="manual-progress-input"
+                    value="${card.manualProgress}"
+                    onfocus="this.select()"
+                    onchange="setManualProgress('${card.id}', this.value)">
+                <span>%</span>
+            ` : ''}
+        </div>
+    ` : '';
+
+    if (progress.total === 0) {
+        return modeRow;
+    }
+
     return `
         <div class="progress-wrap">
             <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${progress.percent}%"></div></div>
             <span class="progress-label">${progress.percent}% (${progress.done}/${progress.total})</span>
         </div>
+        ${modeRow}
     `;
+}
+
+// Troca entre modo manual e automático. Ao trocar pra manual, começa com o
+// valor atual calculado automaticamente, como ponto de partida.
+function setProgressMode(cardId, mode) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    if (mode === 'automatico') {
+        delete card.manualProgress;
+    } else {
+        card.manualProgress = getProgress(card).percent;
+    }
+
+    persistCard(card);
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
+    renderBoard();
+}
+
+// Define a porcentagem manual de um post-it (só tem efeito no modo manual —
+// no modo automático, marcar/desmarcar itens do checklist é que decide).
+function setManualProgress(cardId, value) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    let num = parseInt(value, 10);
+    if (isNaN(num)) num = 0;
+    num = Math.max(0, Math.min(100, num));
+    card.manualProgress = num;
+
+    persistCard(card);
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
+    renderBoard();
 }
 
 function buildPostItElement(card) {
@@ -4785,7 +4872,7 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
     checkbox.addEventListener('change', () => {
         persistChecklistToggle(card.id, itemIndex, subIndex);
         toggleChecklistItemLocally(card, itemIndex, subIndex);
-        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)));
+        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)), card);
         renderBoard();
     });
     row.appendChild(checkbox);
@@ -5123,7 +5210,7 @@ function openViewModal(cardId) {
     }
     document.getElementById('viewCardTags').innerHTML = tagsHtml;
 
-    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card));
+    document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
 
     // Checklist (clicável direto na visualização, com edição por duplo clique e sub-checklists)
     const checklistContainer = document.getElementById('viewCardChecklist');

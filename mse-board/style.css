@@ -675,6 +675,7 @@ h1, h2, h3, h4 {
     border: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: border-color 0.2s, box-shadow 0.2s;
+    overflow-x: hidden;
 }
 
 .column.column-done {
@@ -895,6 +896,8 @@ h1, h2, h3, h4 {
     flex-direction: column;
     justify-content: space-between;
     gap: 0.4rem;
+    overflow: hidden;
+    min-width: 0;
 }
 
 .postit:hover {
@@ -974,6 +977,56 @@ h1, h2, h3, h4 {
     font-weight: 700;
     color: rgba(0, 0, 0, 0.55);
     white-space: nowrap;
+}
+
+.manual-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.7rem;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.progress-mode-select {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    font-size: 0.76rem;
+    color: var(--text-primary);
+    background-color: var(--bg);
+    cursor: pointer;
+}
+
+.progress-mode-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.manual-progress-input {
+    width: 52px;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    font-size: 0.78rem;
+    text-align: right;
+    color: var(--text-primary);
+    background-color: var(--bg);
+}
+
+.manual-progress-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.manual-progress-clear-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
 }
 
 /* CHECKLIST */
@@ -2456,6 +2509,8 @@ body.observer-mode .cards-container.drag-over {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .postit-compact-meta {
@@ -2486,6 +2541,7 @@ body.observer-mode .cards-container.drag-over {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
 }
 
 .lane-header {
@@ -2750,14 +2806,23 @@ body.observer-mode .cards-container.drag-over {
     border: none;
     cursor: pointer;
     font-size: 0.95rem;
-    color: var(--border);
+    color: var(--text-muted);
+    opacity: 0.55;
     flex-shrink: 0;
     line-height: 1;
     padding: 0;
+    transition: color 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+.postit-star-btn:hover {
+    opacity: 1;
+    color: var(--gold);
+    transform: scale(1.15);
 }
 
 .postit-star-btn.is-starred {
     color: var(--gold);
+    opacity: 1;
 }
 
 .view-labels-row {
