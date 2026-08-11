@@ -2541,7 +2541,6 @@ body.observer-mode .cards-container.drag-over {
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
 }
 
 .lane-header {
@@ -2763,6 +2762,13 @@ body.observer-mode .cards-container.drag-over {
 
     .board-container {
         padding: 0.6rem 0.8rem 1rem;
+    }
+
+    /* Só em telas pequenas: impede a raia de vazar conteúdo pra raia de
+       baixo quando o espaço vertical fica muito apertado. Em telas normais
+       isso não é necessário e cortava a tag/porcentagem do post-it à toa. */
+    .lane {
+        overflow: hidden;
     }
 }
 
