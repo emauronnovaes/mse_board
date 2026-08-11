@@ -2541,6 +2541,7 @@ body.observer-mode .cards-container.drag-over {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
 }
 
 .lane-header {
