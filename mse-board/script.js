@@ -4851,6 +4851,30 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Limpa espaçamento irregular de texto colado (tabs, espaços múltiplos,
+// linhas em branco extras) — comum quando se cola de Word/Notion/sites —
+// mas preserva as quebras de linha reais, que é o que a formatação
+// (numeração, listas) precisa pra continuar legível.
+// Descobre em que posição (contando caracteres de texto puro) o cursor está
+// dentro de um elemento editável — usado pra saber a linha atual ao apertar Enter.
+function getCaretOffsetWithin(el) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return el.textContent.length;
+    const range = selection.getRangeAt(0);
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(el);
+    preRange.setEnd(range.endContainer, range.endOffset);
+    return preRange.toString().length;
+}
+
+function normalizeMultilineText(rawText) {
+    return rawText
+        .split('\n')
+        .map(line => line.replace(/[ \t]+/g, ' ').trim())
+        .filter(line => line !== '')
+        .join('\n');
+}
+
 // Atualiza a régua numerada (1, 2, 3...) ao lado da textarea de checklist,
 // uma linha pra cada linha de texto digitada.
 function updateChecklistLineNumbers() {
@@ -4926,7 +4950,7 @@ function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
         el.removeEventListener('blur', onBlur);
         el.removeEventListener('keydown', onKeydown);
         if (commit) {
-            const newText = el.textContent.trim();
+            const newText = normalizeMultilineText(el.textContent);
             if (newText) {
                 if (subIndex === null) card.checklist[itemIndex].text = newText;
                 else card.checklist[itemIndex].subItems[subIndex].text = newText;
@@ -4938,7 +4962,28 @@ function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
     };
     const onBlur = () => finish(true);
     const onKeydown = (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+
+            // Olha a linha atual (do início dela até o cursor) pra saber se
+            // tem numeração — se tiver, continua contando na linha nova.
+            const fullText = el.textContent;
+            const cursorOffset = getCaretOffsetWithin(el);
+            const textBeforeCursor = fullText.slice(0, cursorOffset);
+            const currentLineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+            const currentLine = textBeforeCursor.slice(currentLineStart);
+
+            const match = currentLine.match(/^(\s*)(\d+)([.\-)])\s?/);
+            let insertText = '\n';
+            if (match) {
+                const [, indent, num, sep] = match;
+                const nextNum = parseInt(num, 10) + 1;
+                insertText = `\n${indent}${nextNum}${sep} `;
+            }
+
+            document.execCommand('insertText', false, insertText);
+            return;
+        }
         if (e.key === 'Escape') { e.preventDefault(); finish(false); }
     };
     el.addEventListener('blur', onBlur);
