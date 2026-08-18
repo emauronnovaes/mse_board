@@ -4867,6 +4867,111 @@ function getCaretOffsetWithin(el) {
     return preRange.toString().length;
 }
 
+// Insere texto na posição do cursor dentro de um elemento editável, sem
+// depender do execCommand (API antiga, com comportamento inconsistente
+// entre navegadores).
+function insertTextAtCursor(el, text) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+// Converte o HTML colado (que costuma ter cada linha visual como um
+// bloco/div separado) em texto com quebras de linha reais — usando o
+// innerText do próprio navegador, que já sabe "ler" como cada bloco
+// apareceria visualmente, em vez do textContent (que ignora blocos e
+// junta tudo sem separador nenhum).
+function htmlToTextWithLineBreaks(html) {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const text = container.innerText;
+    document.body.removeChild(container);
+    return text;
+}
+
+// Limpa HTML colado/editado: remove qualquer coisa perigosa (scripts,
+// atributos tipo onclick, links "javascript:") mas mantém a formatação e
+// os links de verdade — negrito, itálico, quebras de linha, <a> clicável.
+function sanitizeRichText(html) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    container.querySelectorAll('script, style, iframe, object, embed, form, input, button, link, meta').forEach(el => el.remove());
+
+    // "Desembrulha" tabelas e listas (table/tr/td/th/ol/ul/li) — essas
+    // estruturas costumam trazer bordas/estilos padrão do navegador que
+    // sobram como resquício visual estranho (tipo uma caixa em volta de um
+    // número). Mantém só o conteúdo de dentro, com uma quebra de linha no
+    // lugar de cada célula/item, sem a "moldura" da tabela/lista em si.
+    container.querySelectorAll('table, thead, tbody, tr, td, th, ol, ul, li').forEach(el => {
+        const frag = document.createDocumentFragment();
+        while (el.firstChild) frag.appendChild(el.firstChild);
+        frag.appendChild(document.createTextNode('\n'));
+        el.replaceWith(frag);
+    });
+
+    container.querySelectorAll('*').forEach(el => {
+        [...el.attributes].forEach(attr => {
+            const name = attr.name.toLowerCase();
+            const isEventHandler = name.startsWith('on');
+            const isDangerousHref = name === 'href' && /^\s*javascript:/i.test(attr.value);
+            const isAllowed = ['href', 'target', 'rel'].includes(name) && el.tagName === 'A';
+            if (isEventHandler || isDangerousHref || !isAllowed) {
+                el.removeAttribute(attr.name);
+            }
+        });
+        if (el.tagName === 'A') {
+            el.setAttribute('target', '_blank');
+            el.setAttribute('rel', 'noopener noreferrer');
+        }
+    });
+
+    // Adiciona o ícone (favicon) do site antes do texto de cada link,
+    // desde que ainda não tenha um (evita duplicar em edições repetidas).
+    container.querySelectorAll('a[href]').forEach(a => {
+        if (a.querySelector('.link-favicon')) return;
+        try {
+            const hostname = new URL(a.getAttribute('href')).hostname;
+            const favicon = document.createElement('img');
+            favicon.src = getFaviconUrl(hostname);
+            favicon.alt = '';
+            favicon.className = 'link-favicon';
+            a.insertBefore(favicon, a.firstChild);
+        } catch (e) { /* href inválido, sem favicon */ }
+    });
+
+    return container.innerHTML;
+}
+
+// Insere HTML (já limpo/sanitizado) na posição do cursor.
+function insertHtmlAtCursor(el, html) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const fragment = range.createContextualFragment(html);
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+    if (lastNode) {
+        range.setStartAfter(lastNode);
+        range.setEndAfter(lastNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+}
+
 function normalizeMultilineText(rawText) {
     return rawText
         .split('\n')
@@ -4903,7 +5008,7 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
 
     const span = document.createElement('span');
     span.className = 'inline-editable';
-    span.innerHTML = linkifyText(item.text);
+    span.innerHTML = item.isRichText ? item.text : linkifyText(item.text);
     span.title = isObserver ? '' : 'Dois cliques para editar';
     if (!isObserver) {
         span.addEventListener('dblclick', (e) => startInlineEditChecklistText(e, card.id, itemIndex, subIndex));
@@ -4938,9 +5043,17 @@ function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
+    const item = subIndex === null ? card.checklist[itemIndex] : card.checklist[itemIndex].subItems[subIndex];
+
     el.contentEditable = 'true';
     el.classList.add('editing');
-    el.textContent = subIndex === null ? card.checklist[itemIndex].text : card.checklist[itemIndex].subItems[subIndex].text;
+    // Se o item já tem formatação rica, edita em cima do HTML de verdade
+    // (mantendo links/negrito visíveis); senão, começa como texto simples.
+    if (item.isRichText) {
+        el.innerHTML = item.text;
+    } else {
+        el.textContent = item.text;
+    }
     el.focus();
     document.execCommand('selectAll', false, null);
 
@@ -4949,11 +5062,21 @@ function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
         el.classList.remove('editing');
         el.removeEventListener('blur', onBlur);
         el.removeEventListener('keydown', onKeydown);
+        el.removeEventListener('paste', onPaste);
         if (commit) {
-            const newText = normalizeMultilineText(el.textContent);
-            if (newText) {
-                if (subIndex === null) card.checklist[itemIndex].text = newText;
-                else card.checklist[itemIndex].subItems[subIndex].text = newText;
+            // Guarda como HTML rico (limpo/sanitizado) — preserva formatação,
+            // links clicáveis e quebras de linha exatamente como ficou editado.
+            const newHtml = sanitizeRichText(el.innerHTML).trim();
+            const hasContent = el.textContent.trim() !== '';
+            if (newHtml && hasContent) {
+                const updated = { text: newHtml, isRichText: true };
+                if (subIndex === null) {
+                    card.checklist[itemIndex].text = updated.text;
+                    card.checklist[itemIndex].isRichText = true;
+                } else {
+                    card.checklist[itemIndex].subItems[subIndex].text = updated.text;
+                    card.checklist[itemIndex].subItems[subIndex].isRichText = true;
+                }
                 persistCard(card);
             }
         }
@@ -4981,13 +5104,28 @@ function startInlineEditChecklistText(event, cardId, itemIndex, subIndex) {
                 insertText = `\n${indent}${nextNum}${sep} `;
             }
 
-            document.execCommand('insertText', false, insertText);
+            insertTextAtCursor(el, insertText);
             return;
         }
         if (e.key === 'Escape') { e.preventDefault(); finish(false); }
     };
+    // Ao colar, mantém a formatação e os links de verdade — só passa pelo
+    // sanitizador (tira scripts e qualquer coisa perigosa), sem reduzir tudo
+    // a texto puro como fazíamos antes.
+    const onPaste = (e) => {
+        e.preventDefault();
+        const clipboard = e.clipboardData || window.clipboardData;
+        const htmlData = clipboard.getData('text/html');
+        const plainData = clipboard.getData('text/plain');
+        if (htmlData) {
+            insertHtmlAtCursor(el, sanitizeRichText(htmlData));
+        } else {
+            insertTextAtCursor(el, plainData);
+        }
+    };
     el.addEventListener('blur', onBlur);
     el.addEventListener('keydown', onKeydown);
+    el.addEventListener('paste', onPaste);
 }
 
 function addSubChecklistItem(cardId, itemIndex) {
@@ -5060,13 +5198,24 @@ function sortByPosition(cards) {
 
 // Transforma links (http://, https://, www.) dentro de um texto já escapado
 // em links clicáveis, que abrem em nova aba.
+// Devolve a URL do favicon (ícone) de um site, usando um serviço público do
+// Google que busca o ícone de qualquer domínio sem precisar acessar o site.
+function getFaviconUrl(hostname) {
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
+}
+
 function linkifyText(str) {
     const escaped = escapeHtml(str);
     return escaped.replace(
         /((https?:\/\/|www\.)[^\s<]+)/gi,
         (match) => {
             const href = match.startsWith('http') ? match : `https://${match}`;
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">${match}</a>`;
+            let hostname = '';
+            try { hostname = new URL(href).hostname; } catch (e) { /* url inválida, sem favicon */ }
+            const favicon = hostname
+                ? `<img src="${getFaviconUrl(hostname)}" alt="" class="link-favicon">`
+                : '';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">${favicon}${match}</a>`;
         }
     );
 }
