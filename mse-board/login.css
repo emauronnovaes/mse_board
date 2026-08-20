@@ -28,6 +28,30 @@
     padding: 1.5rem;
 }
 
+/* --- TELA DE CARREGAMENTO (enquanto o SSO decide se redireciona) --- */
+.sso-loading {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.sso-spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid var(--border);
+    border-top-color: var(--carmine);
+    border-radius: 50%;
+    animation: sso-spin 0.7s linear infinite;
+}
+
+@keyframes sso-spin {
+    to { transform: rotate(360deg); }
+}
+
 .login-card {
     background-color: var(--card);
     border: 1px solid var(--border);
