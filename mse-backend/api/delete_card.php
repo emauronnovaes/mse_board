@@ -23,7 +23,12 @@ if (!$c || empty($c['id'])) {
 }
 
 $pdo = getDbConnection();
-$stmt = $pdo->prepare("DELETE FROM cards WHERE id = :id");
-$stmt->execute(['id' => $c['id']]);
 
-echo json_encode(['success' => true]);
+try {
+    $stmt = $pdo->prepare("DELETE FROM cards WHERE id = :id");
+    $stmt->execute(['id' => $c['id']]);
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Falha ao excluir o post-it.', 'details' => $e->getMessage()]);
+}
