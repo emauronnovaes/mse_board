@@ -1339,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 });
                 const namesList = Object.entries(namesCount).map(([n, c]) => `${n} (${c})`).join(', ');
-                showToast(`⚠️ Tarefas atrasadas/vencendo: ${namesList} — veja em Alertas de Vencimento.`);
+                showToast(`<i class="fa-solid fa-triangle-exclamation"></i> Tarefas atrasadas/vencendo: ${namesList} — veja em Alertas de Vencimento.`);
             } else {
                 const parts = [];
                 if (dueAlerts.overdue.length > 0) parts.push(`${dueAlerts.overdue.length} atrasado${dueAlerts.overdue.length > 1 ? 's' : ''}`);
@@ -1351,6 +1351,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Atalhos de teclado
         document.addEventListener('keydown', (e) => {
+            // Ignora combinações com Ctrl/Cmd/Alt (ex: Ctrl+C pra copiar) —
+            // sem isso, apertar Ctrl+C enquanto tinha um post-it "hover"
+            // disparava o atalho de arquivar (tecla C sozinha), fechando o
+            // card sem querer bem na hora de copiar o texto de dentro dele.
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
             const active = document.activeElement;
             const isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
             if (isTyping) return;
@@ -1767,7 +1773,7 @@ async function refreshBoardFromServer() {
             updateDueAlertsBadge();
 
             if (newSuggestionCards.length > 0) {
-                showToast(`💡 ${newSuggestionCards.length} nova(s) sugestão(ões) de melhoria recebida(s)!`, 'success');
+                showToast(`<i class="fa-solid fa-lightbulb"></i> ${newSuggestionCards.length} nova(s) sugestão(ões) de melhoria recebida(s)!`, 'success');
             }
         }
 
@@ -1800,7 +1806,7 @@ function checkForNewMentions(freshMentions) {
 
     const relevant = newOnes.filter(m => m.mentionedUser === currentUserName);
     relevant.forEach(m => {
-        showToast(`💬 ${deriveNameFromEmail(m.byUser)} mencionou você em "${m.cardTitle}"`, 'success');
+        showToast(`<i class="fa-solid fa-comment"></i> ${deriveNameFromEmail(m.byUser)} mencionou você em "${m.cardTitle}"`, 'success');
     });
 }
 
@@ -1827,10 +1833,10 @@ function checkForNewChatMessages(freshMessages) {
 
     if (relevant.length === 1) {
         const m = relevant[0];
-        const preview = m.text ? `"${m.text.slice(0, 60)}${m.text.length > 60 ? '…' : ''}"` : `enviou um arquivo 📎`;
-        showToast(`💬 Nova mensagem de ${deriveNameFromEmail(m.from)}: ${preview}`, 'success');
+        const preview = m.text ? `"${m.text.slice(0, 60)}${m.text.length > 60 ? '…' : ''}"` : `enviou um arquivo <i class="fa-solid fa-paperclip"></i>`;
+        showToast(`<i class="fa-solid fa-comment"></i> Nova mensagem de ${deriveNameFromEmail(m.from)}: ${preview}`, 'success');
     } else {
-        showToast(`💬 ${relevant.length} novas mensagens no chat`, 'success');
+        showToast(`<i class="fa-solid fa-comment"></i> ${relevant.length} novas mensagens no chat`, 'success');
     }
 
     if (chatPanelOpen) renderChatMessages();
@@ -1919,7 +1925,7 @@ async function loadState() {
     const p1 = addPerson('João (Dev)');
     const p2 = addPerson('Ana (Engenharia)');
     addPerson('Concluído', null, true);
-    const suggestionsPerson = { id: 'suggestions', name: '💡 Sugestões Mia', avatarUrl: null, isDone: false };
+    const suggestionsPerson = { id: 'suggestions', name: 'Sugestões Mia', avatarUrl: null, isDone: false };
     state.people.push(suggestionsPerson);
     persistPerson(suggestionsPerson);
 
@@ -2038,7 +2044,7 @@ function getConversation(withUser) {
 function renderChatChannelOptions() {
     const select = document.getElementById('chatChannelSelect');
     const previousValue = select.value;
-    select.innerHTML = `<option value="">💬 Geral (todos)</option><option value="${MIA_AI_ID}">🤖 Mia (Sugestões)</option>`;
+    select.innerHTML = `<option value="">Geral (todos)</option><option value="${MIA_AI_ID}">Mia (Sugestões)</option>`;
 
     getKnownUsers().forEach(name => {
         const option = document.createElement('option');
@@ -2072,7 +2078,7 @@ function renderChatMessages() {
             if (m.attachment.isImage) {
                 attachmentHtml = `<a href="${m.attachment.url}" target="_blank"><img src="${m.attachment.url}" class="chat-attachment-img" alt="${escapeHtml(m.attachment.name)}"></a>`;
             } else {
-                attachmentHtml = `<a href="${m.attachment.url}" target="_blank" class="chat-attachment-file">📎 ${escapeHtml(m.attachment.name)}</a>`;
+                attachmentHtml = `<a href="${m.attachment.url}" target="_blank" class="chat-attachment-file"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(m.attachment.name)}</a>`;
             }
         }
 
@@ -2157,7 +2163,7 @@ function renderErrorLogList() {
                     <span class="audit-item-user" style="color:#bf3a3a;">${escapeHtml(entry.message)}</span>
                     <span>${dateStr}</span>
                 </div>
-                <div style="color:var(--text-muted); font-size:0.8rem; margin-top:0.3rem;">💡 ${escapeHtml(entry.howToFix)}</div>
+                <div style="color:var(--text-muted); font-size:0.8rem; margin-top:0.3rem;"><i class="fa-solid fa-lightbulb"></i> ${escapeHtml(entry.howToFix)}</div>
             </div>
         `;
     }).join('');
@@ -2345,11 +2351,11 @@ function renderLabelsList() {
 // ==========================================
 
 const STICKERS = [
-    { id: 'attention', emoji: '⚠️', label: 'Atenção' },
-    { id: 'approved', emoji: '✅', label: 'Aprovado' },
-    { id: 'well_done', emoji: '👏', label: 'Muito Bem' },
-    { id: 'redo', emoji: '🔁', label: 'Refazer' },
-    { id: 'siren', emoji: '🚨', label: 'Urgente' }
+    { id: 'attention', icon: 'fa-triangle-exclamation', label: 'Atenção' },
+    { id: 'approved', icon: 'fa-circle-check', label: 'Aprovado' },
+    { id: 'well_done', icon: 'fa-hands-clapping', label: 'Muito Bem' },
+    { id: 'redo', icon: 'fa-rotate', label: 'Refazer' },
+    { id: 'siren', icon: 'fa-bell', label: 'Urgente' }
 ];
 
 let selectedStickerId = null;
@@ -2383,12 +2389,12 @@ function renderStickerPicker(currentStickerId) {
 
     container.innerHTML = STICKERS.map(s => `
         <div class="sticker-option ${selectedStickerId === s.id ? 'is-selected' : ''}" data-sticker-id="${s.id}">
-            <span class="sticker-emoji">${s.emoji}</span>
+            <span class="sticker-emoji"><i class="fa-solid ${s.icon}"></i></span>
             <span class="sticker-label">${s.label}</span>
         </div>
     `).join('') + `
         <div class="sticker-option ${!selectedStickerId ? 'is-selected' : ''}" data-sticker-id="">
-            <span class="sticker-emoji">—</span>
+            <span class="sticker-emoji"><i class="fa-solid fa-ban"></i></span>
             <span class="sticker-label">Nenhuma</span>
         </div>
     `;
@@ -3083,7 +3089,7 @@ function renderDeliveryReport() {
         }
     }
 
-    state.cards.filter(c => !c.archived).forEach(card => {
+    state.cards.filter(c => !c.archived && !c.hiddenFromDashboard).forEach(card => {
         const person = state.people.find(p => p.id === card.personId);
         const personId = person ? person.id : '__sem_coluna__';
 
@@ -3111,7 +3117,7 @@ function renderDeliveryReport() {
     });
 
     if (columnIds.length === 0) {
-        activeContainer.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUMA TAREFA ENCONTRADA COM ESSE FILTRO.</td></tr>`;
+        activeContainer.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUMA TAREFA ENCONTRADA COM ESSE FILTRO.</td></tr>`;
         return;
     }
 
@@ -3121,7 +3127,7 @@ function renderDeliveryReport() {
 
         const personHeaderRow = `
             <tr class="dash-person-group-row">
-                <td colspan="7">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
+                <td colspan="8">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
             </tr>
         `;
 
@@ -3152,12 +3158,72 @@ function renderDeliveryReport() {
                     <td class="dash-obs-cell">
                         <textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>
                     </td>
+                    <td onclick="event.stopPropagation()">
+                        <button type="button" class="dash-hide-task-btn" title="Remover só do Dashboard (a tarefa continua no quadro normal)" onclick="hideCardFromDashboard('${c.id}')">
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </button>
+                    </td>
                 </tr>
             `;
         }).join('');
 
         return personHeaderRow + taskRows;
     }).join('');
+}
+
+// Remove uma tarefa só da visualização do Dashboard de Entregas — ela
+// continua existindo normalmente no quadro principal, só não aparece mais
+// nessa tabela específica.
+function hideCardFromDashboard(cardId) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+    showConfirm(`Remover "${card.title}" do Dashboard? Ela continua normal no quadro, só não aparece mais aqui.`, () => {
+        card.hiddenFromDashboard = true;
+        persistCard(card);
+        renderDeliveryReport();
+    });
+}
+
+// Mostra/esconde o painel com as tarefas que foram removidas só do
+// Dashboard, permitindo trazer de volta (desfazer) a qualquer momento.
+function renderHiddenDashboardTasks() {
+    const panel = document.getElementById('hiddenDashboardTasksPanel');
+    const isOpen = panel.style.display !== 'none';
+
+    if (isOpen) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    fillHiddenDashboardTasksPanel();
+    panel.style.display = 'block';
+}
+
+function fillHiddenDashboardTasksPanel() {
+    const panel = document.getElementById('hiddenDashboardTasksPanel');
+    const hiddenCards = state.cards.filter(c => c.hiddenFromDashboard && !c.archived);
+
+    if (hiddenCards.length === 0) {
+        panel.innerHTML = `<div class="dsg-hidden-tasks-empty">Nenhuma tarefa oculta do Dashboard no momento.</div>`;
+    } else {
+        panel.innerHTML = hiddenCards.map(c => `
+            <div class="dsg-hidden-task-row">
+                <span>${escapeHtml(c.title)}</span>
+                <button type="button" class="dsg-restore-task-btn" onclick="restoreCardToDashboard('${c.id}')">
+                    <i class="fa-solid fa-rotate-left"></i> Restaurar no Dashboard
+                </button>
+            </div>
+        `).join('');
+    }
+}
+
+function restoreCardToDashboard(cardId) {
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+    card.hiddenFromDashboard = false;
+    persistCard(card);
+    renderDeliveryReport();
+    fillHiddenDashboardTasksPanel();
 }
 
 function saveDashboardObservation(cardId, value) {
@@ -3641,7 +3707,7 @@ async function importFromTrello(trelloData, includeArchived, progressEl) {
 
     renderBoard();
     logAudit(`Importou ${lists.length} colunas e ${cardsToImport.length} tarefas do Trello`);
-    progressEl.textContent = `✅ Pronto! ${lists.length} coluna(s) e ${cardsToImport.length} tarefa(s) importadas.`;
+    progressEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> Pronto! ${lists.length} coluna(s) e ${cardsToImport.length} tarefa(s) importadas.`;
     showToast('Importação do Trello concluída!', 'success');
 }
 
@@ -4007,7 +4073,7 @@ function renderArchivedList() {
         item.innerHTML = `
             <div class="archived-item-info">
                 <h4>${escapeHtml(card.title)}</h4>
-                <p>👤 ${escapeHtml(card.author)}</p>
+                <p><i class="fa-solid fa-user"></i> ${escapeHtml(card.author)}</p>
             </div>
             <div class="archived-item-actions">
                 <button type="button" class="btn-secondary" data-action="restore">Restaurar</button>
@@ -4119,10 +4185,10 @@ function renderDueAlertsList() {
                 <div class="audit-item" style="cursor:pointer;" onclick="document.getElementById('dueAlertsModal').style.display='none'; openViewModal('${c.id}')">
                     <div class="audit-item-meta">
                         <span class="audit-item-user" style="color:${colorVar};">${escapeHtml(c.title)}</span>
-                        <span>👤 ${escapeHtml(assigneeNames)} — ${person ? escapeHtml(person.name) : ''}</span>
+                        <span><i class="fa-solid fa-user"></i> ${escapeHtml(assigneeNames)} — ${person ? escapeHtml(person.name) : ''}</span>
                     </div>
                     <div style="color:var(--text-muted); font-size:0.76rem; margin-top:0.2rem;">
-                        🟢 Início: ${startDate} &nbsp;→&nbsp; 📅 Prazo: ${formatDateBR(c.dueDate)}
+                        <i class="fa-solid fa-circle-dot" style="color:#22c55e;"></i> Início: ${startDate} &nbsp;→&nbsp; <i class="fa-solid fa-calendar-days"></i> Prazo: ${formatDateBR(c.dueDate)}
                     </div>
                 </div>
             `;
@@ -4135,7 +4201,7 @@ function renderDueAlertsList() {
         buildSection('Vence Hoje', dueToday, 'var(--gold)') +
         buildSection('Vence Amanhã', dueTomorrow, 'var(--text-primary)');
 
-    container.innerHTML = html || '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma tarefa atrasada ou vencendo nos próximos dias. 🎉</p>';
+    container.innerHTML = html || '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma tarefa atrasada ou vencendo nos próximos dias. <i class="fa-solid fa-champagne-glasses"></i></p>';
 }
 
 function formatDateBR(dateStr) {
@@ -4508,18 +4574,18 @@ function buildColumn(person) {
         if (draggedId && draggedId !== personId) reorderColumns(draggedId, personId);
     });
 
-    const deleteBtn = `<button class="delete-person-btn" title="Excluir Coluna" onclick="event.stopPropagation(); handleDeletePerson('${personId}')">🗑️</button>`;
+    const deleteBtn = `<button class="delete-person-btn" title="Excluir Coluna" onclick="event.stopPropagation(); handleDeletePerson('${personId}')"><i class="fa-solid fa-trash"></i></button>`;
 
     let avatarHtml;
     if (isDone) {
-        avatarHtml = `<span class="column-avatar-fallback column-avatar-done" onclick="openPersonModalForEdit('${personId}')">✓</span>`;
+        avatarHtml = `<span class="column-avatar-fallback column-avatar-done" onclick="openPersonModalForEdit('${personId}')"><i class="fa-solid fa-check"></i></span>`;
     } else if (person.avatarUrl) {
         avatarHtml = `<img src="${person.avatarUrl}" class="column-avatar" alt="${escapeHtml(person.name)}" onclick="openPersonModalForEdit('${personId}')">`;
     } else {
         avatarHtml = `<span class="column-avatar-fallback" onclick="openPersonModalForEdit('${personId}')">${getInitials(person.name)}</span>`;
     }
 
-    const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna">⠿</span>`;
+    const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna"><i class="fa-solid fa-grip-vertical"></i></span>`;
     const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
     let bodyHtml;
@@ -4622,9 +4688,34 @@ function showToast(message, type) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = `toast${type ? ' toast-' + type : ''}`;
-    toast.textContent = message;
+    toast.innerHTML = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3500);
+}
+
+// Toast com um botão "Desfazer" — dá uns segundos pra reverter uma exclusão
+// antes do aviso sumir sozinho.
+function showToastWithUndo(message, onUndo, seconds) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-undo';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    toast.appendChild(textSpan);
+
+    const undoBtn = document.createElement('button');
+    undoBtn.type = 'button';
+    undoBtn.className = 'toast-undo-btn';
+    undoBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Desfazer';
+    undoBtn.addEventListener('click', () => {
+        toast.remove();
+        onUndo();
+    });
+    toast.appendChild(undoBtn);
+
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), (seconds || 6) * 1000);
 }
 
 function getProgress(card) {
@@ -4739,7 +4830,7 @@ function buildPostItElement(card) {
         : '';
 
     const sticker = getStickerById(card.stickerId);
-    const stickerHtml = sticker ? `<span class="postit-sticker-stamp" title="${escapeHtml(sticker.label)}">${sticker.emoji}</span>` : '';
+    const stickerHtml = sticker ? `<span class="postit-sticker-stamp" title="${escapeHtml(sticker.label)}"><i class="fa-solid ${sticker.icon}"></i></span>` : '';
     const coverHtml = card.coverImage ? `<img src="${card.coverImage}" class="postit-cover" alt="Capa">` : '';
 
     let datesHtml = '';
@@ -4752,7 +4843,7 @@ function buildPostItElement(card) {
             else if (isDueSoon(card)) dueColor = 'color:var(--gold); font-weight:700;';
             else dueColor = 'color:var(--green); font-weight:700;';
         }
-        datesHtml = `<div class="postit-dates">🟢 ${startLabel} &nbsp;→&nbsp; <span style="${dueColor}">📅 ${dueLabel}</span></div>`;
+        datesHtml = `<div class="postit-dates"><i class="fa-solid fa-circle-dot" style="color:#22c55e;"></i> ${startLabel} &nbsp;→&nbsp; <span style="${dueColor}"><i class="fa-solid fa-calendar-days"></i> ${dueLabel}</span></div>`;
     }
 
     el.innerHTML = `
@@ -4761,7 +4852,7 @@ function buildPostItElement(card) {
         <div class="postit-compact-top">
             <h4 class="inline-editable" onclick="event.stopPropagation();" ${isObserver ? '' : `ondblclick="startInlineEditCardTitle(event, '${card.id}')"`}>${escapeHtml(card.title)}</h4>
             <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
-                <button class="postit-star-btn ${card.starred ? 'is-starred' : ''}" title="Favoritar" onclick="event.stopPropagation(); handleToggleStar('${card.id}')">★</button>
+                <button class="postit-star-btn ${card.starred ? 'is-starred' : ''}" title="Favoritar" onclick="event.stopPropagation(); handleToggleStar('${card.id}')"><i class="fa-solid fa-star"></i></button>
                 <button class="delete-card-btn" onclick="event.stopPropagation(); handleDeleteCard('${card.id}')">&times;</button>
             </div>
         </div>
@@ -5019,7 +5110,7 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.className = 'checklist-item-delete-btn';
-        delBtn.innerHTML = '&times;';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
         delBtn.title = 'Excluir item';
         delBtn.addEventListener('click', () => deleteChecklistItem(card.id, itemIndex, subIndex));
         row.appendChild(delBtn);
@@ -5141,14 +5232,34 @@ function addSubChecklistItem(cardId, itemIndex) {
 function deleteChecklistItem(cardId, itemIndex, subIndex) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
-    if (subIndex === null) {
-        card.checklist.splice(itemIndex, 1);
-    } else {
-        card.checklist[itemIndex].subItems.splice(subIndex, 1);
-    }
-    persistCard(card);
-    openViewModal(card.id);
-    renderBoard();
+
+    const item = subIndex === null ? card.checklist[itemIndex] : card.checklist[itemIndex].subItems[subIndex];
+    const itemLabel = (item.text || '').replace(/<[^>]*>/g, '').trim().slice(0, 60) || 'este item';
+
+    showConfirm(`Excluir "${itemLabel}"?`, () => {
+        let removed;
+        if (subIndex === null) {
+            removed = card.checklist.splice(itemIndex, 1)[0];
+        } else {
+            removed = card.checklist[itemIndex].subItems.splice(subIndex, 1)[0];
+        }
+        persistCard(card);
+        openViewModal(card.id);
+        renderBoard();
+
+        // Desfazer rápido — volta o item excluído se clicar logo em seguida
+        showToastWithUndo('Item excluído.', () => {
+            if (subIndex === null) {
+                card.checklist.splice(itemIndex, 0, removed);
+            } else {
+                if (!card.checklist[itemIndex].subItems) card.checklist[itemIndex].subItems = [];
+                card.checklist[itemIndex].subItems.splice(subIndex, 0, removed);
+            }
+            persistCard(card);
+            openViewModal(card.id);
+            renderBoard();
+        });
+    });
 }
 
 let currentSortOrder = '';
@@ -5241,7 +5352,7 @@ function populatePersonSelect(selectedId) {
     state.people.forEach(person => {
         const option = document.createElement('option');
         option.value = person.id;
-        option.textContent = person.isDone ? `✅ ${person.name}` : `👤 ${person.name}`;
+        option.textContent = person.name;
         if (person.id === selectedId) option.selected = true;
         select.appendChild(option);
     });
@@ -5295,8 +5406,8 @@ function renderPersonAvatarPreview(person) {
 }
 
 function openCardModalForCreate() {
-    document.getElementById('cardModalTitle').textContent = '📌 Criar Nova Tarefa';
-    document.getElementById('cardFormSubmitBtn').textContent = 'Adicionar Tarefa';
+    document.getElementById('cardModalTitle').innerHTML = '<i class="fa-solid fa-thumbtack"></i> Criar Nova Tarefa';
+    document.getElementById('cardFormSubmitBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar Tarefa';
     document.getElementById('editingCardId').value = '';
     document.getElementById('newCardForm').reset();
     updateChecklistLineNumbers();
@@ -5317,8 +5428,8 @@ function openCardModalForEdit(cardId) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
-    document.getElementById('cardModalTitle').textContent = '✏️ Editar Tarefa';
-    document.getElementById('cardFormSubmitBtn').textContent = 'Salvar Alterações';
+    document.getElementById('cardModalTitle').innerHTML = '<i class="fa-solid fa-pen"></i> Editar Tarefa';
+    document.getElementById('cardFormSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações';
     document.getElementById('editingCardId').value = card.id;
     document.getElementById('templateSelectGroup').style.display = 'none';
 
@@ -5366,7 +5477,7 @@ function openViewModal(cardId) {
     const stickerEl = document.getElementById('viewCardSticker');
     const sticker = getStickerById(card.stickerId);
     if (sticker) {
-        stickerEl.textContent = sticker.emoji;
+        stickerEl.innerHTML = `<i class="fa-solid ${sticker.icon}"></i>`;
         stickerEl.title = sticker.label;
         stickerEl.style.display = 'inline-block';
     } else {
@@ -5388,7 +5499,7 @@ function openViewModal(cardId) {
 
     // Tags: prioridade + prazo
     let tagsHtml = '';
-    const priorityLabel = { baixa: '🟢 Baixa', media: '🟡 Média', alta: '🔴 Alta' }[card.priority] || '';
+    const priorityLabel = { baixa: 'Baixa', media: 'Média', alta: 'Alta' }[card.priority] || '';
     tagsHtml += `<span class="tag tag-priority-${card.priority}">${priorityLabel}</span>`;
 
     if (card.dueDate) {
@@ -5396,11 +5507,11 @@ function openViewModal(cardId) {
         if (isOverdue(card)) dueClass = 'tag-due-overdue';
         else if (isDueSoon(card)) dueClass = 'tag-due-soon';
         const [y, m, d] = card.dueDate.split('-');
-        tagsHtml += `<span class="tag ${dueClass}">📅 ${d}/${m}/${y}</span>`;
+        tagsHtml += `<span class="tag ${dueClass}"><i class="fa-solid fa-calendar-days"></i> ${d}/${m}/${y}</span>`;
     }
     if (card.startDate) {
         const [ys, ms, ds] = card.startDate.split('-');
-        tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);">🟢 Início: ${ds}/${ms}/${ys}</span>`;
+        tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);"><i class="fa-solid fa-circle-dot" style="color:#22c55e;"></i> Início: ${ds}/${ms}/${ys}</span>`;
     }
     document.getElementById('viewCardTags').innerHTML = tagsHtml;
 
@@ -5418,7 +5529,7 @@ function openViewModal(cardId) {
             const addSubBtn = document.createElement('button');
             addSubBtn.type = 'button';
             addSubBtn.className = 'checklist-add-sub-btn';
-            addSubBtn.textContent = '+ Adicionar sub-item';
+            addSubBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar sub-item';
             addSubBtn.addEventListener('click', () => addSubChecklistItem(card.id, index));
             checklistContainer.appendChild(addSubBtn);
         }
@@ -5450,13 +5561,13 @@ function openViewModal(cardId) {
             if (att.isImage) {
                 return `<a href="${att.url}" target="_blank" title="Clique para ampliar: ${escapeHtml(att.name)}"><img src="${att.url}" class="attachment-img" alt="${escapeHtml(att.name)}"></a>`;
             }
-            return `<a href="${att.url}" target="_blank" download="${escapeHtml(att.name)}" class="attachment-doc" title="${escapeHtml(att.name)}">📄 ${escapeHtml(att.name)}</a>`;
+            return `<a href="${att.url}" target="_blank" download="${escapeHtml(att.name)}" class="attachment-doc" title="${escapeHtml(att.name)}"><i class="fa-solid fa-file"></i> ${escapeHtml(att.name)}</a>`;
         }).join('');
     } else {
         attachSection.style.display = 'none';
     }
 
-    document.getElementById('viewCardAuthor').textContent = `👤 ${card.author}`;
+    document.getElementById('viewCardAuthor').innerHTML = `<i class="fa-solid fa-user"></i> ${card.author}`;
     if (card.assignees && card.assignees.length > 0) {
         document.getElementById('viewCardAuthor').textContent += ` — Atribuído(s): ${card.assignees.join(', ')}`;
     }
@@ -5500,7 +5611,7 @@ function renderExistingAttachments(card) {
     card.attachments.forEach((att, index) => {
         const chip = document.createElement('span');
         chip.className = 'existing-attachment-chip';
-        chip.innerHTML = `📎 ${escapeHtml(att.name)} <button type="button" title="Remover anexo">&times;</button>`;
+        chip.innerHTML = `<i class="fa-solid fa-paperclip"></i> ${escapeHtml(att.name)} <button type="button" title="Remover anexo">&times;</button>`;
         chip.querySelector('button').addEventListener('click', () => {
             removeAttachment(card.id, index);
             renderExistingAttachments(state.cards.find(c => c.id === card.id));
@@ -5695,7 +5806,7 @@ function renderUsersList() {
             <span class="member-row-name user-list-identity">
                 <span class="user-avatar user-list-avatar-wrap" title="Editar foto">
                     <img src="${getAvatarUrl(user, 40)}" alt="${escapeHtml(user)}" class="user-list-avatar-img">
-                    <span class="user-list-avatar-edit">✎</span>
+                    <span class="user-list-avatar-edit"><i class="fa-solid fa-pen"></i></span>
                     <input type="file" accept="image/*" class="user-avatar-file-input" style="display:none;">
                 </span>
                 <span class="user-list-text">

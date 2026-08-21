@@ -24,11 +24,16 @@ if (!$p || empty($p['id'])) {
 
 $pdo = getDbConnection();
 
-// Exclui também os post-its dessa pessoa (já devem ter sido movidos pra lixeira pelo site antes de chamar isso)
-$del1 = $pdo->prepare("DELETE FROM cards WHERE person_id = :id");
-$del1->execute(['id' => $p['id']]);
+try {
+    // Exclui também os post-its dessa pessoa (já devem ter sido movidos pra lixeira pelo site antes de chamar isso)
+    $del1 = $pdo->prepare("DELETE FROM cards WHERE person_id = :id");
+    $del1->execute(['id' => $p['id']]);
 
-$del2 = $pdo->prepare("DELETE FROM people WHERE id = :id");
-$del2->execute(['id' => $p['id']]);
+    $del2 = $pdo->prepare("DELETE FROM people WHERE id = :id");
+    $del2->execute(['id' => $p['id']]);
 
-echo json_encode(['success' => true]);
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Falha ao excluir a pessoa/coluna.', 'details' => $e->getMessage()]);
+}

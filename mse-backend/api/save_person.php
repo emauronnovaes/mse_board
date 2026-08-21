@@ -24,25 +24,39 @@ if (!$p || empty($p['id']) || empty($p['name'])) {
 
 $pdo = getDbConnection();
 
-$maxPos = $pdo->query("SELECT COALESCE(MAX(position), -1) FROM people")->fetchColumn();
+try {
+    // Trava a tabela pra calcular a posição, senão duas pessoas clicando em
+    // "+ Adicionar Pessoa" ao mesmo tempo podem ler o mesmo "último lugar" e
+    // as duas colunas nascerem empatadas na mesma posição — o que fazia a
+    // ordem delas ficar instável, "pulando" de lugar a cada atualização.
+    $pdo->beginTransaction();
 
-$stmt = $pdo->prepare(
-    "INSERT INTO people (id, name, avatar_url, is_done, member_email, position)
-     VALUES (:id, :name, :avatar_url, :is_done, :member_email, :position)
-     ON DUPLICATE KEY UPDATE
-        name = VALUES(name),
-        avatar_url = VALUES(avatar_url),
-        is_done = VALUES(is_done),
-        member_email = VALUES(member_email)"
-);
+    $maxPos = $pdo->query("SELECT COALESCE(MAX(position), -1) FROM people FOR UPDATE")->fetchColumn();
 
-$stmt->execute([
-    'id' => $p['id'],
-    'name' => $p['name'],
-    'avatar_url' => $p['avatarUrl'] ?? null,
-    'is_done' => !empty($p['isDone']) ? 1 : 0,
-    'member_email' => $p['memberEmail'] ?? null,
-    'position' => $maxPos + 1
-]);
+    $stmt = $pdo->prepare(
+        "INSERT INTO people (id, name, avatar_url, is_done, member_email, position)
+         VALUES (:id, :name, :avatar_url, :is_done, :member_email, :position)
+         ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            avatar_url = VALUES(avatar_url),
+            is_done = VALUES(is_done),
+            member_email = VALUES(member_email)"
+    );
 
-echo json_encode(['success' => true]);
+    $stmt->execute([
+        'id' => $p['id'],
+        'name' => $p['name'],
+        'avatar_url' => $p['avatarUrl'] ?? null,
+        'is_done' => !empty($p['isDone']) ? 1 : 0,
+        'member_email' => $p['memberEmail'] ?? null,
+        'position' => $maxPos + 1
+    ]);
+
+    $pdo->commit();
+
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    http_response_code(500);
+    echo json_encode(['error' => 'Falha ao salvar a pessoa/coluna.', 'details' => $e->getMessage()]);
+}

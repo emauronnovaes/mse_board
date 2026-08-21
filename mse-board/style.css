@@ -1063,6 +1063,22 @@ h1, h2, h3, h4 {
 .checklist-item .inline-editable {
     flex: 1;
     min-width: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.checklist-item .inline-editable div,
+.checklist-item .inline-editable p {
+    margin: 0;
+    padding: 0;
+}
+
+.link-favicon {
+    width: 14px;
+    height: 14px;
+    vertical-align: -2px;
+    margin-right: 0.3rem;
+    border-radius: 2px;
 }
 
 .checklist-subitem {
@@ -1522,6 +1538,29 @@ h1, h2, h3, h4 {
 }
 
 .toast.toast-success { border-left-color: var(--green); }
+
+.toast.toast-undo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-left-color: var(--gold);
+}
+
+.toast-undo-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.toast-undo-btn:hover {
+    text-decoration: underline;
+}
 
 @keyframes toast-in {
     from { opacity: 0; transform: translateY(10px); }
@@ -3837,4 +3876,82 @@ body.dashboard-only-mode .dashboard-modal-content {
 }
 .dash-obs-box::placeholder {
     color: var(--dsg-mut-2);
+}
+
+.dash-hide-task-btn {
+    background: none;
+    border: none;
+    color: var(--dsg-mut-2);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.3rem;
+    border-radius: 6px;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.dash-hide-task-btn:hover {
+    color: var(--red);
+    background-color: rgba(210, 59, 59, 0.08);
+}
+
+.dsg-hidden-tasks-link {
+    background: none;
+    border: none;
+    color: var(--dsg-blue);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    float: right;
+    padding: 0.2rem 0.5rem;
+}
+
+.dsg-hidden-tasks-link:hover {
+    text-decoration: underline;
+}
+
+#hiddenDashboardTasksPanel {
+    margin: 0.8rem 0;
+    padding: 0.8rem 1rem;
+    background-color: var(--dsg-bg-2, #f8f9fb);
+    border: 1px solid var(--dsg-line);
+    border-radius: 8px;
+}
+
+.dsg-hidden-tasks-empty {
+    color: var(--dsg-mut-2);
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+.dsg-hidden-task-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--dsg-line);
+    font-size: 0.85rem;
+}
+
+.dsg-hidden-task-row:last-child {
+    border-bottom: none;
+}
+
+.dsg-restore-task-btn {
+    background: none;
+    border: 1px solid var(--dsg-blue);
+    color: var(--dsg-blue);
+    border-radius: 6px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dsg-restore-task-btn:hover {
+    background-color: var(--dsg-blue);
+    color: #fff;
 }
