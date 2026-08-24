@@ -872,6 +872,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.querySelectorAll('.report-period-btn').forEach(b => b.classList.toggle('is-current', b.dataset.period === 'day'));
                     renderDeliveryReport();
                     document.getElementById('deliveryReportModal').style.display = 'flex';
+                } else if (action === 'delivery-stats') {
+                    currentReportPeriod = 'day';
+                    document.querySelectorAll('.report-period-btn').forEach(b => b.classList.toggle('is-current', b.dataset.period === 'day'));
+                    renderDeliveryReport();
+                    document.getElementById('deliveryStatsModal').style.display = 'flex';
                 } else if (action === 'due-alerts') {
                     renderDueAlertsList();
                     document.getElementById('dueAlertsModal').style.display = 'flex';
@@ -1132,6 +1137,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Relatório de Entregas
         document.getElementById('closeDeliveryReportModalBtn').addEventListener('click', () => {
             document.getElementById('deliveryReportModal').style.display = 'none';
+        });
+
+        document.getElementById('closeDeliveryStatsModalBtn').addEventListener('click', () => {
+            document.getElementById('deliveryStatsModal').style.display = 'none';
         });
 
         document.querySelectorAll('.report-period-btn').forEach(btn => {

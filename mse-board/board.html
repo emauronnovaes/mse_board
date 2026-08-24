@@ -41,6 +41,14 @@
                         <span class="nav-desc">Ranking, prazos e tarefas em andamento</span>
                     </span>
                 </a>
+
+                <a class="nav-item" href="#" data-tooltip="Estatísticas de Entregas" data-action="delivery-stats">
+                    <span class="nav-icon"><i class="fa-solid fa-trophy"></i></span>
+                    <span class="nav-labels">
+                        <span class="nav-title">Estatísticas de Entregas</span>
+                        <span class="nav-desc">Ranking no prazo × atrasado e histórico de conclusões</span>
+                    </span>
+                </a>
             </div>
 
             <div class="nav-section">
@@ -857,51 +865,6 @@
             </div>
 
             <div class="dashboard-section">
-                <div class="dsg-sec">Ranking de Entregas <span class="ct">no prazo × atrasado</span></div>
-
-                <div class="dashboard-podiums">
-                    <div class="dashboard-podium-col">
-                        <div class="dashboard-podium-heading dashboard-podium-heading-warn"><i class="fa-solid fa-triangle-exclamation"></i> Atrasados</div>
-                        <div id="reportPodiumWorst"></div>
-                    </div>
-                    <div class="dashboard-podium-col">
-                        <div class="dashboard-podium-heading"><i class="fa-solid fa-trophy"></i> No Prazo</div>
-                        <div id="reportPodiumBest"></div>
-                    </div>
-                </div>
-
-                <div class="dashboard-filter-bar">
-                    <div class="dashboard-filter-field">
-                        <label>De</label>
-                        <input type="date" id="reportDateFrom">
-                    </div>
-                    <div class="dashboard-filter-field">
-                        <label>Até</label>
-                        <input type="date" id="reportDateTo">
-                    </div>
-                    <button type="button" id="reportClearPeriodBtn" class="dashboard-clear-btn">Limpar período</button>
-                    <span class="dashboard-filter-note" id="reportPeriodNote">Todas as entregas registradas</span>
-                </div>
-
-                <div class="dashboard-table-wrap">
-                    <table class="dashboard-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Responsável</th>
-                                <th>No Prazo</th>
-                                <th>Atrasadas</th>
-                                <th>Total Entregue</th>
-                                <th>Proporção</th>
-                                <th>% No Prazo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reportByPerson"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="dashboard-section">
                 <div class="dsg-sec">
                     Tarefas por Responsável <span class="ct">em ordem alfabética · todos os status</span>
                     <button type="button" id="showHiddenDashboardTasksBtn" class="dsg-hidden-tasks-link" onclick="renderHiddenDashboardTasks()">
@@ -951,6 +914,63 @@
                             </tr>
                         </thead>
                         <tbody id="reportActiveTasksByPerson"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Estatísticas de Entregas (Ranking + histórico de conclusões) -->
+    <div id="deliveryStatsModal" class="modal">
+        <div class="modal-content dashboard-modal-content">
+            <span class="close-btn dashboard-close-btn" id="closeDeliveryStatsModalBtn">&times;</span>
+
+            <div class="dashboard-hero">
+                <div class="dashboard-title">Estatísticas <b>de Entregas</b></div>
+                <div class="dashboard-subtitle">RANKING NO PRAZO × ATRASADO E HISTÓRICO DE CONCLUSÕES</div>
+            </div>
+
+            <div class="dashboard-section">
+                <div class="dsg-sec">Ranking de Entregas <span class="ct">no prazo × atrasado</span></div>
+
+                <div class="dashboard-podiums">
+                    <div class="dashboard-podium-col">
+                        <div class="dashboard-podium-heading dashboard-podium-heading-warn"><i class="fa-solid fa-triangle-exclamation"></i> Atrasados</div>
+                        <div id="reportPodiumWorst"></div>
+                    </div>
+                    <div class="dashboard-podium-col">
+                        <div class="dashboard-podium-heading"><i class="fa-solid fa-trophy"></i> No Prazo</div>
+                        <div id="reportPodiumBest"></div>
+                    </div>
+                </div>
+
+                <div class="dashboard-filter-bar">
+                    <div class="dashboard-filter-field">
+                        <label>De</label>
+                        <input type="date" id="reportDateFrom">
+                    </div>
+                    <div class="dashboard-filter-field">
+                        <label>Até</label>
+                        <input type="date" id="reportDateTo">
+                    </div>
+                    <button type="button" id="reportClearPeriodBtn" class="dashboard-clear-btn">Limpar período</button>
+                    <span class="dashboard-filter-note" id="reportPeriodNote">Todas as entregas registradas</span>
+                </div>
+
+                <div class="dashboard-table-wrap">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Responsável</th>
+                                <th>No Prazo</th>
+                                <th>Atrasadas</th>
+                                <th>Total Entregue</th>
+                                <th>Proporção</th>
+                                <th>% No Prazo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportByPerson"></tbody>
                     </table>
                 </div>
             </div>
