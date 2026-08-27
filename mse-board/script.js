@@ -116,7 +116,7 @@ function deletePersonFromServer(id) { return apiCall('delete_person.php', { id }
 // resolvido e aconteceu de novo depois, ou (b) já se passaram 30 minutos
 // desde o último aviso — um lembrete periódico de que o problema continua,
 // sem virar uma enxurrada de avisos idênticos.
-const REAVISAR_ERRO_A_CADA_MS = 30 * 60 * 1000; // 30 minutos
+const REAVISAR_ERRO_A_CADA_MS = 60 * 60 * 1000; // 1 hora
 const lastLoggedErrorAt = new Map();
 
 function logErrorOnce(key, message, howToFix) {
