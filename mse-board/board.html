@@ -15,7 +15,7 @@
 <body class="board-body">
 
     <!-- Menu Lateral -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" style="display:none;">
 
         <div class="sidebar-head">
             <div class="sidebar-mark">
@@ -235,7 +235,7 @@
     <!-- Cabeçalho Principal -->
     <header class="navbar">
         <div class="navbar-brand">
-            <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Abrir menu">
+            <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Abrir menu" style="display:none;">
                 <i class="fa-solid fa-bars"></i>
             </button>
             <h1><span class="mse-red">MSE</span> <span>Board</span> <small>(Programação)</small></h1>
@@ -272,6 +272,7 @@
                 <button id="aboutBoardBtn" class="btn-secondary" title="Sobre este quadro"><i class="fa-solid fa-circle-info"></i> Sobre</button>
                 <button id="addPersonBtn" class="btn-secondary"><i class="fa-solid fa-user-plus"></i> Adicionar Pessoa</button>
                 <button id="addDoneTabBtn" class="btn-secondary"><i class="fa-solid fa-flag-checkered"></i> Aba Concluído</button>
+                <button id="addMembersBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-users"></i> Adicionar Membros</button>
                 <span class="action-buttons-divider"></span>
                 <button id="openModalBtn" class="btn-primary"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
             </div>
