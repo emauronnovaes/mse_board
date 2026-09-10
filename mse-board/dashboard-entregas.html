@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Entregas — MSE Board</title>
+<link rel="icon" type="image/png" href="https://mseboard.portalmse.com.br/mse-board/logo-mse-circle.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Reaproveita o MESMO CSS do MSE Board, pra ficar visualmente idêntico -->
+<link rel="stylesheet" href="https://mseboard.portalmse.com.br/mse-board/style.css">
+<style>
+    body { background-color: var(--bg); min-height: 100vh; }
+    html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; }
+    .standalone-page-wrap { width: 100%; margin: 0; padding: 1.2rem 1.5rem 2.5rem; box-sizing: border-box; }
+    .standalone-topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        margin: -1.2rem -1.5rem 1.2rem; padding: 0.9rem 1.5rem;
+        flex-wrap: wrap; gap: 0.8rem;
+        color: #fff;
+        background:
+            radial-gradient(640px 360px at 85% -30%, rgba(64, 120, 210, 0.5), transparent 62%),
+            linear-gradient(118deg, #13223b 0%, #193053 68%, var(--navy-2) 100%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .standalone-topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; color: #fff; }
+    .standalone-topbar-brand img { width: 32px; height: 32px; border-radius: 50%; }
+    .standalone-nav-links { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .standalone-nav-links a {
+        text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.5rem 0.9rem;
+        border-radius: var(--radius-s); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff;
+        transition: background-color 0.15s ease;
+    }
+    .standalone-nav-links a.is-current { background-color: var(--accent); color: #fff; border-color: var(--accent); }
+    .standalone-nav-links a:not(.is-current):hover { background-color: rgba(255, 255, 255, 0.12); }
+    #standaloneViewerLabel { font-size: 0.76rem; color: rgba(255, 255, 255, 0.75); }
+    .dash-obs-readonly { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+</style>
+</head>
+<body data-standalone-dashboard="true">
+
+    <div class="standalone-page-wrap">
+        <div class="standalone-topbar">
+            <div class="standalone-topbar-brand">
+                <img src="https://mseboard.portalmse.com.br/mse-board/logo-mse-circle.png" alt="MSE">
+                <span>MSE Board — Relatórios</span>
+            </div>
+            <div class="standalone-nav-links">
+                <a href="dashboard-entregas.html" class="is-current">Dashboard de Entregas</a>
+                <a href="estatisticas-entregas.html">Estatísticas de Entregas</a>
+            </div>
+            <span id="standaloneViewerLabel"></span>
+        </div>
+
+        <div class="dashboard-hero">
+            <div class="dashboard-title">Dashboard <b>de Entregas</b></div>
+            <div class="dashboard-subtitle">O QUE CADA PESSOA ESTÁ FAZENDO E O QUE JÁ ENTREGOU</div>
+        </div>
+
+        <div class="dashboard-section">
+            <div class="dsg-sec">
+                Tarefas por Responsável <span class="ct">em ordem alfabética · todos os status</span>
+                <button type="button" id="showHiddenDashboardTasksBtn" class="dsg-hidden-tasks-link" onclick="renderHiddenDashboardTasks()">
+                    <i class="fa-solid fa-eye"></i> Ver tarefas ocultas do Dashboard
+                </button>
+            </div>
+
+            <div id="hiddenDashboardTasksPanel" style="display:none;"></div>
+
+            <div class="dashboard-filter-bar">
+                <div class="dashboard-filter-field" style="flex:1; min-width:180px;">
+                    <label>Buscar</label>
+                    <input type="text" id="taskSearchInput" placeholder="Tarefa ou responsável...">
+                </div>
+                <div class="dashboard-filter-field">
+                    <label>Responsável</label>
+                    <select id="taskFilterPerson">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="dashboard-filter-field">
+                    <label>Status</label>
+                    <select id="taskFilterLane">
+                        <option value="">Todas</option>
+                        <option value="afazer">A Fazer</option>
+                        <option value="todo">Fazendo</option>
+                        <option value="testing">Em Teste</option>
+                        <option value="paused">Pausado</option>
+                        <option value="done">Concluída</option>
+                    </select>
+                </div>
+                <button type="button" id="taskFilterClearBtn" class="dashboard-clear-btn">Limpar filtros</button>
+            </div>
+
+            <div class="dashboard-table-wrap">
+                <table class="dashboard-table dashboard-spreadsheet">
+                    <thead>
+                        <tr>
+                            <th>Tarefas</th>
+                            <th>Status</th>
+                            <th>Início</th>
+                            <th>Prazo</th>
+                            <th>%</th>
+                            <th>Avanço</th>
+                            <th>Observações</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportActiveTasksByPerson"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estas telas escondidas existem só pra função renderDeliveryReport()
+         não quebrar (ela também calcula pra Estatísticas de Entregas, mas
+         nessa página a gente só mostra a tabela acima). -->
+    <div style="display:none;">
+        <div id="reportPodiumWorst"></div>
+        <div id="reportPodiumBest"></div>
+        <span id="reportPeriodNote"></span>
+        <input type="date" id="reportDateFrom">
+        <input type="date" id="reportDateTo">
+        <button id="reportClearPeriodBtn"></button>
+        <table><tbody id="reportByPerson"></tbody></table>
+        <span id="reportTotalDone"></span>
+        <span id="reportOnTimePct"></span>
+        <span id="reportLatePct"></span>
+        <div id="reportChart"></div>
+    </div>
+
+    <div id="confirmModal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="confirm-icon">!</div>
+            <h3 id="confirmModalTitle">Tem certeza?</h3>
+            <p id="confirmModalMessage" class="confirm-message"></p>
+            <div class="confirm-actions">
+                <button type="button" id="confirmCancelBtn" class="btn-secondary">Cancelar</button>
+                <button type="button" id="confirmOkBtn" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Configuração da API (mesma do MSE Board) -->
+    <script src="https://mseboard.portalmse.com.br/mse-board/config.js.php"></script>
+    <!-- Mesmo script.js do MSE Board — ele detecta data-standalone-dashboard
+         no <body> acima e só roda a parte de buscar dados + montar o relatório. -->
+    <script src="https://mseboard.portalmse.com.br/mse-board/script.js"></script>
+</body>
+</html>
