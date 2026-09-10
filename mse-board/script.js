@@ -478,6 +478,72 @@ window.addEventListener('unhandledrejection', (e) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // ==========================================
+    // PÁGINA STANDALONE DE DASHBOARD (fora do MSE Board, embutida no Portal)
+    // Detecta pelo atributo data-standalone-dashboard no <body> da página.
+    // Só busca os dados e mostra o relatório — pula toda a inicialização
+    // do quadro (login, drag-and-drop, sidebar, chat, etc).
+    // ==========================================
+    if (document.body.dataset.standaloneDashboard) {
+        await loadState();
+
+        // Descobre quem está vendo (mesma sessão SSO/local usada no board)
+        // pra saber se essa pessoa pode editar (só quem é Admin no board).
+        let viewerEmail = null;
+        try {
+            const stored = JSON.parse(localStorage.getItem('mse_user'));
+            viewerEmail = stored && stored.name;
+        } catch (e) { /* sem sessão, tudo bem — só não edita */ }
+        currentUserName = viewerEmail;
+        canEditDashboard = !!(viewerEmail && state.members && state.members[viewerEmail] === 'Admin');
+
+        const viewerLabelEl = document.getElementById('standaloneViewerLabel');
+        if (viewerLabelEl) {
+            viewerLabelEl.textContent = viewerEmail
+                ? `${viewerEmail}${canEditDashboard ? ' (Admin — pode editar)' : ' (somente leitura)'}`
+                : 'Visitante (somente leitura)';
+        }
+
+        currentReportPeriod = 'day';
+        renderDeliveryReport();
+
+        document.querySelectorAll('.report-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentReportPeriod = btn.dataset.period;
+                document.querySelectorAll('.report-period-btn').forEach(b => b.classList.toggle('is-current', b === btn));
+                renderDeliveryReport();
+            });
+        });
+
+        const bindIfExists = (id, event, handler) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener(event, handler);
+        };
+
+        bindIfExists('reportDateFrom', 'change', renderDeliveryReport);
+        bindIfExists('reportDateTo', 'change', renderDeliveryReport);
+        bindIfExists('reportClearPeriodBtn', 'click', () => {
+            document.getElementById('reportDateFrom').value = '';
+            document.getElementById('reportDateTo').value = '';
+            renderDeliveryReport();
+        });
+        bindIfExists('exportReportCsvBtn', 'click', exportDeliveryReportCsv);
+        bindIfExists('printReportBtn', 'click', () => {
+            document.body.classList.add('printing-report');
+            window.print();
+            setTimeout(() => document.body.classList.remove('printing-report'), 500);
+        });
+
+        // Atualiza sozinho a cada 30s, pra ficar sincronizado com o que
+        // está acontecendo no MSE Board sem precisar recarregar a página.
+        setInterval(async () => {
+            await loadState();
+            renderDeliveryReport();
+        }, 30000);
+
+        return; // não continua pro resto da inicialização (login/board)
+    }
+
     // SSO: se veio ?sso=<token> do portal, tenta herdar o login antes de tudo.
     const ssoResultado = await tryInheritLoginFromSso();
     if (ssoResultado === 'redirecting') return; // vai navegar pro quadro; para aqui
@@ -770,45 +836,61 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.admin-only-nav-item').forEach(item => item.remove());
         }
 
-        // Rodapé do menu lateral
-        document.getElementById('sidebarFootName').textContent = userData.name;
-        document.getElementById('sidebarFootRole').textContent = userData.role;
-        document.getElementById('sidebarFootAvatar').innerHTML = `<img src="${getAvatarUrl(userData.name, 68)}" alt="${escapeHtml(userData.name)}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
+        // Menu lateral inteiro — visibilidade decidida depois do loadState()
+        // mais abaixo, já que precisa saber se a pessoa é Admin.
 
-        document.getElementById('sidebarFootAvatar').addEventListener('click', () => {
-            document.getElementById('myAvatarFileInput').click();
-        });
+        // Botão "Adicionar Membros" no menu de cima — só aparece pra Admin.
+        // Precisa rodar DEPOIS do loadState() mais abaixo, pra state.members
+        // já estar carregado do servidor (por isso a chamada real fica lá embaixo).
 
-        document.getElementById('myAvatarFileInput').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const dataUrl = await processSingleFile(file);
-            setCustomAvatar(currentUserName, dataUrl);
-            e.target.value = '';
-            showToast('Sua foto de perfil foi atualizada!', 'success');
-        });
+        // Rodapé do menu lateral (só existe se o menu não tiver sido removido acima)
+        if (document.getElementById('sidebarFootName')) {
+            document.getElementById('sidebarFootName').textContent = userData.name;
+            document.getElementById('sidebarFootRole').textContent = userData.role;
+            document.getElementById('sidebarFootAvatar').innerHTML = `<img src="${getAvatarUrl(userData.name, 68)}" alt="${escapeHtml(userData.name)}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
 
-        // Toggle do menu lateral
-        document.getElementById('sidebarToggle').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('is-collapsed');
-            // Ao mudar a largura da sidebar, o espaço visível do quadro muda —
-            // sem resetar a rolagem, sobrava um pedacinho cortado de coluna
-            // "espremido" entre a sidebar e a primeira coluna visível.
-            const peopleGridEl = document.getElementById('peopleGrid');
-            if (peopleGridEl) peopleGridEl.scrollLeft = 0;
-        });
+            document.getElementById('sidebarFootAvatar').addEventListener('click', () => {
+                document.getElementById('myAvatarFileInput').click();
+            });
 
-        // Menu lateral em telas pequenas: vira uma gaveta (some por padrão, abre com o hambúrguer)
-        const sidebarEl = document.getElementById('sidebar');
-        const sidebarBackdropEl = document.getElementById('sidebarBackdrop');
-        const openMobileSidebar = () => {
-            sidebarEl.classList.add('is-mobile-open');
-        };
+            document.getElementById('myAvatarFileInput').addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const dataUrl = await processSingleFile(file);
+                setCustomAvatar(currentUserName, dataUrl);
+                e.target.value = '';
+                showToast('Sua foto de perfil foi atualizada!', 'success');
+            });
+        }
+
+        // Fecha a gaveta do menu mobile — função em escopo aberto porque é
+        // usada tanto aqui embaixo quanto no clique dos itens do menu.
+        // Não faz nada se a sidebar não existir (removida pra quem não é admin).
         const closeMobileSidebar = () => {
-            sidebarEl.classList.remove('is-mobile-open');
+            const sidebarEl = document.getElementById('sidebar');
+            if (sidebarEl) sidebarEl.classList.remove('is-mobile-open');
         };
-        document.getElementById('mobileSidebarToggle').addEventListener('click', openMobileSidebar);
-        sidebarBackdropEl.addEventListener('click', closeMobileSidebar);
+
+        // Toggle do menu lateral (só existe se o menu não tiver sido removido acima)
+        if (document.getElementById('sidebarToggle')) {
+            document.getElementById('sidebarToggle').addEventListener('click', () => {
+                document.getElementById('sidebar').classList.toggle('is-collapsed');
+                // Ao mudar a largura da sidebar, o espaço visível do quadro muda —
+                // sem resetar a rolagem, sobrava um pedacinho cortado de coluna
+                // "espremido" entre a sidebar e a primeira coluna visível.
+                const peopleGridEl = document.getElementById('peopleGrid');
+                if (peopleGridEl) peopleGridEl.scrollLeft = 0;
+            });
+
+            // Menu lateral em telas pequenas: vira uma gaveta (some por padrão, abre com o hambúrguer)
+            const sidebarEl = document.getElementById('sidebar');
+            const sidebarBackdropEl = document.getElementById('sidebarBackdrop');
+            const openMobileSidebar = () => {
+                sidebarEl.classList.add('is-mobile-open');
+            };
+            document.getElementById('mobileSidebarToggle').addEventListener('click', openMobileSidebar);
+            sidebarBackdropEl.addEventListener('click', closeMobileSidebar);
+        }
 
         // Ações do menu lateral
         document.querySelectorAll('.nav-item[data-action]').forEach(item => {
@@ -1280,6 +1362,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         await loadState();
+
+        const isAdminViewer = getMemberRole(userData.name) === 'Admin';
+
+        // Menu lateral — só aparece pra quem é Admin no board. Pra qualquer
+        // outra pessoa, continua escondido (já nasce assim no HTML, evitando
+        // o "flash" de aparecer e sumir rapidinho ao carregar a página).
+        const sidebarEl = document.getElementById('sidebar');
+        const mobileToggleEl = document.getElementById('mobileSidebarToggle');
+        if (isAdminViewer) {
+            if (sidebarEl) sidebarEl.style.display = '';
+            if (mobileToggleEl) mobileToggleEl.style.display = '';
+        }
+
+        // Botão "Adicionar Membros" no menu de cima — só aparece pra Admin.
+        // Roda aqui (depois do loadState) porque precisa de state.members
+        // já carregado do servidor pra saber o papel de quem está vendo.
+        const addMembersBtnEl = document.getElementById('addMembersBtn');
+        if (addMembersBtnEl) {
+            if (isAdminViewer) {
+                addMembersBtnEl.style.display = 'inline-flex';
+                addMembersBtnEl.addEventListener('click', () => {
+                    renderMembersList();
+                    renderPendingApprovalsList();
+                    renderPasswordResetList();
+                    document.getElementById('membersModal').style.display = 'flex';
+                });
+            } else {
+                addMembersBtnEl.style.display = 'none';
+            }
+        }
 
         // Quem NÃO está cadastrado em "Membros e Permissões" não foi convidado — só pode
         // ver o Dashboard, e nada mais (sem acessar o quadro, colunas ou post-its).
@@ -2796,6 +2908,12 @@ function computeAnalytics() {
 
 let currentReportPeriod = 'day';
 
+// Controla se os campos da tabela "Tarefas por Responsável" são editáveis
+// (observação, ocultar tarefa, abrir o card). Dentro do MSE Board normal
+// (acessado pela sidebar) sempre é true — só fica false nas páginas
+// standalone do Portal, pra visitantes sem permissão de Admin no board.
+let canEditDashboard = true;
+
 function getReportDateRange() {
     const fromEl = document.getElementById('reportDateFrom');
     const toEl = document.getElementById('reportDateTo');
@@ -2962,6 +3080,9 @@ function exportDeliveryReportCsv() {
 }
 
 function renderDeliveryReport() {
+    const hiddenTasksLinkEl = document.getElementById('showHiddenDashboardTasksBtn');
+    if (hiddenTasksLinkEl) hiddenTasksLinkEl.style.display = canEditDashboard ? 'inline-block' : 'none';
+
     const stats = computeDeliveryStats();
     document.getElementById('reportTotalDone').textContent = stats.total;
     document.getElementById('reportOnTimePct').textContent = `${stats.onTimePct}%`;
@@ -3153,7 +3274,7 @@ function renderDeliveryReport() {
             else barColor = 'var(--accent)';
 
             return `
-                <tr class="dash-task-row" onclick="document.getElementById('deliveryReportModal').style.display='none'; openViewModal('${c.id}')">
+                <tr class="dash-task-row" ${canEditDashboard && document.getElementById('viewCardModal') ? `onclick="document.getElementById('deliveryReportModal').style.display='none'; openViewModal('${c.id}')"` : ''}>
                     <td class="dash-task-title-cell">${escapeHtml(c.title)}</td>
                     <td><span class="dash-lane-tag dash-lane-${c.status || 'todo'}">${laneLabel}</span></td>
                     <td class="dash-mono-cell">${startLabel}</td>
@@ -3165,12 +3286,16 @@ function renderDeliveryReport() {
                         </div>
                     </td>
                     <td class="dash-obs-cell">
-                        <textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>
+                        ${canEditDashboard
+                            ? `<textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>`
+                            : `<div class="dash-obs-readonly">${escapeHtml(c.observacao || '—')}</div>`}
                     </td>
                     <td onclick="event.stopPropagation()">
+                        ${canEditDashboard ? `
                         <button type="button" class="dash-hide-task-btn" title="Remover só do Dashboard (a tarefa continua no quadro normal)" onclick="hideCardFromDashboard('${c.id}')">
                             <i class="fa-solid fa-eye-slash"></i>
                         </button>
+                        ` : ''}
                     </td>
                 </tr>
             `;
