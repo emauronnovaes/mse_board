@@ -3787,19 +3787,19 @@ body.dashboard-only-mode .dashboard-modal-content {
 
 /* --- Tabela "Tarefas por Pessoa" (planilha) --- */
 .dashboard-spreadsheet .dash-person-group-row td {
-    background-color: var(--dsg-line-2);
+    background-color: var(--navy-2, #193053);
     font-family: "IBM Plex Mono";
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: .8px;
     text-transform: uppercase;
-    color: var(--dsg-ink);
-    padding: .55rem 1rem;
-    border-top: 1px solid var(--dsg-line);
+    color: #fff;
+    padding: .7rem 1rem;
+    border-top: 3px solid var(--accent);
 }
 .dash-person-group-count {
     font-weight: 400;
-    color: var(--dsg-mut);
+    color: rgba(255, 255, 255, 0.7);
     text-transform: none;
     letter-spacing: 0;
     margin-left: .4rem;

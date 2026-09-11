@@ -26,8 +26,12 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
     .standalone-topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 0.95rem; color: #fff; }
-    .standalone-topbar-brand img { height: 22px; width: auto; display: block; }
-    .standalone-logo-link { display: flex; align-items: center; opacity: 0.9; transition: opacity 0.15s ease, transform 0.15s ease; }
+    .standalone-logo-link {
+        display: flex; align-items: center; text-decoration: none;
+        font-family: "IBM Plex Sans", sans-serif; font-weight: 800; font-size: 1.1rem;
+        color: #ff4d4d; letter-spacing: -0.5px;
+        opacity: 0.95; transition: opacity 0.15s ease, transform 0.15s ease;
+    }
     .standalone-logo-link:hover { opacity: 1; transform: scale(1.08); }
     .standalone-nav-links { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     .standalone-nav-links a {
@@ -45,9 +49,7 @@
 
     <div class="standalone-topbar">
         <div class="standalone-topbar-brand">
-            <a href="https://portalmse.com.br/" title="Voltar ao Portal MSE" class="standalone-logo-link">
-                <img src="https://mseboard.portalmse.com.br/mse-board/logo-mse-circle.png" alt="MSE">
-            </a>
+            <a href="https://portalmse.com.br/" title="Voltar ao Portal MSE" class="standalone-logo-link">MSE</a>
             <span>Dashboard de Entregas</span>
         </div>
         <div class="standalone-nav-links">
