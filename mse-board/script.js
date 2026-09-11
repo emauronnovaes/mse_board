@@ -485,6 +485,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // do quadro (login, drag-and-drop, sidebar, chat, etc).
     // ==========================================
     if (document.body.dataset.standaloneDashboard) {
+        // Processa o token de SSO que o Portal manda na URL (?sso=...) —
+        // sem isso, a sessão nunca era reconhecida no primeiro acesso vindo
+        // direto do Portal, e todo mundo (até Admin) aparecia como Visitante.
+        await tryInheritLoginFromSso();
+
         await loadState();
 
         // Descobre quem está vendo (mesma sessão SSO/local usada no board)
@@ -532,6 +537,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.classList.add('printing-report');
             window.print();
             setTimeout(() => document.body.classList.remove('printing-report'), 500);
+        });
+
+        // Filtros da tabela "Tarefas por Responsável" (buscar, responsável,
+        // status, limpar filtros) — na versão dentro do board isso já era
+        // ligado em outra parte do código, que a página standalone pula.
+        bindIfExists('taskSearchInput', 'input', renderDeliveryReport);
+        bindIfExists('taskFilterPerson', 'change', renderDeliveryReport);
+        bindIfExists('taskFilterLane', 'change', renderDeliveryReport);
+        bindIfExists('taskFilterClearBtn', 'click', () => {
+            document.getElementById('taskSearchInput').value = '';
+            document.getElementById('taskFilterPerson').value = '';
+            document.getElementById('taskFilterLane').value = '';
+            renderDeliveryReport();
         });
 
         // Atualiza sozinho a cada 30s, pra ficar sincronizado com o que
