@@ -14,11 +14,11 @@
 <style>
     /* Esse arquivo vive fora do MSE Board — não é um modal, é a própria página */
     body { background-color: var(--bg); min-height: 100vh; }
-    html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; }
+    html, body { margin: 0; padding: 0; width: 100%; height: auto; min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
     .standalone-page-wrap { width: 100%; margin: 0; padding: 1.2rem 1.5rem 2.5rem; box-sizing: border-box; }
     .standalone-topbar {
         display: flex; align-items: center; justify-content: space-between;
-        margin: -1.2rem -1.5rem 1.2rem; padding: 0.9rem 1.5rem;
+        margin: 0 0 1.2rem; padding: 0.6rem 1.5rem;
         flex-wrap: wrap; gap: 0.8rem;
         color: #fff;
         background:
@@ -26,8 +26,10 @@
             linear-gradient(118deg, #13223b 0%, #193053 68%, var(--navy-2) 100%);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .standalone-topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; color: #fff; }
-    .standalone-topbar-brand img { width: 32px; height: 32px; border-radius: 50%; }
+    .standalone-topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 0.95rem; color: #fff; }
+    .standalone-topbar-brand img { height: 22px; width: auto; display: block; }
+    .standalone-logo-link { display: flex; align-items: center; opacity: 0.9; transition: opacity 0.15s ease, transform 0.15s ease; }
+    .standalone-logo-link:hover { opacity: 1; transform: scale(1.08); }
     .standalone-nav-links { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     .standalone-nav-links a {
         text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.5rem 0.9rem;
@@ -41,24 +43,21 @@
 </head>
 <body data-standalone-dashboard="true">
 
-    <div class="standalone-page-wrap">
-        <div class="standalone-topbar">
-            <div class="standalone-topbar-brand">
+    <div class="standalone-topbar">
+        <div class="standalone-topbar-brand">
+            <a href="https://portalmse.com.br/" title="Voltar ao Portal MSE" class="standalone-logo-link">
                 <img src="https://mseboard.portalmse.com.br/mse-board/logo-mse-circle.png" alt="MSE">
-                <span>MSE Board — Relatórios</span>
-            </div>
-            <div class="standalone-nav-links">
-                <a href="dashboard-entregas.html">Dashboard de Entregas</a>
-                <a href="estatisticas-entregas.html" class="is-current">Estatísticas de Entregas</a>
-            </div>
-            <span id="standaloneViewerLabel"></span>
+            </a>
+            <span>Estatísticas de Entregas</span>
         </div>
-
-        <div class="dashboard-hero">
-            <div class="dashboard-title">Estatísticas <b>de Entregas</b></div>
-            <div class="dashboard-subtitle">RANKING NO PRAZO × ATRASADO E HISTÓRICO DE CONCLUSÕES</div>
+        <div class="standalone-nav-links">
+            <a href="dashboard-entregas.html">Dashboard de Entregas</a>
+            <a href="estatisticas-entregas.html" class="is-current">Estatísticas de Entregas</a>
         </div>
+        <span id="standaloneViewerLabel"></span>
+    </div>
 
+    <div class="standalone-page-wrap">
         <div class="dashboard-section">
             <div class="dsg-sec">Ranking de Entregas <span class="ct">no prazo × atrasado</span></div>
 
