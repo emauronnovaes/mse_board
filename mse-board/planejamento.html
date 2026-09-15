@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSE Board (Planejamento)</title>
+<script>
+    // Manda pro board.html de verdade, já marcando o departamento —
+    // e preserva qualquer outro parâmetro que tenha vindo na URL (como o
+    // ?sso=... que o Portal manda pro login automático).
+    const params = new URLSearchParams(window.location.search);
+    params.set('dept', 'planejamento');
+    window.location.replace('board.html?' + params.toString());
+</script>
+</head>
+<body>
+    <p>Abrindo o MSE Board (Planejamento)...</p>
+</body>
+</html>

@@ -5,6 +5,20 @@ let isObserver = false;
 let currentCalendarMonth = new Date();
 
 // ==========================================
+// DEPARTAMENTO ATUAL (multi-quadro num só código)
+// ==========================================
+// Um único board.html/script.js atende vários departamentos (Programação,
+// Planejamento, etc), cada um com seu PRÓPRIO banco de dados no servidor —
+// sem misturar dados. O departamento vem da URL: board.html?dept=planejamento
+// Se não vier nada, assume "programacao" (mantém links antigos funcionando).
+const CURRENT_DEPARTMENT = new URLSearchParams(window.location.search).get('dept') || 'programacao';
+
+const DEPARTMENT_LABELS = {
+    programacao: 'Programação',
+    planejamento: 'Planejamento',
+};
+
+// ==========================================
 // CONEXÃO COM O BACKEND (PHP + MySQL)
 // ==========================================
 // Estes valores vêm do arquivo .env do backend, entregues por config.js.php
@@ -15,9 +29,24 @@ const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || 'http://lo
 // Chave da API — a MESMA definida no .env (API_SECRET). Vem via window.APP_CONFIG.
 const API_SECRET = (window.APP_CONFIG && window.APP_CONFIG.API_SECRET) || '';
 
+// Monta a URL de um endpoint já incluindo ?dept=... — TODA chamada ao
+// backend precisa passar por aqui, senão o servidor não sabe de qual
+// departamento (banco de dados) buscar/salvar os dados.
+function apiUrl(endpoint) {
+    return `${API_BASE}/${endpoint}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+}
+
+// Monta a URL pra voltar/ir pro board.html, preservando o departamento
+// atual (?dept=...) — sem isso, ao sair do login.html o usuário cairia
+// sempre no departamento padrão (Programação), mesmo tendo entrado por
+// um link de outro departamento.
+function boardUrl() {
+    return CURRENT_DEPARTMENT === 'programacao' ? 'board.html' : `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+}
+
 async function fetchBoardStateFromServer() {
     try {
-        const res = await fetch(`${API_BASE}/get_state.php`, {
+        const res = await fetch(apiUrl('get_state.php'), {
             headers: { 'X-API-Key': API_SECRET }
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -33,7 +62,7 @@ async function saveBoardStateToServer(obj) {
     try {
         // Não manda pessoas/post-its no blob — eles agora moram nas tabelas próprias
         const { people, cards, ...rest } = obj;
-        await fetch(`${API_BASE}/save_state.php`, {
+        await fetch(apiUrl('save_state.php'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -54,7 +83,7 @@ async function saveBoardStateToServer(obj) {
 
 async function apiCall(endpoint, body) {
     try {
-        const res = await fetch(`${API_BASE}/${endpoint}`, {
+        const res = await fetch(apiUrl(endpoint), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -78,7 +107,7 @@ async function apiCall(endpoint, body) {
 
 async function fetchPeopleFromServer() {
     try {
-        const res = await fetch(`${API_BASE}/get_people.php`, { headers: { 'X-API-Key': API_SECRET } });
+        const res = await fetch(apiUrl('get_people.php'), { headers: { 'X-API-Key': API_SECRET } });
         const text = await res.text();
         if (!res.ok) {
             let details = text;
@@ -94,7 +123,7 @@ async function fetchPeopleFromServer() {
 
 async function fetchCardsFromServer() {
     try {
-        const res = await fetch(`${API_BASE}/get_cards.php`, { headers: { 'X-API-Key': API_SECRET } });
+        const res = await fetch(apiUrl('get_cards.php'), { headers: { 'X-API-Key': API_SECRET } });
         const text = await res.text();
         if (!res.ok) {
             let details = text;
@@ -418,7 +447,7 @@ async function tryInheritLoginFromSso() {
     const cleanUrl = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
 
     try {
-        const res = await fetch(`${API_BASE}/sso_login.php`, {
+        const res = await fetch(apiUrl('sso_login.php'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
@@ -435,7 +464,7 @@ async function tryInheritLoginFromSso() {
 
             // Estamos na tela de login? Então vamos direto pro quadro.
             if (document.getElementById('loginForm')) {
-                window.location.replace('board.html');
+                window.location.replace(boardUrl());
                 return 'redirecting';
             }
             // Já estamos no quadro: só limpa a URL e segue o fluxo normal.
@@ -477,6 +506,16 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // Atualiza o nome do departamento exibido (título da aba + cabeçalho),
+    // conforme o ?dept= da URL. Funciona em qualquer página que inclua
+    // esse script (board.html, login.html, páginas standalone).
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+    const departmentLabelEl = document.getElementById('departmentLabel');
+    if (departmentLabelEl) departmentLabelEl.textContent = `(${deptLabel})`;
+    if (document.title.includes('MSE Board')) {
+        document.title = `MSE Board (${deptLabel})${document.title.replace('MSE Board', '')}`;
+    }
 
     // ==========================================
     // PÁGINA STANDALONE DE DASHBOARD (fora do MSE Board, embutida no Portal)
@@ -581,7 +620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let sessaoAtual = null;
         try { sessaoAtual = JSON.parse(localStorage.getItem('mse_user')); } catch (e) {}
         if (sessaoAtual && sessaoAtual.name) {
-            window.location.replace('board.html');
+            window.location.replace(boardUrl());
             return;
         }
 
@@ -743,7 +782,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     name: email,
                     role: boardState.members[email] === 'Admin' ? 'Admin' : 'Membro'
                 }));
-                window.location.href = 'board.html';
+                window.location.href = boardUrl();
                 return;
             }
 
@@ -756,7 +795,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     name: email,
                     role: 'Admin'
                 }));
-                window.location.href = 'board.html';
+                window.location.href = boardUrl();
                 return;
             }
 
@@ -837,6 +876,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (hiddenLoginAccessEl) {
             if (userData.name === 'matheus.batista@mse.com.br') {
                 hiddenLoginAccessEl.style.display = 'block';
+                // Preserva o departamento atual — senão, ao clicar aqui e
+                // logar de novo, ele sempre voltaria pro board de Programação.
+                hiddenLoginAccessEl.href = CURRENT_DEPARTMENT === 'programacao'
+                    ? 'login.html'
+                    : `login.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
             } else {
                 hiddenLoginAccessEl.remove();
             }
