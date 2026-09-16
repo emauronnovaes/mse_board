@@ -1,0 +1,9 @@
+commit 4c4699e0e6510926ab263be6d38ce60b19c19976
+Merge: 3e141e5 00f5490
+Author: emauronnovaes <emauron.novaes@mse.com.br>
+Date:   Fri Sep 11 16:32:54 2026 -0300
+
+    Merge pull request #30 from emauronnovaes/develop
+    
+    Corrige SSO nao processado nas paginas standalone, filtros sem funcio…
+
