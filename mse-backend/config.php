@@ -1,99 +1,97 @@
 <?php
 // ==========================================
-// MSE Board — Configuração da conexão com o MySQL
+// MSE Board — Configuração central (múltiplos departamentos)
+// Lê as credenciais do arquivo .env (nunca deixe esses valores direto no
+// código — o .env fica FORA da pasta pública, só o servidor lê ele).
+//
+// Um único backend/banco de código atende vários "departamentos" (quadros
+// separados, ex: Programação e Planejamento) — cada um com seu PRÓPRIO
+// banco de dados, escolhido pelo parâmetro "dept" que o front-end manda
+// em toda chamada (?dept=planejamento). Sem misturar dados entre eles.
 // ==========================================
-// Os valores sensíveis (banco, chaves, tokens) ficam no arquivo ".env" na raiz
-// do projeto (mse_board/.env), que NÃO vai para o Git. Use ".env.example" como
-// modelo. Ajuste o ".env" conforme o seu ambiente (XAMPP local, servidor, etc.).
 
-// --- Carrega as variáveis do arquivo .env (raiz do projeto) ---
-(function () {
-    $envPath = __DIR__ . '/../.env';
-    if (!is_file($envPath)) {
-        return;
-    }
-    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        $line = trim($line);
-        if ($line === '' || $line[0] === '#') {
-            continue;
-        }
-        if (strpos($line, '=') === false) {
-            continue;
-        }
-        list($name, $value) = explode('=', $line, 2);
-        $name = trim($name);
+// Carrega o .env manualmente (sem precisar de biblioteca externa)
+function loadEnv($path) {
+    if (!file_exists($path)) return;
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue; // comentário
+        if (strpos($line, '=') === false) continue;
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
         $value = trim($value);
-        // Remove aspas envolvendo o valor, se houver
-        $len = strlen($value);
-        if ($len >= 2
-            && ($value[0] === '"' || $value[0] === "'")
-            && $value[$len - 1] === $value[0]) {
-            $value = substr($value, 1, -1);
-        }
-        if (getenv($name) === false) {
-            putenv("$name=$value");
-        }
-        $_ENV[$name] = $value;
+        // Remove aspas se tiver
+        $value = trim($value, "\"'");
+        putenv("$key=$value");
+        $_ENV[$key] = $value;
     }
-})();
-
-function env($key, $default = null) {
-    $value = getenv($key);
-    if ($value === false) {
-        $value = $_ENV[$key] ?? null;
-    }
-    return ($value === null || $value === '') ? $default : $value;
 }
 
-$DB_HOST = env('DB_HOST', 'localhost');
-$DB_NAME = env('DB_NAME', 'mse_board');
-$DB_USER = env('DB_USER', 'root');
-$DB_PASS = env('DB_PASS', '');
+loadEnv(__DIR__ . '/.env');
 
-// Chave secreta que protege a API — só quem souber esse valor consegue
-// ler ou gravar dados. Precisa ser IGUAL à chave usada pelo frontend
-// (entregue automaticamente via config.js.php, que lê o mesmo .env).
-define('API_SECRET', env('API_SECRET', ''));
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
+define('API_SECRET', getenv('API_SECRET') ?: '');
+define('ALLOWED_ORIGIN', getenv('ALLOWED_ORIGIN') ?: '*');
 
-// Origem permitida a chamar a API (o endereço de onde o site é servido).
-define('ALLOWED_ORIGIN', env('ALLOWED_ORIGIN', 'http://localhost'));
+// Departamento padrão, usado se ninguém mandar o parâmetro "dept" — assim
+// nenhum link/chamada antiga (de antes dessa mudança) quebra.
+define('DEFAULT_DEPARTMENT', 'programacao');
 
-// Token separado, só pra o webhook de sugestões (usado pelo GPT Maker ou qualquer
-// outra ferramenta externa). É de propósito diferente do API_SECRET acima —
-// assim dá pra revogar/trocar sem afetar o resto do site.
-define('SUGGESTIONS_WEBHOOK_TOKEN', env('SUGGESTIONS_WEBHOOK_TOKEN', ''));
+// Nome de cada banco de dados, um por departamento. Pra adicionar um
+// departamento novo no futuro, só acrescenta uma linha aqui.
+// Compatibilidade: se o .env só tiver "DB_NAME" (formato antigo, de antes
+// de existir múltiplos departamentos), usa esse valor pro banco de
+// Programação — assim não quebra nada enquanto o .env não for atualizado.
+$GLOBALS['DEPARTMENT_DATABASES'] = [
+    'programacao' => getenv('DB_NAME_PROGRAMACAO') ?: (getenv('DB_NAME') ?: 'mse_board'),
+    'planejamento' => getenv('DB_NAME_PLANEJAMENTO') ?: 'mse_board_planejamento',
+];
 
-// Endereço base da API usado pelo frontend (repassado via config.js.php).
-define('API_BASE', env('API_BASE', 'http://localhost/mse_board/mse-backend/api'));
+// Descobre qual departamento foi pedido nessa chamada — sempre pela query
+// string (?dept=x). Importante: NÃO lemos o corpo da requisição aqui, já
+// que cada endpoint só pode ler o corpo (php://input) uma vez — se a gente
+// lesse aqui também, o endpoint receberia um corpo vazio depois.
+function getCurrentDepartment() {
+    $dept = $_GET['dept'] ?? DEFAULT_DEPARTMENT;
 
-function requireApiKey() {
-    $provided = $_SERVER['HTTP_X_API_KEY'] ?? '';
-    if (!hash_equals(API_SECRET, $provided)) {
-        http_response_code(401);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['error' => 'Não autorizado. Chave de API ausente ou incorreta.']);
-        exit;
+    // Só aceita departamentos conhecidos — evita alguém tentar mandar um
+    // nome de banco arbitrário pelo parâmetro.
+    if (!isset($GLOBALS['DEPARTMENT_DATABASES'][$dept])) {
+        $dept = DEFAULT_DEPARTMENT;
     }
+
+    return $dept;
 }
 
 function getDbConnection() {
-    global $DB_HOST, $DB_NAME, $DB_USER, $DB_PASS;
+    static $connections = [];
 
-    try {
-        $pdo = new PDO(
-            "mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4",
-            $DB_USER,
-            $DB_PASS
-        );
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $pdo;
-    } catch (PDOException $e) {
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'error' => 'Não foi possível conectar ao banco de dados.',
-            'details' => $e->getMessage()
+    $dept = getCurrentDepartment();
+
+    if (!isset($connections[$dept])) {
+        $dbName = $GLOBALS['DEPARTMENT_DATABASES'][$dept];
+        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . $dbName . ";charset=utf8mb4";
+        $connections[$dept] = new PDO($dsn, DB_USER, DB_PASS, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
+    }
+
+    return $connections[$dept];
+}
+
+// Confere se quem está chamando manda a chave certa (X-API-Key), pra
+// impedir que qualquer pessoa na internet leia/altere os dados do quadro.
+function requireApiKey() {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $sentKey = $headers['X-API-Key'] ?? $headers['x-api-key'] ?? ($_SERVER['HTTP_X_API_KEY'] ?? '');
+
+    if (empty(API_SECRET) || $sentKey !== API_SECRET) {
+        http_response_code(401);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => 'Não autorizado.']);
         exit;
     }
 }
