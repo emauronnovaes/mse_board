@@ -1,6 +1,6 @@
 <?php
 // ==========================================
-// MSE Board — Configuração central (múltiplos departamentos)
+// MSE Board — Configuração central (múltiplos departamentos, MESMO banco)
 // Lê as credenciais do arquivo .env (nunca deixe esses valores direto no
 // código — o .env fica FORA da pasta pública, só o servidor lê ele).
 //
@@ -27,8 +27,7 @@ function loadEnv($path) {
     }
 }
 
-// O .env fica na RAIZ do projeto (mse_board/.env), um nivel acima desta pasta.
-loadEnv(__DIR__ . '/../.env');
+loadEnv(__DIR__ . '/.env');
 
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('DB_NAME') ?: 'mse_board');
@@ -37,37 +36,27 @@ define('DB_PASS', getenv('DB_PASS') ?: '');
 define('API_SECRET', getenv('API_SECRET') ?: '');
 define('ALLOWED_ORIGIN', getenv('ALLOWED_ORIGIN') ?: '*');
 
-// Endereco base da API, entregue ao frontend pelo config.js.php.
-define('API_BASE', getenv('API_BASE') ?: 'http://localhost/mse_board/mse-backend/api');
-
 // Departamento padrão, usado se ninguém mandar o parâmetro "dept" — assim
 // nenhum link/chamada antiga (de antes dessa mudança) quebra.
 define('DEFAULT_DEPARTMENT', 'programacao');
 
 // Departamentos conhecidos — pra adicionar um novo no futuro, só
-// acrescenta o nome aqui (nada de banco novo: a separação é pela coluna
-// "department" das tabelas).
+// acrescenta o nome aqui.
 $GLOBALS['KNOWN_DEPARTMENTS'] = ['programacao', 'planejamento'];
 
 // Descobre qual departamento foi pedido nessa chamada — sempre pela query
-// string (?dept=x). Importante: NÃO lemos o corpo da requisição aqui, já
-// que cada endpoint só pode ler o corpo (php://input) uma vez — se a gente
-// lesse aqui também, o endpoint receberia um corpo vazio depois.
+// string (?dept=x). Só aceita departamentos conhecidos, pra evitar alguém
+// tentar mandar um valor arbitrário pelo parâmetro.
 function getCurrentDepartment() {
     $dept = $_GET['dept'] ?? DEFAULT_DEPARTMENT;
-
-    // Só aceita departamentos conhecidos — evita alguém tentar mandar um
-    // valor arbitrário pelo parâmetro.
     if (!in_array($dept, $GLOBALS['KNOWN_DEPARTMENTS'], true)) {
         $dept = DEFAULT_DEPARTMENT;
     }
-
     return $dept;
 }
 
 function getDbConnection() {
     static $pdo = null;
-
     if ($pdo === null) {
         $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
         $pdo = new PDO($dsn, DB_USER, DB_PASS, [
@@ -75,7 +64,6 @@ function getDbConnection() {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
     }
-
     return $pdo;
 }
 
