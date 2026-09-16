@@ -23,12 +23,13 @@ if (!$p || empty($p['cardId']) || !isset($p['itemIndex'])) {
 }
 
 $pdo = getDbConnection();
+$dept = getCurrentDepartment();
 
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare("SELECT checklist FROM cards WHERE id = :id FOR UPDATE");
-    $stmt->execute(['id' => $p['cardId']]);
+    $stmt = $pdo->prepare("SELECT checklist FROM cards WHERE id = :id AND department = :dept FOR UPDATE");
+    $stmt->execute(['id' => $p['cardId'], 'dept' => $dept]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
@@ -61,8 +62,8 @@ try {
         $checklist[$idx]['subItems'][$subIdx]['checked'] = !$checklist[$idx]['subItems'][$subIdx]['checked'];
     }
 
-    $update = $pdo->prepare("UPDATE cards SET checklist = :checklist WHERE id = :id");
-    $update->execute(['checklist' => json_encode($checklist), 'id' => $p['cardId']]);
+    $update = $pdo->prepare("UPDATE cards SET checklist = :checklist WHERE id = :id AND department = :dept");
+    $update->execute(['checklist' => json_encode($checklist), 'id' => $p['cardId'], 'dept' => $dept]);
 
     $pdo->commit();
 

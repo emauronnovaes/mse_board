@@ -23,6 +23,7 @@ if (!$p || empty($p['id']) || empty($p['name'])) {
 }
 
 $pdo = getDbConnection();
+$dept = getCurrentDepartment();
 
 try {
     // Trava a tabela pra calcular a posição, senão duas pessoas clicando em
@@ -31,11 +32,13 @@ try {
     // ordem delas ficar instável, "pulando" de lugar a cada atualização.
     $pdo->beginTransaction();
 
-    $maxPos = $pdo->query("SELECT COALESCE(MAX(position), -1) FROM people FOR UPDATE")->fetchColumn();
+    $maxPosStmt = $pdo->prepare("SELECT COALESCE(MAX(position), -1) FROM people WHERE department = :dept FOR UPDATE");
+    $maxPosStmt->execute(['dept' => $dept]);
+    $maxPos = $maxPosStmt->fetchColumn();
 
     $stmt = $pdo->prepare(
-        "INSERT INTO people (id, name, avatar_url, is_done, member_email, position)
-         VALUES (:id, :name, :avatar_url, :is_done, :member_email, :position)
+        "INSERT INTO people (id, department, name, avatar_url, is_done, member_email, position)
+         VALUES (:id, :department, :name, :avatar_url, :is_done, :member_email, :position)
          ON DUPLICATE KEY UPDATE
             name = VALUES(name),
             avatar_url = VALUES(avatar_url),
@@ -45,6 +48,7 @@ try {
 
     $stmt->execute([
         'id' => $p['id'],
+        'department' => $dept,
         'name' => $p['name'],
         'avatar_url' => $p['avatarUrl'] ?? null,
         'is_done' => !empty($p['isDone']) ? 1 : 0,

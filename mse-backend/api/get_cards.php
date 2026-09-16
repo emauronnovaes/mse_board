@@ -18,7 +18,8 @@ requireApiKey();
 
 try {
     $pdo = getDbConnection();
-    $stmt = $pdo->query("SELECT * FROM cards ORDER BY created_at ASC");
+    $stmt = $pdo->prepare("SELECT * FROM cards WHERE department = :dept ORDER BY created_at ASC");
+    $stmt->execute(['dept' => getCurrentDepartment()]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $cards = array_map(function ($r) {
@@ -33,6 +34,7 @@ try {
             'observacao' => $r['observacao'] ?? '',
             'manualProgress' => isset($r['manual_progress']) && $r['manual_progress'] !== null ? (int) $r['manual_progress'] : null,
             'hiddenFromDashboard' => isset($r['hidden_from_dashboard']) ? (bool) $r['hidden_from_dashboard'] : false,
+            'position' => isset($r['position']) && $r['position'] !== null ? (float) $r['position'] : null,
             'estimatedHours' => $r['estimated_hours'] !== null ? (float) $r['estimated_hours'] : null,
             'workedHours' => $r['worked_hours'] !== null ? (float) $r['worked_hours'] : null,
             'project' => $r['project'],

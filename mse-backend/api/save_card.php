@@ -57,6 +57,7 @@ try {
         'observacao'      => $c['observacao'] ?? '',
         'manual_progress' => array_key_exists('manualProgress', $c) ? $c['manualProgress'] : null,
         'hidden_from_dashboard' => !empty($c['hiddenFromDashboard']) ? 1 : 0,
+        'position'        => array_key_exists('position', $c) ? $c['position'] : null,
         'estimated_hours' => $c['estimatedHours'] ?? null,
         'worked_hours'    => $c['workedHours'] ?? null,
         'project'         => $c['project'] ?? null,
@@ -76,8 +77,10 @@ try {
         'completed_at'    => $c['completedAt'] ?? null
     ];
 
-    // id sempre entra (é a chave primária); os demais só se existirem na tabela
-    $fields = ['id' => $c['id']];
+    // id e department sempre entram (department nunca é atualizado depois de
+    // criado — um post-it não muda de departamento); os demais só se
+    // existirem na tabela.
+    $fields = ['id' => $c['id'], 'department' => getCurrentDepartment()];
     foreach ($candidates as $column => $value) {
         if (in_array($column, $existingColumns, true)) {
             $fields[$column] = $value;
@@ -90,7 +93,7 @@ try {
     }, $columnNames);
 
     $updateColumns = array_filter($columnNames, function ($col) {
-        return $col !== 'id';
+        return $col !== 'id' && $col !== 'department';
     });
     $updateParts = array_map(function ($col) {
         return "$col = VALUES($col)";

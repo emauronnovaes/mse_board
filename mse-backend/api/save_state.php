@@ -1,6 +1,6 @@
 <?php
 // ==========================================
-// MSE Board — POST: salva o estado atual do quadro
+// MSE Board — POST: salva o estado atual do quadro (do departamento pedido)
 // ==========================================
 
 header('Access-Control-Allow-Origin: *');
@@ -25,17 +25,24 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 }
 
 $pdo = getDbConnection();
+$dept = getCurrentDepartment();
 
-$stmt = $pdo->prepare("UPDATE board_state SET data = :data WHERE id = 1");
-$stmt->execute(['data' => $raw]);
+try {
+    $stmt = $pdo->prepare("UPDATE board_state SET data = :data WHERE department = :dept");
+    $stmt->execute(['data' => $raw, 'dept' => $dept]);
 
-// Se por algum motivo o registro ainda não existir, cria agora
-if ($stmt->rowCount() === 0) {
-    $check = $pdo->query("SELECT COUNT(*) FROM board_state WHERE id = 1")->fetchColumn();
-    if ($check == 0) {
-        $insert = $pdo->prepare("INSERT INTO board_state (id, data) VALUES (1, :data)");
-        $insert->execute(['data' => $raw]);
+    // Se por algum motivo o registro ainda não existir, cria agora
+    if ($stmt->rowCount() === 0) {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM board_state WHERE department = :dept");
+        $check->execute(['dept' => $dept]);
+        if ($check->fetchColumn() == 0) {
+            $insert = $pdo->prepare("INSERT INTO board_state (department, data) VALUES (:dept, :data)");
+            $insert->execute(['dept' => $dept, 'data' => $raw]);
+        }
     }
-}
 
-echo json_encode(['success' => true]);
+    echo json_encode(['success' => true]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Falha ao salvar o estado do quadro.', 'details' => $e->getMessage()]);
+}

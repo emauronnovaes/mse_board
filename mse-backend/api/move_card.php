@@ -33,13 +33,14 @@ try {
         "UPDATE cards SET person_id = :person_id,
          status = COALESCE(:status, status),
          completed_at = :completed_at
-         WHERE id = :id"
+         WHERE id = :id AND department = :dept"
     );
     $stmt->execute([
         'person_id' => $p['personId'],
         'status' => $p['status'] ?? null,
         'completed_at' => array_key_exists('completedAt', $p) ? $p['completedAt'] : null,
-        'id' => $p['id']
+        'id' => $p['id'],
+        'dept' => getCurrentDepartment()
     ]);
 
     echo json_encode(['success' => true]);
