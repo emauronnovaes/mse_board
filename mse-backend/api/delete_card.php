@@ -25,8 +25,8 @@ if (!$c || empty($c['id'])) {
 $pdo = getDbConnection();
 
 try {
-    $stmt = $pdo->prepare("DELETE FROM cards WHERE id = :id");
-    $stmt->execute(['id' => $c['id']]);
+    $stmt = $pdo->prepare("DELETE FROM cards WHERE id = :id AND department = :dept");
+    $stmt->execute(['id' => $c['id'], 'dept' => getCurrentDepartment()]);
     echo json_encode(['success' => true]);
 } catch (Throwable $e) {
     http_response_code(500);

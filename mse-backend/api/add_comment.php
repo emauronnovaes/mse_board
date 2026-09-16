@@ -23,12 +23,13 @@ if (!$p || empty($p['cardId']) || empty($p['author']) || !isset($p['text'])) {
 }
 
 $pdo = getDbConnection();
+$dept = getCurrentDepartment();
 
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare("SELECT comments FROM cards WHERE id = :id FOR UPDATE");
-    $stmt->execute(['id' => $p['cardId']]);
+    $stmt = $pdo->prepare("SELECT comments FROM cards WHERE id = :id AND department = :dept FOR UPDATE");
+    $stmt->execute(['id' => $p['cardId'], 'dept' => $dept]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
@@ -45,8 +46,8 @@ try {
         'date' => round(microtime(true) * 1000)
     ];
 
-    $update = $pdo->prepare("UPDATE cards SET comments = :comments WHERE id = :id");
-    $update->execute(['comments' => json_encode($comments), 'id' => $p['cardId']]);
+    $update = $pdo->prepare("UPDATE cards SET comments = :comments WHERE id = :id AND department = :dept");
+    $update->execute(['comments' => json_encode($comments), 'id' => $p['cardId'], 'dept' => $dept]);
 
     $pdo->commit();
 

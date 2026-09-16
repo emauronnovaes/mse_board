@@ -23,14 +23,15 @@ if (!$p || empty($p['id'])) {
 }
 
 $pdo = getDbConnection();
+$dept = getCurrentDepartment();
 
 try {
     // Exclui também os post-its dessa pessoa (já devem ter sido movidos pra lixeira pelo site antes de chamar isso)
-    $del1 = $pdo->prepare("DELETE FROM cards WHERE person_id = :id");
-    $del1->execute(['id' => $p['id']]);
+    $del1 = $pdo->prepare("DELETE FROM cards WHERE person_id = :id AND department = :dept");
+    $del1->execute(['id' => $p['id'], 'dept' => $dept]);
 
-    $del2 = $pdo->prepare("DELETE FROM people WHERE id = :id");
-    $del2->execute(['id' => $p['id']]);
+    $del2 = $pdo->prepare("DELETE FROM people WHERE id = :id AND department = :dept");
+    $del2->execute(['id' => $p['id'], 'dept' => $dept]);
 
     echo json_encode(['success' => true]);
 } catch (Throwable $e) {

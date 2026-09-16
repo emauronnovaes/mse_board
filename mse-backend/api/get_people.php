@@ -18,7 +18,8 @@ requireApiKey();
 
 try {
     $pdo = getDbConnection();
-    $stmt = $pdo->query("SELECT * FROM people ORDER BY is_done ASC, position ASC");
+    $stmt = $pdo->prepare("SELECT * FROM people WHERE department = :dept ORDER BY is_done ASC, position ASC");
+    $stmt->execute(['dept' => getCurrentDepartment()]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $people = array_map(function ($r) {
