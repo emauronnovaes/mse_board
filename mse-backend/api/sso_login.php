@@ -49,8 +49,15 @@ $payload = $resultado['payload'];
 $email = strtolower(trim((string) $payload['email']));
 
 // --- Confere se o email tem acesso liberado (está em board_state.members) ---
+// Cada departamento tem a SUA lista de membros, então a consulta precisa
+// respeitar o ?dept= da chamada. Antes isso lia sempre "WHERE id = 1" (ou
+// seja, sempre a Programação): o login liberava com base na lista de um
+// quadro e o board.html depois barrava com base na de outro, jogando o
+// usuário no "dashboard-only-mode".
 $pdo = getDbConnection();
-$stmt = $pdo->query("SELECT data FROM board_state WHERE id = 1");
+$dept = getCurrentDepartment();
+$stmt = $pdo->prepare("SELECT data FROM board_state WHERE department = :dept");
+$stmt->execute(['dept' => $dept]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 $board = ($row && $row['data']) ? json_decode($row['data'], true) : [];
 

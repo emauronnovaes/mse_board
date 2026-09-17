@@ -1076,9 +1076,14 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Acesso ao login manual (conta admin legada) — visível só pro Matheus, controlado via script.js.
-         Limpa a sessão SSO atual antes de navegar, senão o login.html redireciona de volta
-         pro board sozinho (porque já existe uma sessão ativa). -->
-    <a href="login.html" class="matheus-admin-access-btn" id="matheusAdminAccessBtn" style="display:none;" onclick="localStorage.removeItem('mse_user');"><i class="fa-solid fa-key"></i> Login Admin</a>
+         O script.js guarda a sessão atual e limpa a sessão SSO antes de navegar: sem limpar,
+         o login.html redireciona de volta pro board sozinho (porque já existe uma sessão ativa);
+         sem guardar, não teria como voltar pro perfil de origem depois. -->
+    <a href="login.html" class="matheus-admin-access-btn" id="matheusAdminAccessBtn" style="display:none;"><i class="fa-solid fa-key"></i> Login Admin</a>
+
+    <!-- Volta pro perfil de origem (o par do botão acima) — visível só quando existe
+         uma sessão guardada de outra pessoa. Controlado via script.js. -->
+    <a href="#" class="matheus-admin-access-btn voltar-perfil-btn" id="voltarPerfilBtn" style="display:none;"><i class="fa-solid fa-rotate-left"></i> Voltar</a>
 
     <script src="config.js.php"></script>
     <script src="script.js"></script>

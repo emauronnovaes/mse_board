@@ -2683,6 +2683,15 @@ body.observer-mode .cards-container.drag-over {
     background-color: var(--accent);
 }
 
+/* Botão de voltar pro perfil anterior — mesmo tratamento discreto do de cima,
+   mas no canto oposto: os dois podem aparecer juntos (quando se troca de
+   perfil pelo login.html em vez do botão), e no mesmo canto um cobriria o
+   outro. Canto direito também deixa claro qual é qual. */
+.voltar-perfil-btn {
+    left: auto;
+    right: 0;
+}
+
 .lane-container {
     min-height: 90px;
     gap: 0.6rem;

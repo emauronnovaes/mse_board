@@ -44,6 +44,13 @@ function boardUrl() {
     return CURRENT_DEPARTMENT === 'programacao' ? 'board.html' : `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
 }
 
+// Onde fica guardada a sessão de quem trocou de perfil (ex: entrou como
+// admin@mse.com.br pra mexer no menu de administração). Guardar isso é o que
+// permite VOLTAR pro perfil de origem num clique só — sem isso o caminho de
+// volta exigiria um token SSO novo do Portal (que expira em 60s) ou a senha
+// do perfil, e a pessoa ficava presa na conta de admin.
+const PERFIL_ANTERIOR_KEY = 'mse_user_anterior';
+
 async function fetchBoardStateFromServer() {
     try {
         const res = await fetch(apiUrl('get_state.php'), {
@@ -881,8 +888,47 @@ document.addEventListener('DOMContentLoaded', async () => {
                 hiddenLoginAccessEl.href = CURRENT_DEPARTMENT === 'programacao'
                     ? 'login.html'
                     : `login.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+                // Guarda a sessão atual ANTES de sair, pra o botão de voltar
+                // (logo abaixo) conseguir restaurá-la depois num clique só.
+                hiddenLoginAccessEl.addEventListener('click', () => {
+                    localStorage.setItem(PERFIL_ANTERIOR_KEY, JSON.stringify(userData));
+                    localStorage.removeItem('mse_user');
+                });
             } else {
                 hiddenLoginAccessEl.remove();
+            }
+        }
+
+        // Botão de VOLTAR pro perfil anterior — o caminho de volta do botão
+        // acima. Sem ele, quem trocou pra conta de admin ficava sem saída:
+        // o botão de cima só existe pro Matheus, então logado como
+        // admin@mse.com.br ele é removido do DOM e não sobra nada na tela.
+        // Aparece só quando existe uma sessão guardada de OUTRA pessoa.
+        const voltarPerfilEl = document.querySelector('.voltar-perfil-btn');
+        if (voltarPerfilEl) {
+            let perfilAnterior = null;
+            try {
+                perfilAnterior = JSON.parse(localStorage.getItem(PERFIL_ANTERIOR_KEY));
+            } catch (e) {
+                localStorage.removeItem(PERFIL_ANTERIOR_KEY);
+            }
+
+            if (perfilAnterior && perfilAnterior.name && perfilAnterior.name !== userData.name) {
+                voltarPerfilEl.style.display = 'block';
+                voltarPerfilEl.title = `Voltar para ${perfilAnterior.name}`;
+                voltarPerfilEl.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    localStorage.setItem('mse_user', JSON.stringify(perfilAnterior));
+                    localStorage.removeItem(PERFIL_ANTERIOR_KEY);
+                    // replace() em vez de href: não deixa o "voltar" do
+                    // navegador cair de novo na sessão que acabou de sair.
+                    window.location.replace(boardUrl());
+                });
+            } else {
+                // Sessão guardada é da própria pessoa (ou está corrompida):
+                // não serve pra nada, some com ela e com o botão.
+                if (perfilAnterior) localStorage.removeItem(PERFIL_ANTERIOR_KEY);
+                voltarPerfilEl.remove();
             }
         }
 
@@ -5966,7 +6012,14 @@ function renderOnlineUsers(currentUser) {
     if (!list) return;
 
     const users = ((state.knownUsers && state.knownUsers.length > 0) ? state.knownUsers : [currentUser])
-        .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL || u === currentUser);
+        .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL || u === currentUser)
+        // Só quem tem acesso de verdade ao quadro entra nas bolinhas.
+        // Um filtro só resolve os dois casos porque o getMemberRole() devolve
+        // "Observador" tanto pra quem foi cadastrado com esse papel quanto pra
+        // quem nem está em state.members (o visitante que cai no
+        // dashboard-only-mode) — os dois só visualizam, então nenhum dos dois
+        // deve contar como gente conectada trabalhando no quadro.
+        .filter(u => getMemberRole(u) !== 'Observador');
     list.innerHTML = '';
 
     users.slice(0, 5).forEach(user => {
