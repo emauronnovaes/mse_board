@@ -30,6 +30,18 @@ function loadEnv($path) {
 // O .env fica na RAIZ do projeto (mse_board/.env), um nivel acima desta pasta.
 loadEnv(__DIR__ . '/../.env');
 
+// Lê uma variável do .env com valor padrão. O sso_helper.php depende dessa
+// função — ela existia no config.php original e sumiu quando o arquivo foi
+// reescrito, o que derrubava TODO login por SSO com
+// "Call to undefined function env()".
+function env($key, $default = null) {
+    $value = getenv($key);
+    if ($value === false) {
+        $value = $_ENV[$key] ?? null;
+    }
+    return ($value === null || $value === '') ? $default : $value;
+}
+
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('DB_NAME') ?: 'mse_board');
 define('DB_USER', getenv('DB_USER') ?: 'root');
