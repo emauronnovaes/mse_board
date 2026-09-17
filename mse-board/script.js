@@ -1473,12 +1473,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
 
-        // Menu lateral — só aparece pra quem é Admin no board. Pra qualquer
-        // outra pessoa, continua escondido (já nasce assim no HTML, evitando
-        // o "flash" de aparecer e sumir rapidinho ao carregar a página).
+        // Menu lateral — restrito à conta admin@mse.com.br, NÃO a todo mundo
+        // que tem papel de Admin. O quadro vai ter outros Admins (que criam
+        // post-its, gerenciam membros pelo botão do menu de cima, etc), mas as
+        // ferramentas do menu lateral continuam só nessa conta.
+        //
+        // A checagem é pelo e-mail de propósito: papel é por departamento
+        // (state.members vem do board_state de cada um), então checar papel
+        // deixaria a regra diferente entre Programação e Planejamento. Pelo
+        // e-mail, vale igual nos dois.
+        //
+        // Pra qualquer outra pessoa continua escondido — já nasce assim no
+        // HTML, o que evita o "flash" de aparecer e sumir ao carregar a
+        // página. Aqui é só display:none e não .remove() porque mais abaixo
+        // o código mexe em #sidebarFootRole e #sidebarFootAvatar (que vivem
+        // dentro da sidebar) sem checar se existem — removendo, quebraria.
+        const podeVerMenuLateral = userData.name === BOOTSTRAP_ADMIN_EMAIL;
         const sidebarEl = document.getElementById('sidebar');
         const mobileToggleEl = document.getElementById('mobileSidebarToggle');
-        if (isAdminViewer) {
+        if (podeVerMenuLateral) {
             if (sidebarEl) sidebarEl.style.display = '';
             if (mobileToggleEl) mobileToggleEl.style.display = '';
         }
