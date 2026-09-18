@@ -375,6 +375,13 @@ async function verifyPassword(password, storedHash) {
 
 // Conta admin fixa: admin@mse.com.br / admin123 (hash salgado pré-calculado)
 const BOOTSTRAP_ADMIN_EMAIL = 'admin@mse.com.br';
+
+// Perfis que NÃO devem aparecer nas bolinhas de "Conectados", por
+// departamento. Continuam com acesso normal ao quadro (colunas, post-its,
+// permissões) — só não entram na contagem de gente online.
+const PERFIS_OCULTOS_NO_ONLINE = {
+    planejamento: ['matheus.batista@mse.com.br'],
+};
 const BOOTSTRAP_ADMIN_PASSWORD_HASH = 'e8eda0d35f19623f:b087c63fcb3b0a7b5c32e7ce04ff85f58df14c514cf1068392cb92e007b3bf82';
 
 async function ensureBootstrapAdmin() {
@@ -1473,22 +1480,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
 
-        // Menu lateral — restrito à conta admin@mse.com.br, NÃO a todo mundo
-        // que tem papel de Admin. O quadro vai ter outros Admins (que criam
-        // post-its, gerenciam membros pelo botão do menu de cima, etc), mas as
-        // ferramentas do menu lateral continuam só nessa conta.
+        // Menu lateral — só existe no quadro de PLANEJAMENTO, e lá só pra
+        // quem tem papel de Admin. Em Programação (ou qualquer outro
+        // departamento) ninguém vê, nem Admin.
         //
-        // A checagem é pelo e-mail de propósito: papel é por departamento
-        // (state.members vem do board_state de cada um), então checar papel
-        // deixaria a regra diferente entre Programação e Planejamento. Pelo
-        // e-mail, vale igual nos dois.
+        // A checagem de departamento é o que manda: as ferramentas do menu
+        // lateral (dashboards, relatórios, backups) foram feitas pro fluxo de
+        // Planejamento. O papel vem de state.members, que é por departamento,
+        // então "Admin" aqui já significa "Admin em Planejamento".
         //
         // Pra qualquer outra pessoa continua escondido — já nasce assim no
         // HTML, o que evita o "flash" de aparecer e sumir ao carregar a
         // página. Aqui é só display:none e não .remove() porque mais abaixo
         // o código mexe em #sidebarFootRole e #sidebarFootAvatar (que vivem
         // dentro da sidebar) sem checar se existem — removendo, quebraria.
-        const podeVerMenuLateral = userData.name === BOOTSTRAP_ADMIN_EMAIL;
+        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && isAdminViewer;
         const sidebarEl = document.getElementById('sidebar');
         const mobileToggleEl = document.getElementById('mobileSidebarToggle');
         if (podeVerMenuLateral) {
@@ -1513,6 +1519,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 addMembersBtnEl.style.display = 'none';
             }
         }
+
+        // Botão "Tarefas Recorrentes" — só no quadro de Planejamento, e lá
+        // aparece pra todo mundo. Roda depois do loadState() porque precisa de
+        // state.cards/state.people pra montar a lista e pra decidir o reinício.
+        setupTarefasRecorrentes();
 
         // Quem NÃO está cadastrado em "Membros e Permissões" não foi convidado — só pode
         // ver o Dashboard, e nada mais (sem acessar o quadro, colunas ou post-its).
@@ -1808,6 +1819,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const priority = document.getElementById('cardPriority').value;
             const dueDate = document.getElementById('cardDueDate').value;
             const startDate = document.getElementById('cardStartDate').value;
+            const resumo = document.getElementById('cardResumo').value.trim();
             const fileInput = document.getElementById('cardAttachments');
 
             const newAttachments = await processFiles(fileInput.files);
@@ -1818,9 +1830,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const coverImage = selectedCoverImage;
 
             if (editingId) {
-                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate });
+                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
             } else {
-                await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate });
+                await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
             }
 
             renderBoard();
@@ -2130,7 +2142,7 @@ async function loadState() {
         if (!state.loginAttempts) state.loginAttempts = {};
         if (!state.boardInfo) state.boardInfo = { name: 'Quadro Geral de Equipe', description: 'Adicione pessoas e atribua tarefas com checklists e anexos' };
         if (!state.errorLog) state.errorLog = [];
-        state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.startDate === undefined) c.startDate = null; if (c.observacao === undefined) c.observacao = ''; });
+        state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.startDate === undefined) c.startDate = null; if (c.observacao === undefined) c.observacao = ''; if (c.resumo === undefined) c.resumo = ''; });
         if (currentUserName && !state.knownUsers.includes(currentUserName)) state.knownUsers.push(currentUserName);
 
         // Migração: cartões antigos ganham a raia "Fazendo" por padrão.
@@ -2474,7 +2486,8 @@ function saveCurrentFormAsTemplate() {
         title,
         lines: desc.split('\n').map(l => l.trim()).filter(l => l !== ''),
         color,
-        priority
+        priority,
+        resumo: (document.getElementById('cardResumo').value || '').trim()
     });
     saveState();
     populateTemplateSelect();
@@ -2488,6 +2501,7 @@ function applyTemplateToForm(templateId) {
     document.getElementById('cardDesc').value = tpl.lines.join('\n');
     document.getElementById('cardColor').value = tpl.color;
     document.getElementById('cardPriority').value = tpl.priority;
+    document.getElementById('cardResumo').value = tpl.resumo || '';
     updateChecklistLineNumbers();
 }
 
@@ -4078,7 +4092,7 @@ function deletePerson(personId) {
 // CRUD: POST-ITS (CARDS)
 // ==========================================
 
-function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate }) {
+function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
     const id = generateUniqueId('c');
 
     const card = {
@@ -4086,6 +4100,10 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         priority: priority || 'media',
         dueDate: dueDate || '',
         startDate: startDate || null,
+        // Texto livre que explica do que se trata a tarefa. Aparece ao abrir o
+        // post-it. Não é a mesma coisa que "observacao", que é a anotação do
+        // Dashboard de Entregas.
+        resumo: resumo || '',
         author,
         status: 'afazer',
         checklist: lines.map(text => ({ text, checked: false })),
@@ -4109,7 +4127,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     return id;
 }
 
-async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate }) {
+async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -4125,6 +4143,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     card.priority = priority;
     card.dueDate = dueDate;
     card.startDate = startDate || null;
+    card.resumo = resumo || '';
     card.checklist = newChecklist;
     card.attachments = [...card.attachments, ...newAttachments];
     if (customValues) card.customValues = customValues;
@@ -4235,6 +4254,444 @@ function moveCard(cardId, newPersonId, newStatus) {
     if (isNowDone) {
         fireWebhook('card_completed', { title: card.title });
     }
+}
+
+// ==========================================
+// TAREFAS RECORRENTES (só no quadro de Planejamento)
+// ==========================================
+// Uma tarefa marcada como recorrente é uma rotina diária: todo dia às 07:00
+// ela SAI de "Concluída" e volta pra raia "Fazendo", na coluna de origem.
+//
+// Não existe cron/agendador no servidor, então quem dispara o reinício é o
+// próprio navegador de quem está com o quadro aberto (ou de quem abrir
+// depois). O que impede de rodar duas vezes é a data guardada em
+// state.recurringTasks.lastResetDate: só roda quando a data de hoje é
+// diferente da última rodada E já passou das 07:00. Como esse campo vive no
+// board_state (o mesmo blob que todo mundo relê a cada 6 segundos), quem
+// abrir o quadro às 11h ainda pega o reinício do dia se ninguém abriu antes.
+
+const RECURRING_RESET_HOUR = 7;
+
+// Data local no formato AAAA-MM-DD. É de propósito que NÃO usa toISOString():
+// aquele converte pra UTC e, de madrugada, devolveria o dia errado no Brasil.
+function recurringDateKey(date) {
+    const d = date || new Date();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+// Garante que a estrutura existe no state (quadros antigos não têm).
+// lastResetDate começa valendo HOJE de propósito: assim, ao ligar a
+// funcionalidade, nada é movido na hora — o primeiro reinício de verdade
+// acontece amanhã às 07:00.
+function ensureRecurringState() {
+    if (!state.recurringTasks || typeof state.recurringTasks !== 'object' || Array.isArray(state.recurringTasks)) {
+        state.recurringTasks = { tasks: [], lastResetDate: recurringDateKey() };
+    }
+    if (!Array.isArray(state.recurringTasks.tasks)) state.recurringTasks.tasks = [];
+    if (!state.recurringTasks.lastResetDate) state.recurringTasks.lastResetDate = recurringDateKey();
+    return state.recurringTasks;
+}
+
+function isRecurringCard(cardId) {
+    return ensureRecurringState().tasks.some(t => t.cardId === cardId);
+}
+
+// Marca/desmarca uma tarefa como recorrente. Guarda junto a coluna de origem
+// (homePersonId) — é pra lá que ela volta quando estiver parada numa aba de
+// "Concluído", que é uma coluna de verdade e não uma raia.
+function toggleRecurringCard(cardId, ligado) {
+    const rec = ensureRecurringState();
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+
+    if (ligado) {
+        if (!isRecurringCard(cardId)) {
+            const pessoa = (state.people || []).find(p => p.id === card.personId);
+            // Coluna de volta: a coluna onde a tarefa vive. Se ela estiver
+            // parada numa aba de "Concluído", usa a coluna que está aberta no
+            // modal (foi por ela que a pessoa chegou até esta tarefa); se nem
+            // isso der, fica null e aparece o seletor "Na coluna" na tela.
+            let homePersonId = null;
+            if (pessoa && !pessoa.isDone) {
+                homePersonId = card.personId;
+            } else {
+                const aberta = (state.people || []).find(p => p.id === recurringSelectedPersonId && !p.isDone);
+                if (aberta) homePersonId = aberta.id;
+            }
+            rec.tasks.push({ cardId, homePersonId, targetStatus: 'todo' });
+            logAudit(`"${card.title}" virou tarefa recorrente (volta pra Fazendo todo dia às 0${RECURRING_RESET_HOUR}:00)`);
+        }
+    } else {
+        rec.tasks = rec.tasks.filter(t => t.cardId !== cardId);
+        logAudit(`"${card.title}" deixou de ser tarefa recorrente`);
+    }
+
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Roda o reinício diário, se já estiver na hora e ainda não tiver rodado hoje.
+function runRecurringResetIfDue() {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!state || !Array.isArray(state.cards) || !Array.isArray(state.people)) return;
+    // Quem só observa não escreve no servidor — o reinício acontece assim que
+    // alguém que edita abrir o quadro.
+    if (isObserver) return;
+    // Quadro ainda não carregou de verdade: não mexe em nada (senão a limpeza
+    // de tarefas órfãs abaixo apagaria a lista achando que os post-its sumiram).
+    if (state.cards.length === 0) return;
+
+    const rec = ensureRecurringState();
+    const agora = new Date();
+    const hoje = recurringDateKey(agora);
+
+    if (rec.lastResetDate === hoje) return;
+    if (agora.getHours() < RECURRING_RESET_HOUR) return;
+
+    // Tira da lista as tarefas cujo post-it foi excluído
+    rec.tasks = rec.tasks.filter(t => state.cards.some(c => c.id === t.cardId));
+
+    let movidas = 0;
+
+    rec.tasks.forEach(t => {
+        const card = state.cards.find(c => c.id === t.cardId);
+        if (!card) return;
+
+        const pessoaAtual = state.people.find(p => p.id === card.personId);
+        const estaNumaAbaConcluido = !!(pessoaAtual && pessoaAtual.isDone);
+
+        // Enquanto a tarefa NÃO está numa aba de "Concluído", a coluna onde
+        // ela vive é a origem. Atualizar aqui mantém o caminho de volta certo
+        // mesmo que a tarefa tenha sido passada pra outra pessoa no meio.
+        if (!estaNumaAbaConcluido) t.homePersonId = card.personId;
+
+        const estaConcluida = estaNumaAbaConcluido || card.status === 'done';
+        if (!estaConcluida) return;
+
+        // Pra onde volta: a coluna de origem (se ainda existir e não for uma
+        // aba de "Concluído"); se estava só na raia "Concluída", continua na
+        // mesma coluna e muda só de raia.
+        let destino = card.personId;
+        if (estaNumaAbaConcluido) {
+            const origem = state.people.find(p => p.id === t.homePersonId && !p.isDone);
+            if (!origem) return; // coluna de origem sumiu — deixa quieto
+            destino = origem.id;
+        }
+
+        // Desmarca o checklist. Sem isso a tarefa voltaria pra "Fazendo" já
+        // 100% concluída e, com a automação "mover ao concluir" ligada, seria
+        // jogada de volta pra "Concluída" no mesmo instante.
+        const tinhaMarcado = (card.checklist || []).some(
+            item => item.checked || (item.subItems || []).some(sub => sub.checked)
+        );
+        if (tinhaMarcado) {
+            card.checklist.forEach(item => {
+                item.checked = false;
+                (item.subItems || []).forEach(sub => { sub.checked = false; });
+            });
+        }
+
+        // Raia escolhida no modal (Fazendo por padrão, pra quem marcou antes
+        // do seletor existir ou não mexeu nele).
+        const raiaDestino = t.targetStatus || 'todo';
+        moveCard(card.id, destino, raiaDestino);
+        if (tinhaMarcado) persistCard(card); // moveCard só grava coluna/raia/conclusão
+        movidas++;
+    });
+
+    rec.lastResetDate = hoje;
+
+    if (movidas > 0) {
+        logAudit(`Tarefas recorrentes: ${movidas} tarefa(s) reiniciadas (reinício das 0${RECURRING_RESET_HOUR}:00)`);
+        renderBoard();
+        showToast(`${movidas} tarefa(s) recorrente(s) foram reiniciadas`, 'success');
+    } else {
+        saveState(); // grava a data de hoje mesmo sem ter movido nada
+    }
+
+    renderRecurringTasksList();
+}
+
+// Raias pra onde uma tarefa recorrente pode voltar. É a mesma lista de raias
+// de uma coluna de pessoa (ver renderColumn), menos "Concluída" — voltar pra
+// "Concluída" não faria a tarefa recomeçar, que é o objetivo.
+const RECURRING_TARGET_LANES = [
+    { key: 'todo', label: 'Fazendo' },
+    { key: 'afazer', label: 'A Fazer' },
+    { key: 'testing', label: 'Em Teste' },
+    { key: 'paused', label: 'Pausado' }
+];
+
+const RECURRING_LANE_LABELS = { afazer: 'A Fazer', todo: 'Fazendo', testing: 'Em Teste', paused: 'Pausado', done: 'Concluída' };
+
+// Qual pessoa/coluna está aberta no modal. null = está na tela de escolher
+// a pessoa. Fica só na memória do navegador (não vai pro state) porque é
+// navegação de tela, não configuração do quadro.
+let recurringSelectedPersonId = null;
+
+// Muda a raia pra onde a tarefa volta todo dia.
+function setRecurringTargetStatus(cardId, status) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+    tarefa.targetStatus = status;
+
+    const card = (state.cards || []).find(c => c.id === cardId);
+    const rotulo = RECURRING_LANE_LABELS[status] || status;
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}" passou a voltar para a raia ${rotulo}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Muda a coluna pra onde a tarefa volta. Só aparece na tela quando a tarefa
+// está parada numa aba de "Concluído" (aí não dá pra adivinhar a origem).
+function setRecurringHomePerson(cardId, personId) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+    tarefa.homePersonId = personId || null;
+
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    const card = (state.cards || []).find(c => c.id === cardId);
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}" passou a voltar para a coluna ${pessoa ? pessoa.name : '(nenhuma)'}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Tarefas que aparecem debaixo de uma pessoa: as que estão na coluna dela
+// agora, mais as que já são recorrentes e têm essa coluna como origem (o caso
+// da tarefa que foi arrastada pra uma aba de "Concluído" e mora lá até a
+// virada do dia).
+function getCardsDaPessoaParaRecorrencia(personId) {
+    const rec = ensureRecurringState();
+    return (state.cards || []).filter(c => {
+        if (c.archived) return false;
+        if (c.personId === personId) return true;
+        const tarefa = rec.tasks.find(t => t.cardId === c.id);
+        return !!(tarefa && tarefa.homePersonId === personId);
+    });
+}
+
+function renderRecurringTasksList() {
+    const list = document.getElementById('recurringTasksList');
+    if (!list) return;
+
+    const rec = ensureRecurringState();
+    const buscaEl = document.getElementById('recurringTasksSearch');
+    const termo = (buscaEl ? buscaEl.value : '').trim().toLowerCase();
+
+    const statusEl = document.getElementById('recurringTasksStatus');
+    if (statusEl) {
+        const ultima = rec.lastResetDate ? rec.lastResetDate.split('-').reverse().join('/') : '—';
+        statusEl.innerHTML = `Recorrentes agora: <strong>${rec.tasks.length}</strong> · Último reinício: <strong>${ultima}</strong>`;
+    }
+
+    // A pessoa escolhida pode ter sido excluída por outra pessoa enquanto o
+    // modal estava aberto — nesse caso volta pra tela de escolher.
+    if (recurringSelectedPersonId && !(state.people || []).some(p => p.id === recurringSelectedPersonId)) {
+        recurringSelectedPersonId = null;
+    }
+
+    const voltarBtn = document.getElementById('recurringBackBtn');
+    const crumbEl = document.getElementById('recurringCrumbLabel');
+
+    if (!recurringSelectedPersonId) {
+        if (voltarBtn) voltarBtn.style.display = 'none';
+        if (crumbEl) crumbEl.textContent = 'Escolha a pessoa';
+        if (buscaEl) buscaEl.placeholder = 'Digite parte do nome da pessoa...';
+        renderRecurringPeoplePicker(list, termo);
+        return;
+    }
+
+    const pessoa = state.people.find(p => p.id === recurringSelectedPersonId);
+    if (voltarBtn) voltarBtn.style.display = 'inline-flex';
+    if (crumbEl) crumbEl.textContent = `Tarefas de ${pessoa.name}`;
+    if (buscaEl) buscaEl.placeholder = 'Digite parte do título da tarefa...';
+    renderRecurringCardsDaPessoa(list, pessoa, termo);
+}
+
+// TELA 1 — escolher a pessoa (ou a aba de "Concluído")
+function renderRecurringPeoplePicker(list, termo) {
+    const rec = ensureRecurringState();
+
+    // Mesma ordem do quadro: pessoas primeiro, abas de "Concluído" no fim.
+    const pessoas = [
+        ...(state.people || []).filter(p => !p.isDone),
+        ...(state.people || []).filter(p => p.isDone)
+    ].filter(p => !termo || (p.name || '').toLowerCase().includes(termo));
+
+    if (pessoas.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma pessoa encontrada.</p>';
+        return;
+    }
+
+    list.innerHTML = pessoas.map(p => {
+        const cards = getCardsDaPessoaParaRecorrencia(p.id);
+        const recorrentes = cards.filter(c => rec.tasks.some(t => t.cardId === c.id)).length;
+        const avatar = p.isDone
+            ? '<span class="recurring-person-avatar recurring-person-avatar-done"><i class="fa-solid fa-check"></i></span>'
+            : (p.avatarUrl
+                ? `<img src="${escapeHtml(p.avatarUrl)}" class="recurring-person-avatar" alt="${escapeHtml(p.name)}">`
+                : `<span class="recurring-person-avatar">${escapeHtml(getInitials(p.name))}</span>`);
+        return `
+            <button type="button" class="recurring-person-row" data-recurring-person="${escapeHtml(p.id)}">
+                ${avatar}
+                <span class="recurring-task-text">
+                    <span class="recurring-task-title">${escapeHtml(p.name)}</span>
+                    <span class="recurring-task-where">${cards.length} tarefa(s)${recorrentes > 0 ? ` · ${recorrentes} recorrente(s)` : ''}</span>
+                </span>
+                ${recorrentes > 0 ? '<span class="recurring-task-badge"><i class="fa-solid fa-rotate"></i></span>' : ''}
+                <i class="fa-solid fa-angle-right recurring-person-chevron"></i>
+            </button>
+        `;
+    }).join('');
+
+    list.querySelectorAll('button[data-recurring-person]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            recurringSelectedPersonId = btn.dataset.recurringPerson;
+            const busca = document.getElementById('recurringTasksSearch');
+            if (busca) busca.value = ''; // o termo era pra filtrar nomes, não títulos
+            renderRecurringTasksList();
+        });
+    });
+}
+
+// TELA 2 — tarefas da pessoa escolhida
+function renderRecurringCardsDaPessoa(list, pessoa, termo) {
+    const rec = ensureRecurringState();
+
+    const cards = getCardsDaPessoaParaRecorrencia(pessoa.id)
+        .filter(c => !termo || (c.title || '').toLowerCase().includes(termo))
+        .sort((a, b) => {
+            // Recorrentes primeiro, depois por título
+            const ra = isRecurringCard(a.id) ? 0 : 1;
+            const rb = isRecurringCard(b.id) ? 0 : 1;
+            if (ra !== rb) return ra - rb;
+            return (a.title || '').localeCompare(b.title || '', 'pt-BR');
+        });
+
+    if (cards.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma tarefa nessa coluna.</p>';
+        return;
+    }
+
+    const colunasDeVolta = (state.people || []).filter(p => !p.isDone);
+
+    list.innerHTML = cards.map(card => {
+        const tarefa = rec.tasks.find(t => t.cardId === card.id);
+        const marcado = !!tarefa;
+        const alvo = (tarefa && tarefa.targetStatus) || 'todo';
+
+        const pessoaAtual = (state.people || []).find(p => p.id === card.personId);
+        const estaNumaAbaConcluido = !!(pessoaAtual && pessoaAtual.isDone);
+        const ondeEsta = estaNumaAbaConcluido
+            ? `Agora em: ${escapeHtml(pessoaAtual.name)}`
+            : `Agora em: ${RECURRING_LANE_LABELS[card.status || 'todo'] || 'Fazendo'}`;
+
+        // Seletor de raia: só faz sentido depois de marcada como recorrente.
+        const seletorRaia = marcado ? `
+            <span class="recurring-task-target">
+                <label>Volta para</label>
+                <select data-recurring-target="${escapeHtml(card.id)}" ${isObserver ? 'disabled' : ''}>
+                    ${RECURRING_TARGET_LANES.map(l => `<option value="${l.key}" ${l.key === alvo ? 'selected' : ''}>${l.label}</option>`).join('')}
+                </select>
+            </span>
+        ` : '';
+
+        // Seletor de coluna: só quando a tarefa está parada numa aba de
+        // "Concluído". Nas outras vezes a coluna de volta é a própria coluna
+        // onde a tarefa vive, então não tem o que escolher.
+        const seletorColuna = (marcado && estaNumaAbaConcluido) ? `
+            <span class="recurring-task-target">
+                <label>Na coluna</label>
+                <select data-recurring-home="${escapeHtml(card.id)}" ${isObserver ? 'disabled' : ''}>
+                    <option value="">(escolha)</option>
+                    ${colunasDeVolta.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === tarefa.homePersonId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                </select>
+            </span>
+        ` : '';
+
+        return `
+            <div class="recurring-task-row${marcado ? ' is-recurring' : ''}">
+                <label class="recurring-task-main">
+                    <input type="checkbox" data-recurring-card="${escapeHtml(card.id)}" ${marcado ? 'checked' : ''} ${isObserver ? 'disabled' : ''}>
+                    <span class="recurring-task-text">
+                        <span class="recurring-task-title">${escapeHtml(card.title || '(sem título)')}</span>
+                        <span class="recurring-task-where">${ondeEsta}</span>
+                    </span>
+                </label>
+                ${seletorColuna}
+                ${seletorRaia}
+            </div>
+        `;
+    }).join('');
+
+    list.querySelectorAll('input[data-recurring-card]').forEach(input => {
+        input.addEventListener('change', () => {
+            toggleRecurringCard(input.dataset.recurringCard, input.checked);
+        });
+    });
+
+    list.querySelectorAll('select[data-recurring-target]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            setRecurringTargetStatus(sel.dataset.recurringTarget, sel.value);
+        });
+    });
+
+    list.querySelectorAll('select[data-recurring-home]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            setRecurringHomePerson(sel.dataset.recurringHome, sel.value);
+        });
+    });
+}
+
+// Liga o botão e o modal. Só no Planejamento — nos outros quadros o botão
+// continua escondido (é como ele nasce no HTML).
+function setupTarefasRecorrentes() {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+
+    const btn = document.getElementById('recurringTasksBtn');
+    const modal = document.getElementById('recurringTasksModal');
+    if (!btn || !modal) return;
+
+    // Visível pra todo mundo que enxerga o quadro, não só pra Admin.
+    btn.style.display = 'inline-flex';
+
+    btn.addEventListener('click', () => {
+        // Sempre abre na tela de escolher a pessoa
+        recurringSelectedPersonId = null;
+        const busca = document.getElementById('recurringTasksSearch');
+        if (busca) busca.value = '';
+        renderRecurringTasksList();
+        modal.style.display = 'flex';
+    });
+
+    document.getElementById('closeRecurringTasksModalBtn').addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+
+    // "Voltar" leva da lista de tarefas de volta pra lista de pessoas
+    const voltarBtn = document.getElementById('recurringBackBtn');
+    if (voltarBtn) {
+        voltarBtn.addEventListener('click', () => {
+            recurringSelectedPersonId = null;
+            const busca = document.getElementById('recurringTasksSearch');
+            if (busca) busca.value = '';
+            renderRecurringTasksList();
+        });
+    }
+
+    const busca = document.getElementById('recurringTasksSearch');
+    if (busca) busca.addEventListener('input', renderRecurringTasksList);
+
+    // Confere na abertura e de minuto em minuto. Um minuto é fino o bastante
+    // pra quem já está com o quadro aberto às 07:00 ver a virada quase na
+    // hora, e é barato (a checagem para na primeira linha quando o dia de
+    // hoje já rodou).
+    runRecurringResetIfDue();
+    setInterval(runRecurringResetIfDue, 60 * 1000);
 }
 
 function extractMentionTokens(text) {
@@ -4976,13 +5433,15 @@ function showToastWithUndo(message, onUndo, seconds) {
 function getProgress(card) {
     let total = 0;
     let done = 0;
-    card.checklist.forEach(item => {
+    // Só as ATIVIDADES (itens de primeiro nível) contam na barra geral do
+    // post-it. Os sub-itens ficam de fora de propósito: eles medem o andamento
+    // DAQUELA atividade, não do post-it inteiro — senão uma atividade com 10
+    // sub-itens pesaria 10x mais na barra do que outra sem nenhum.
+    // O progresso dos sub-itens aparece por atividade (ver
+    // getChecklistItemProgress, usado em buildChecklistItemRow).
+    (card.checklist || []).forEach(item => {
         total++;
         if (item.checked) done++;
-        (item.subItems || []).forEach(sub => {
-            total++;
-            if (sub.checked) done++;
-        });
     });
 
     // Se a pessoa definiu uma porcentagem manual, ela manda — em vez do
@@ -4993,6 +5452,15 @@ function getProgress(card) {
 
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
     return { done, total, percent };
+}
+
+// Progresso de UMA atividade do checklist, contando só os sub-itens dela.
+// Devolve null quando a atividade não tem sub-itens (aí não há o que mostrar).
+function getChecklistItemProgress(item) {
+    const subs = item.subItems || [];
+    if (subs.length === 0) return null;
+    const done = subs.filter(s => s.checked).length;
+    return { done, total: subs.length, percent: Math.round((done / subs.length) * 100) };
 }
 
 function buildProgressBarHtml(progress, card) {
@@ -5336,6 +5804,119 @@ function updateChecklistLineNumbers() {
     gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
 }
 
+// Desenha a caixa de resumo no cabeçalho do post-it.
+function renderViewCardResumo(card) {
+    const section = document.getElementById('viewCardResumoSection');
+    const el = document.getElementById('viewCardResumo');
+    if (!section || !el) return;
+
+    const texto = (card.resumo || '').trim();
+
+    if (texto) {
+        // linkifyText já escapa o texto e transforma links em <a> clicáveis
+        el.innerHTML = linkifyText(texto);
+        el.classList.remove('view-resumo-vazio');
+        section.style.display = 'block';
+    } else if (!isObserver) {
+        // Sem resumo, mas quem está vendo pode escrever: mostra o convite,
+        // senão não haveria onde dar o duplo clique pra criar o primeiro.
+        el.textContent = 'Sem resumo — dois cliques para escrever';
+        el.classList.add('view-resumo-vazio');
+        section.style.display = 'block';
+    } else {
+        el.textContent = '';
+        el.classList.remove('view-resumo-vazio');
+        section.style.display = 'none';
+    }
+
+    // Recria o listener a cada render porque o texto (e o card) mudam
+    el.ondblclick = isObserver ? null : (e) => startInlineEditCardResumo(e, card.id);
+    el.title = isObserver ? '' : 'Dois cliques para editar';
+}
+
+// Edição do resumo direto no post-it aberto (duplo clique). Diferente do
+// título, aqui Enter quebra linha em vez de salvar — resumo é texto de
+// várias linhas. Salva ao clicar fora; Esc cancela.
+function startInlineEditCardResumo(event, cardId) {
+    event.stopPropagation();
+    const el = event.currentTarget;
+    const card = state.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    // Começa do texto puro (sem os links já transformados em <a>) e sem o
+    // texto de convite, que não é conteúdo de verdade.
+    el.classList.remove('view-resumo-vazio');
+    el.textContent = card.resumo || '';
+
+    el.contentEditable = 'true';
+    el.classList.add('editing');
+    el.focus();
+    document.execCommand('selectAll', false, null);
+
+    const finish = async (commit) => {
+        el.contentEditable = 'false';
+        el.classList.remove('editing');
+        el.removeEventListener('blur', onBlur);
+        el.removeEventListener('keydown', onKeydown);
+        el.removeEventListener('paste', onPaste);
+
+        if (commit) {
+            // O contentEditable troca espaços por &nbsp;; volta pra espaço normal
+            const novo = el.innerText.replace(/\u00a0/g, ' ').trim();
+            if (novo !== (card.resumo || '')) {
+                card.resumo = novo;
+                // Espera o servidor confirmar antes de seguir — a sincronização
+                // automática roda a cada 6s e sobrescreveria a edição com a
+                // versão antiga se ela ainda não tivesse sido gravada.
+                await persistCard(card);
+                logAudit(`Editou o resumo da tarefa "${card.title}"`);
+            }
+        }
+
+        renderViewCardResumo(card);
+    };
+
+    const onBlur = () => finish(true);
+    const onKeydown = (e) => {
+        // Enter quebra linha (comportamento padrão). Esc cancela.
+        if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    };
+    // Cola sempre como texto puro — resumo não guarda formatação
+    const onPaste = (e) => {
+        e.preventDefault();
+        const texto = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, texto);
+    };
+
+    el.addEventListener('blur', onBlur);
+    el.addEventListener('keydown', onKeydown);
+    el.addEventListener('paste', onPaste);
+}
+
+// Desenha a lista de atividades (e sub-itens) dentro do modal do post-it.
+// Fica separada de openViewModal porque marcar um sub-item precisa redesenhar
+// só esta parte — abrir o modal inteiro de novo perderia a rolagem da tela.
+function renderViewCardChecklist(card) {
+    const checklistContainer = document.getElementById('viewCardChecklist');
+    if (!checklistContainer) return;
+
+    checklistContainer.innerHTML = '';
+    (card.checklist || []).forEach((item, index) => {
+        checklistContainer.appendChild(buildChecklistItemRow(card, item, index, null));
+        (item.subItems || []).forEach((subItem, subIndex) => {
+            checklistContainer.appendChild(buildChecklistItemRow(card, subItem, index, subIndex));
+        });
+        if (!isObserver) {
+            const addSubBtn = document.createElement('button');
+            addSubBtn.type = 'button';
+            addSubBtn.className = 'checklist-add-sub-btn';
+            addSubBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar sub-item';
+            addSubBtn.addEventListener('click', () => addSubChecklistItem(card.id, index));
+            checklistContainer.appendChild(addSubBtn);
+        }
+    });
+}
+
 function buildChecklistItemRow(card, item, itemIndex, subIndex) {
     const row = document.createElement('div');
     row.className = subIndex === null ? 'checklist-item' : 'checklist-item checklist-subitem';
@@ -5347,7 +5928,11 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
     checkbox.addEventListener('change', () => {
         persistChecklistToggle(card.id, itemIndex, subIndex);
         toggleChecklistItemLocally(card, itemIndex, subIndex);
-        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(state.cards.find(c => c.id === card.id)), card);
+        const atual = state.cards.find(c => c.id === card.id) || card;
+        document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(atual), card);
+        // Redesenha as linhas: marcar um sub-item muda a barrinha da atividade
+        // a que ele pertence.
+        renderViewCardChecklist(atual);
         renderBoard();
     });
     row.appendChild(checkbox);
@@ -5360,6 +5945,23 @@ function buildChecklistItemRow(card, item, itemIndex, subIndex) {
         span.addEventListener('dblclick', (e) => startInlineEditChecklistText(e, card.id, itemIndex, subIndex));
     }
     row.appendChild(span);
+
+    // Barrinha de progresso da atividade — só nos itens de primeiro nível que
+    // têm sub-itens. É o andamento DAQUELA atividade; não entra na barra geral
+    // do post-it (ver getProgress).
+    if (subIndex === null) {
+        const itemProgress = getChecklistItemProgress(item);
+        if (itemProgress) {
+            const prog = document.createElement('span');
+            prog.className = 'checklist-item-progress';
+            prog.title = `${itemProgress.done} de ${itemProgress.total} sub-itens concluídos`;
+            prog.innerHTML = `
+                <span class="checklist-item-progress-track"><span class="checklist-item-progress-fill" style="width:${itemProgress.percent}%"></span></span>
+                <span class="checklist-item-progress-label">${itemProgress.percent}% (${itemProgress.done}/${itemProgress.total})</span>
+            `;
+            row.appendChild(prog);
+        }
+    }
 
     if (!isObserver) {
         const delBtn = document.createElement('button');
@@ -5696,6 +6298,7 @@ function openCardModalForEdit(cardId) {
     document.getElementById('cardPriority').value = card.priority;
     document.getElementById('cardDueDate').value = card.dueDate || '';
     document.getElementById('cardStartDate').value = card.startDate || '';
+    document.getElementById('cardResumo').value = card.resumo || '';
     document.getElementById('cardAttachments').value = '';
 
     renderExistingAttachments(card);
@@ -5772,23 +6375,13 @@ function openViewModal(cardId) {
 
     document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);
 
+    // Resumo — editável por duplo clique, igual ao título e aos itens do
+    // checklist. Quem só observa não edita: pra essa pessoa a caixa some
+    // quando não há resumo escrito, em vez de mostrar um convite pra editar.
+    renderViewCardResumo(card);
+
     // Checklist (clicável direto na visualização, com edição por duplo clique e sub-checklists)
-    const checklistContainer = document.getElementById('viewCardChecklist');
-    checklistContainer.innerHTML = '';
-    card.checklist.forEach((item, index) => {
-        checklistContainer.appendChild(buildChecklistItemRow(card, item, index, null));
-        (item.subItems || []).forEach((subItem, subIndex) => {
-            checklistContainer.appendChild(buildChecklistItemRow(card, subItem, index, subIndex));
-        });
-        if (!isObserver) {
-            const addSubBtn = document.createElement('button');
-            addSubBtn.type = 'button';
-            addSubBtn.className = 'checklist-add-sub-btn';
-            addSubBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar sub-item';
-            addSubBtn.addEventListener('click', () => addSubChecklistItem(card.id, index));
-            checklistContainer.appendChild(addSubBtn);
-        }
-    });
+    renderViewCardChecklist(card);
 
     // Campos Personalizados
     const customFieldsSection = document.getElementById('viewCardCustomFieldsSection');
@@ -6032,7 +6625,12 @@ function renderOnlineUsers(currentUser) {
         // quem nem está em state.members (o visitante que cai no
         // dashboard-only-mode) — os dois só visualizam, então nenhum dos dois
         // deve contar como gente conectada trabalhando no quadro.
-        .filter(u => getMemberRole(u) !== 'Observador');
+        .filter(u => getMemberRole(u) !== 'Observador')
+        // Perfis ocultos deste departamento (ver PERFIS_OCULTOS_NO_ONLINE).
+        // Some pra todo mundo, inclusive pra própria pessoa — a lista é
+        // montada no navegador de cada um a partir do mesmo state.knownUsers,
+        // então não dá pra esconder só pros outros.
+        .filter(u => !(PERFIS_OCULTOS_NO_ONLINE[CURRENT_DEPARTMENT] || []).includes(u));
     list.innerHTML = '';
 
     users.slice(0, 5).forEach(user => {
