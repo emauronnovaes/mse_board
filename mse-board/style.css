@@ -310,6 +310,20 @@ h1, h2, h3, h4 {
     text-transform: uppercase;
 }
 
+/* O título do quadro vira link pro Portal MSE — herda as cores já definidas
+   acima pra continuar idêntico ao que era antes (sem azul de link nem
+   sublinhado). display:block porque o <small> do departamento é block e
+   precisa continuar caindo na linha de baixo. */
+.navbar-brand h1 .navbar-brand-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.navbar-brand h1 .navbar-brand-link:hover span:not(.mse-red) {
+    color: rgba(255, 255, 255, 0.75);
+}
+
 .navbar-brand h1 .mse-red {
     color: #5b9bf0;
 }
@@ -1087,6 +1101,39 @@ h1, h2, h3, h4 {
     border-left: 2px solid var(--border);
 }
 
+/* Progresso por ATIVIDADE: só conta os sub-itens daquela linha. Fica de fora
+   da barra geral do post-it de propósito (ver getProgress no script.js). */
+.checklist-item-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.checklist-item-progress-track {
+    width: 48px;
+    height: 5px;
+    border-radius: 999px;
+    background-color: var(--border);
+    overflow: hidden;
+}
+
+.checklist-item-progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background-color: var(--accent);
+    transition: width 0.2s ease;
+}
+
+.checklist-item-progress-label {
+    font-size: 0.66rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 .checklist-item-delete-btn {
     background: none;
     border: none;
@@ -1350,10 +1397,21 @@ h1, h2, h3, h4 {
 
 .view-header {
     display: flex;
-    align-items: center;
-    gap: 0.8rem;
+    align-items: flex-start;
+    gap: 1rem;
     margin-bottom: 1.2rem;
     padding-right: 1.5rem;
+}
+
+/* Bloco do título (bolinha de cor + nome + adesivo + favoritar). Fica numa
+   div própria pra manter o alinhamento vertical central entre eles, mesmo
+   com o resumo alto ao lado. */
+.view-header-main {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .view-color-dot {
@@ -1417,6 +1475,76 @@ h1, h2, h3, h4 {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-bottom: 0.7rem;
+}
+
+/* Resumo da tarefa — caixa à direita do título, no cabeçalho do post-it.
+   A largura é proporcional (42%) com teto em 260px: larga o bastante pra
+   caber uma frase inteira sem espremer o título ao lado. Resumo comprido
+   ganha rolagem própria em vez de esticar o cabeçalho. */
+.view-resumo-box {
+    flex: 0 1 42%;
+    max-width: 260px;
+    max-height: 7.5rem;
+    overflow-y: auto;
+    background-color: var(--bg);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-s);
+    padding: 0.55rem 0.75rem;
+}
+
+.view-resumo-label {
+    display: block;
+    font-size: 0.62rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+/* Texto corrido, respeita as quebras de linha digitadas */
+.view-resumo {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+/* Convite pra escrever o primeiro resumo (post-it ainda sem resumo) */
+.view-resumo.view-resumo-vazio {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.view-resumo-box:hover {
+    border-left-color: var(--accent-hover);
+}
+
+/* Enquanto está sendo editado por duplo clique */
+.view-resumo.editing {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+    background-color: var(--card);
+    font-style: normal;
+    color: var(--text-primary);
+    cursor: text;
+}
+
+/* Em tela estreita não cabem as duas colunas: o resumo desce pra baixo do
+   título e ocupa a largura toda. */
+@media (max-width: 620px) {
+    .view-header {
+        flex-direction: column;
+    }
+
+    .view-resumo-box {
+        flex: none;
+        max-width: none;
+        width: 100%;
+    }
 }
 
 .view-checklist {
@@ -3973,4 +4101,173 @@ body.dashboard-only-mode .dashboard-modal-content {
 .dsg-restore-task-btn:hover {
     background-color: var(--dsg-blue);
     color: #fff;
+}
+
+/* ==========================================
+   TAREFAS RECORRENTES (modal do quadro de Planejamento)
+   ========================================== */
+.recurring-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 45vh;
+    overflow-y: auto;
+    padding-right: 0.3rem;
+}
+
+.recurring-task-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    flex-wrap: wrap;
+}
+
+/* Só esta parte marca/desmarca. Os <select> ficam de fora do <label> de
+   propósito: dentro dele, mexer no seletor desmarcaria a tarefa. */
+.recurring-task-main {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.recurring-task-row:hover {
+    background-color: var(--line-2);
+}
+
+/* Barra lateral azul marca, de relance, quem já é recorrente */
+.recurring-task-row.is-recurring {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.recurring-task-row input[type="checkbox"] {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.recurring-task-row input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+.recurring-task-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.recurring-task-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recurring-task-where {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.recurring-task-badge {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+/* Seletores "Volta para" / "Na coluna" de cada tarefa recorrente */
+.recurring-task-target {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex-shrink: 0;
+}
+
+.recurring-task-target label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.recurring-task-target select {
+    padding: 0.3rem 0.45rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-family: var(--font-display);
+}
+
+/* Trilha "Voltar / Tarefas de Fulano" acima da lista */
+.recurring-crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.8rem;
+}
+
+.recurring-crumb #recurringCrumbLabel {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Linha de pessoa (primeira tela do modal) */
+.recurring-person-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background-color: var(--card);
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+
+.recurring-person-row:hover {
+    background-color: var(--line-2);
+}
+
+.recurring-person-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--navy);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.recurring-person-avatar-done {
+    background-color: var(--green);
+}
+
+.recurring-person-chevron {
+    color: var(--text-muted);
+    flex-shrink: 0;
 }

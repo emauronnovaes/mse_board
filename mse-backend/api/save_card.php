@@ -55,6 +55,7 @@ try {
         'due_date'        => $c['dueDate'] ?? null,
         'start_date'      => $c['startDate'] ?? null,
         'observacao'      => $c['observacao'] ?? '',
+        'resumo'          => $c['resumo'] ?? '',
         'manual_progress' => array_key_exists('manualProgress', $c) ? $c['manualProgress'] : null,
         'hidden_from_dashboard' => !empty($c['hiddenFromDashboard']) ? 1 : 0,
         'position'        => array_key_exists('position', $c) ? $c['position'] : null,

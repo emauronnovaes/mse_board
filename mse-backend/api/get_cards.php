@@ -32,6 +32,7 @@ try {
             'dueDate' => $r['due_date'],
             'startDate' => $r['start_date'] ?? null,
             'observacao' => $r['observacao'] ?? '',
+            'resumo' => $r['resumo'] ?? '',
             'manualProgress' => isset($r['manual_progress']) && $r['manual_progress'] !== null ? (int) $r['manual_progress'] : null,
             'hiddenFromDashboard' => isset($r['hidden_from_dashboard']) ? (bool) $r['hidden_from_dashboard'] : false,
             'position' => isset($r['position']) && $r['position'] !== null ? (float) $r['position'] : null,

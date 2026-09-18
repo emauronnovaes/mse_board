@@ -238,7 +238,10 @@
             <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Abrir menu" style="display:none;">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <h1><span class="mse-red">MSE</span> <span>Board</span> <small id="departmentLabel">(Programação)</small></h1>
+            <!-- O título é um link de volta pro Portal MSE — o board é aberto
+                 a partir de lá, e clicar no nome do quadro é o caminho que a
+                 pessoa espera pra voltar. -->
+            <h1><a class="navbar-brand-link" href="https://portalmse.com.br/index.php" title="Voltar ao Portal MSE"><span class="mse-red">MSE</span> <span>Board</span> <small id="departmentLabel">(Programação)</small></a></h1>
         </div>
 
         <!-- Indicador de Pessoas Conectadas -->
@@ -273,6 +276,9 @@
                 <button id="addPersonBtn" class="btn-secondary"><i class="fa-solid fa-user-plus"></i> Adicionar Pessoa</button>
                 <button id="addDoneTabBtn" class="btn-secondary"><i class="fa-solid fa-flag-checkered"></i> Aba Concluído</button>
                 <button id="addMembersBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-users"></i> Adicionar Membros</button>
+                <!-- Só aparece no quadro de Planejamento (ver setupTarefasRecorrentes),
+                     e lá fica visível pra todo mundo, não só pra Admin. -->
+                <button id="recurringTasksBtn" class="btn-secondary" style="display:none;" title="Tarefas que voltam pra Fazendo todo dia às 07:00"><i class="fa-solid fa-rotate"></i> Tarefas Recorrentes</button>
                 <span class="action-buttons-divider"></span>
                 <button id="openModalBtn" class="btn-primary"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
             </div>
@@ -384,6 +390,11 @@
                 </div>
 
                 <div class="input-group">
+                    <label for="cardResumo">Resumo (do que se trata esta tarefa)</label>
+                    <textarea id="cardResumo" rows="3" placeholder="Ex: Revisão completa do projeto estrutural do Hangar A antes do envio ao CREA. Inclui conferência de medições e validação de carga."></textarea>
+                </div>
+
+                <div class="input-group">
                     <label for="cardDesc">Checklist de Atividades (1 por linha)</label>
                     <div class="checklist-textarea-wrap">
                         <div class="checklist-line-numbers" id="cardDescLineNumbers">1</div>
@@ -468,10 +479,19 @@
             <img id="viewCardCover" class="view-cover-img" style="display:none;" alt="Capa da tarefa">
 
             <div class="view-header">
-                <span id="viewCardColorDot" class="view-color-dot"></span>
-                <h2 id="viewCardTitle">Título da Tarefa</h2>
-                <span id="viewCardSticker" class="view-sticker-badge" style="display:none;"></span>
-                <button type="button" id="viewStarBtn" class="postit-star-btn" title="Favoritar" style="font-size:1.3rem;"><i class="fa-solid fa-star"></i></button>
+                <div class="view-header-main">
+                    <span id="viewCardColorDot" class="view-color-dot"></span>
+                    <h2 id="viewCardTitle">Título da Tarefa</h2>
+                    <span id="viewCardSticker" class="view-sticker-badge" style="display:none;"></span>
+                    <button type="button" id="viewStarBtn" class="postit-star-btn" title="Favoritar" style="font-size:1.3rem;"><i class="fa-solid fa-star"></i></button>
+                </div>
+
+                <!-- Resumo ao lado do título. Só aparece quando a tarefa tem
+                     resumo escrito (ver openViewModal). -->
+                <div id="viewCardResumoSection" class="view-resumo-box" style="display:none;">
+                    <span class="view-resumo-label">Resumo</span>
+                    <p id="viewCardResumo" class="view-resumo"></p>
+                </div>
             </div>
 
             <div id="viewCardLabels" class="view-labels-row"></div>
@@ -800,6 +820,38 @@
             </div>
 
             <button type="button" id="saveAboutBoardBtn" class="btn-primary">Salvar</button>
+        </div>
+    </div>
+
+    <!-- Modal: Tarefas Recorrentes -->
+    <div id="recurringTasksModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closeRecurringTasksModalBtn">&times;</span>
+            <h3>Tarefas Recorrentes</h3>
+            <p class="settings-subtitle">
+                Escolha a pessoa, depois marque as tarefas dela que se repetem todo dia.
+                <strong>Todo dia às 07:00</strong> a tarefa marcada sai de "Concluída" e volta
+                sozinha para a raia que você escolher (Fazendo, A Fazer, Em Teste ou Pausado),
+                na coluna dela, com o checklist desmarcado. Tarefa que não estiver concluída
+                fica como está.
+            </p>
+            <p class="settings-subtitle" id="recurringTasksStatus"></p>
+
+            <div class="recurring-crumb">
+                <button type="button" id="recurringBackBtn" class="btn-secondary" style="display:none;">
+                    <i class="fa-solid fa-arrow-left"></i> Voltar
+                </button>
+                <span id="recurringCrumbLabel">Escolha a pessoa</span>
+            </div>
+
+            <div class="input-group">
+                <label for="recurringTasksSearch">Buscar</label>
+                <input type="text" id="recurringTasksSearch" placeholder="Digite parte do nome ou do título...">
+            </div>
+
+            <div id="recurringTasksList" class="recurring-tasks-list">
+                <!-- Preenchido via JS (lista de pessoas ou lista de tarefas) -->
+            </div>
         </div>
     </div>
 
