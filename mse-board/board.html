@@ -271,28 +271,31 @@
     <!-- Área Principal do Quadro -->
     <main class="board-container">
 
-        <!-- Barra compacta: botões numa linha, busca+filtros na outra -->
-        <section class="board-actions board-actions-compact">
-            <div style="display:none;">
-                <h2 id="boardTitleDisplay">Quadro Geral de Equipe</h2>
-                <p class="subtitle" id="boardDescDisplay">Adicione pessoas e atribua tarefas com checklists e anexos</p>
-            </div>
+        <!-- Os dois "minimizar" na MESMA linha: cada um sozinho gastaria uma
+             linha de altura só pra existir, e a ideia aqui é justamente sobrar
+             altura pros post-its. -->
+        <div class="board-toggles">
+            <button type="button" id="toggleActionsBtn" class="toggle-filters-btn">
+                <span id="toggleActionsIcon">▲</span> Ações do Quadro
+            </button>
+            <span class="board-toggles-sep">·</span>
+            <button type="button" id="toggleFiltersBtn" class="toggle-filters-btn">
+                <span id="toggleFiltersIcon">▲</span> Busca e Filtros
+            </button>
+        </div>
+
+        <!-- Barra de botões — minimizável (ver toggleActionsBtn) -->
+        <section class="board-actions board-actions-compact" id="boardActionsContent">
             <div class="action-buttons-group">
-                <button id="aboutBoardBtn" class="btn-secondary" title="Sobre este quadro"><i class="fa-solid fa-circle-info"></i> Sobre</button>
                 <button id="addPersonBtn" class="btn-secondary"><i class="fa-solid fa-user-plus"></i> Adicionar Pessoa</button>
-                <button id="addDoneTabBtn" class="btn-secondary"><i class="fa-solid fa-flag-checkered"></i> Aba Concluído</button>
                 <button id="addMembersBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-users"></i> Adicionar Membros</button>
                 <!-- Só aparece no quadro de Planejamento (ver setupTarefasRecorrentes),
                      e lá fica visível pra todo mundo, não só pra Admin. -->
-                <button id="recurringTasksBtn" class="btn-secondary" style="display:none;" title="Tarefas que voltam pra Fazendo todo dia às 07:00"><i class="fa-solid fa-rotate"></i> Tarefas Recorrentes</button>
+                <button id="recurringTasksBtn" class="btn-secondary" style="display:none;" title="Tarefas que se repetem e voltam sozinhas pra raia escolhida"><i class="fa-solid fa-rotate"></i> Tarefas Recorrentes</button>
                 <span class="action-buttons-divider"></span>
                 <button id="openModalBtn" class="btn-primary"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
             </div>
         </section>
-
-        <button type="button" id="toggleFiltersBtn" class="toggle-filters-btn">
-            <span id="toggleFiltersIcon">▲</span> Busca e Filtros
-        </button>
 
         <section class="filter-bar filter-bar-compact" id="filterBarContent">
             <input type="text" id="searchInput" placeholder="Buscar por título, checklist ou responsável..." class="search-input">
@@ -806,26 +809,6 @@
             </form>
 
             <div id="labelsList" class="members-list"></div>
-        </div>
-    </div>
-
-    <!-- Modal: Sobre este Quadro -->
-    <div id="aboutBoardModal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" id="closeAboutBoardModalBtn">&times;</span>
-            <h3>Sobre este Quadro</h3>
-
-            <div class="input-group">
-                <label for="boardNameInput">Nome do quadro</label>
-                <input type="text" id="boardNameInput" placeholder="Quadro Geral de Equipe">
-            </div>
-
-            <div class="input-group">
-                <label for="boardDescInput">Descrição</label>
-                <textarea id="boardDescInput" rows="3" placeholder="Do que se trata este quadro?"></textarea>
-            </div>
-
-            <button type="button" id="saveAboutBoardBtn" class="btn-primary">Salvar</button>
         </div>
     </div>
 

@@ -1459,27 +1459,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderBoard();
         });
 
-        // Sobre este Quadro
-        document.getElementById('aboutBoardBtn').addEventListener('click', () => {
-            document.getElementById('boardNameInput').value = state.boardInfo.name;
-            document.getElementById('boardDescInput').value = state.boardInfo.description;
-            document.getElementById('aboutBoardModal').style.display = 'flex';
-        });
-
-        document.getElementById('closeAboutBoardModalBtn').addEventListener('click', () => {
-            document.getElementById('aboutBoardModal').style.display = 'none';
-        });
-
-        document.getElementById('saveAboutBoardBtn').addEventListener('click', () => {
-            const name = document.getElementById('boardNameInput').value.trim() || 'Quadro Geral de Equipe';
-            const description = document.getElementById('boardDescInput').value.trim();
-            state.boardInfo = { name, description };
-            saveState();
-            applyBoardInfo();
-            document.getElementById('aboutBoardModal').style.display = 'none';
-            showToast('Informações do quadro salvas!', 'success');
-        });
-
         await loadState();
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
@@ -1559,7 +1538,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         renderOnlineUsers(userData.name);
-        applyBoardInfo();
         updatePendingApprovalsBadge();
         updateErrorLogBadge();
 
@@ -1750,11 +1728,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cardModal = document.getElementById('cardModal');
 
         document.getElementById('addPersonBtn').addEventListener('click', () => {
-            openPersonModalForCreate(false);
-        });
-
-        document.getElementById('addDoneTabBtn').addEventListener('click', () => {
-            openPersonModalForCreate(true);
+            openPersonModalForCreate();
         });
 
         document.getElementById('closePersonModalBtn').addEventListener('click', () => {
@@ -1909,20 +1883,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderBoard();
         });
 
-        // Botão de minimizar Busca e Filtros (lembra o estado entre acessos)
-        const filterBarContent = document.getElementById('filterBarContent');
-        const toggleFiltersIcon = document.getElementById('toggleFiltersIcon');
-        if (localStorage.getItem('mse_filters_hidden') === 'true') {
-            filterBarContent.classList.add('filters-hidden');
-            toggleFiltersIcon.textContent = '▼';
-        }
-        document.getElementById('toggleFiltersBtn').addEventListener('click', () => {
-            const isHidden = filterBarContent.classList.toggle('filters-hidden');
-            toggleFiltersIcon.textContent = isHidden ? '▼' : '▲';
-            localStorage.setItem('mse_filters_hidden', isHidden ? 'true' : 'false');
-        });
+        // Botões de minimizar as duas barras de cima (Ações e Busca/Filtros).
+        // A escolha fica lembrada por navegador — quem trabalha em notebook
+        // minimiza uma vez e o quadro abre assim nas próximas.
+        ligarBarraMinimizavel('toggleFiltersBtn', 'toggleFiltersIcon', 'filterBarContent', 'mse_filters_hidden');
+        ligarBarraMinimizavel('toggleActionsBtn', 'toggleActionsIcon', 'boardActionsContent', 'mse_actions_hidden');
     }
 });
+
+// Liga um par "botão ▲/▼ + seção" pra minimizar/expandir, guardando a
+// escolha no localStorage. Serve as duas barras do topo do quadro (Ações e
+// Busca/Filtros) — a lógica era a mesma nas duas, então virou uma função só.
+function ligarBarraMinimizavel(btnId, iconId, secaoId, chaveStorage) {
+    const btn = document.getElementById(btnId);
+    const icon = document.getElementById(iconId);
+    const secao = document.getElementById(secaoId);
+    if (!btn || !icon || !secao) return;
+
+    // Estado inicial: expandido por padrão; minimizado se foi assim na última vez
+    if (localStorage.getItem(chaveStorage) === 'true') {
+        secao.classList.add('filters-hidden');
+        icon.textContent = '▼';
+    }
+
+    btn.addEventListener('click', () => {
+        const minimizada = secao.classList.toggle('filters-hidden');
+        icon.textContent = minimizada ? '▼' : '▲';
+        try {
+            localStorage.setItem(chaveStorage, minimizada ? 'true' : 'false');
+        } catch (err) {
+            // Sem localStorage (janela privada, etc): o minimizar segue
+            // funcionando, só não é lembrado no próximo acesso.
+            console.warn('Não foi possível lembrar o estado da barra:', err);
+        }
+    });
+}
 
 // ==========================================
 // ESTADO E PERSISTÊNCIA (localStorage)
@@ -2155,7 +2150,6 @@ async function loadState() {
         if (!state.privateComments) state.privateComments = [];
         if (!state.mentions) state.mentions = [];
         if (!state.loginAttempts) state.loginAttempts = {};
-        if (!state.boardInfo) state.boardInfo = { name: 'Quadro Geral de Equipe', description: 'Adicione pessoas e atribua tarefas com checklists e anexos' };
         if (!state.errorLog) state.errorLog = [];
         state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.startDate === undefined) c.startDate = null; if (c.observacao === undefined) c.observacao = ''; if (c.resumo === undefined) c.resumo = ''; });
         if (currentUserName && !state.knownUsers.includes(currentUserName)) state.knownUsers.push(currentUserName);
@@ -2186,7 +2180,6 @@ async function loadState() {
     state.trash = [];
     state.templates = [];
     state.labels = [];
-    state.boardInfo = { name: 'Quadro Geral de Equipe', description: 'Adicione pessoas e atribua tarefas com checklists e anexos' };
     state.errorLog = [];
     state.people = [];
     state.cards = [];
@@ -2722,13 +2715,6 @@ function toggleStar(cardId) {
     if (!card) return;
     card.starred = !card.starred;
     persistCard(card);
-}
-
-function applyBoardInfo() {
-    const titleEl = document.getElementById('boardTitleDisplay');
-    const descEl = document.getElementById('boardDescDisplay');
-    if (titleEl) titleEl.textContent = state.boardInfo.name;
-    if (descEl) descEl.textContent = state.boardInfo.description;
 }
 
 function getMemberRole(name) {
@@ -7230,13 +7216,16 @@ function populatePersonSelect(selectedId) {
 // MODAL DE PESSOA: CRIAR / EDITAR
 // ==========================================
 
-function openPersonModalForCreate(isDoneTab) {
-    document.getElementById('personModalTitle').textContent = isDoneTab ? 'Nova Aba de Concluído' : 'Adicionar Membro da Equipe';
-    document.getElementById('personFormSubmitBtn').textContent = isDoneTab ? 'Criar Aba' : 'Criar Coluna de Tarefas';
+// Só cria coluna de PESSOA. A criação de "Aba de Concluído" foi removida —
+// as abas que já existem seguem funcionando (e ainda podem ser renomeadas por
+// openPersonModalForEdit, que continua respeitando o person.isDone delas).
+function openPersonModalForCreate() {
+    document.getElementById('personModalTitle').textContent = 'Adicionar Membro da Equipe';
+    document.getElementById('personFormSubmitBtn').textContent = 'Criar Coluna de Tarefas';
     document.getElementById('editingPersonId').value = '';
-    document.getElementById('personIsDoneInput').value = isDoneTab ? 'true' : '';
-    document.getElementById('personNameInput').value = isDoneTab ? 'Concluído' : '';
-    document.getElementById('personNameInput').placeholder = isDoneTab ? 'Ex: Concluído - Equipe Estrutural' : 'Ex: Roberto (Engenharia)';
+    document.getElementById('personIsDoneInput').value = '';
+    document.getElementById('personNameInput').value = '';
+    document.getElementById('personNameInput').placeholder = 'Ex: Roberto (Engenharia)';
     document.getElementById('personAvatarInput').value = '';
     document.getElementById('personAvatarPreview').innerHTML = '';
     document.getElementById('personModal').style.display = 'flex';
