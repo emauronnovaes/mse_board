@@ -4213,6 +4213,16 @@ body.dashboard-only-mode .dashboard-modal-content {
     font-family: var(--font-mono);
 }
 
+.recurring-time-input {
+    padding: 0.3rem 0.45rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+}
+
 .recurring-task-target select {
     padding: 0.3rem 0.45rem;
     border-radius: var(--radius-s);

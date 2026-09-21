@@ -4979,7 +4979,24 @@ function setupComentariosParticulares() {
 // board_state (o mesmo blob que todo mundo relê a cada 6 segundos), quem
 // abrir o quadro às 11h ainda pega o reinício do dia se ninguém abriu antes.
 
+// Horário PADRÃO de reinício (07:00). Cada tarefa guarda o próprio horário em
+// resetHour/resetMinute — este valor só é usado pra tarefas novas e pras
+// antigas, que foram criadas quando o horário era fixo pra todo mundo.
 const RECURRING_RESET_HOUR = 7;
+const RECURRING_RESET_MINUTE = 0;
+
+// Horário de uma tarefa, sempre como {hora, minuto} válidos
+function horarioDaRecorrencia(t) {
+    const hora = (t && typeof t.resetHour === 'number') ? t.resetHour : RECURRING_RESET_HOUR;
+    const minuto = (t && typeof t.resetMinute === 'number') ? t.resetMinute : RECURRING_RESET_MINUTE;
+    return { hora, minuto };
+}
+
+// "07:00" — pra mostrar na tela e preencher o <input type="time">
+function horarioDaRecorrenciaTexto(t) {
+    const { hora, minuto } = horarioDaRecorrencia(t);
+    return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+}
 
 // Data local no formato AAAA-MM-DD. É de propósito que NÃO usa toISOString():
 // aquele converte pra UTC e, de madrugada, devolveria o dia errado no Brasil.
@@ -5031,6 +5048,10 @@ function ensureRecurringState() {
         if (t.frequency === 'semanal' && typeof t.weekday !== 'number') t.weekday = 1;
         if (t.frequency === 'mensal' && typeof t.monthday !== 'number') t.monthday = 1;
         if (!t.lastResetDate) t.lastResetDate = rec.lastResetDate;
+        // Tarefas criadas quando o horário era fixo pro quadro inteiro
+        // continuam nas 07:00, que era o comportamento delas.
+        if (typeof t.resetHour !== 'number') t.resetHour = RECURRING_RESET_HOUR;
+        if (typeof t.resetMinute !== 'number') t.resetMinute = RECURRING_RESET_MINUTE;
     });
 
     return rec;
@@ -5073,9 +5094,12 @@ function ultimaOcorrenciaRecorrente(t, agora) {
     // possível é ~31 dias) e evita laço infinito se algo vier torto.
     for (let i = 0; i < 400; i++) {
         if (dataBateComRecorrencia(t, d)) {
-            // No próprio dia de hoje só conta se as 07:00 já passaram
+            // No próprio dia de hoje só conta se o horário da tarefa já passou
             const ehHoje = i === 0;
-            if (!ehHoje || agora.getHours() >= RECURRING_RESET_HOUR) {
+            const { hora, minuto } = horarioDaRecorrencia(t);
+            const jaPassouHoje = agora.getHours() > hora
+                || (agora.getHours() === hora && agora.getMinutes() >= minuto);
+            if (!ehHoje || jaPassouHoje) {
                 return recurringDateKey(d);
             }
         }
@@ -5084,17 +5108,9 @@ function ultimaOcorrenciaRecorrente(t, agora) {
     return null;
 }
 
-// Está na hora de reiniciar esta tarefa?
-function recorrenteEstaVencida(t, agora) {
-    const ocorrencia = ultimaOcorrenciaRecorrente(t, agora);
-    if (!ocorrencia) return false;
-    // Datas em AAAA-MM-DD comparam certo como texto
-    return !t.lastResetDate || t.lastResetDate < ocorrencia;
-}
-
 // Frase curta descrevendo quando a tarefa reinicia ("Toda segunda-feira").
 function descreveRecorrencia(t) {
-    const hora = `0${RECURRING_RESET_HOUR}:00`;
+    const hora = horarioDaRecorrenciaTexto(t);
     if (t.frequency === 'semanal') {
         const dia = RECURRING_WEEKDAYS.find(w => w.key === t.weekday);
         return `Toda ${dia ? dia.label.toLowerCase() : 'segunda-feira'} às ${hora}`;
@@ -5129,11 +5145,13 @@ function toggleRecurringCard(cardId, ligado) {
                 homePersonId,
                 targetStatus: 'todo',
                 frequency: 'diaria',
+                resetHour: RECURRING_RESET_HOUR,
+                resetMinute: RECURRING_RESET_MINUTE,
                 // Nasce já "reiniciada hoje" pra não disparar no mesmo instante
                 // em que foi marcada — o primeiro reinício é na próxima data.
                 lastResetDate: recurringDateKey()
             });
-            logAudit(`"${card.title}" virou tarefa recorrente (volta pra Fazendo todo dia às 0${RECURRING_RESET_HOUR}:00)`);
+            logAudit(`"${card.title}" virou tarefa recorrente (volta pra Fazendo todo dia às ${horarioDaRecorrenciaTexto(null)})`);
         }
     } else {
         rec.tasks = rec.tasks.filter(t => t.cardId !== cardId);
@@ -5159,8 +5177,8 @@ function runRecurringResetIfDue() {
     const agora = new Date();
     const hoje = recurringDateKey(agora);
 
-    // Antes das 07:00 nenhuma regra dispara, seja qual for a frequência
-    if (agora.getHours() < RECURRING_RESET_HOUR) return;
+    // Não existe mais um corte de horário pro quadro inteiro: cada tarefa tem
+    // o próprio horário, então quem decide é ultimaOcorrenciaRecorrente().
 
     // Tira da lista as tarefas cujo post-it foi excluído
     const antes = rec.tasks.length;
@@ -5173,9 +5191,11 @@ function runRecurringResetIfDue() {
         const card = state.cards.find(c => c.id === t.cardId);
         if (!card) return;
 
-        // Cada tarefa tem a própria agenda (diária/semanal/mensal) e a própria
+        // Cada tarefa tem a própria agenda (frequência + horário) e a própria
         // data de último reinício — uma semanal não impede a diária de rodar.
-        if (!recorrenteEstaVencida(t, agora)) return;
+        const ocorrencia = ultimaOcorrenciaRecorrente(t, agora);
+        if (!ocorrencia) return;
+        if (t.lastResetDate && t.lastResetDate >= ocorrencia) return;
 
         const pessoaAtual = state.people.find(p => p.id === card.personId);
         const estaNumaAbaConcluido = !!(pessoaAtual && pessoaAtual.isDone);
@@ -5217,16 +5237,22 @@ function runRecurringResetIfDue() {
         moveCard(card.id, destino, raiaDestino);
         if (tinhaMarcado) persistCard(card); // moveCard só grava coluna/raia/conclusão
 
-        t.lastResetDate = hoje;
+        // Guarda a DATA DA OCORRÊNCIA, não a data de hoje. Faz diferença pra
+        // horário tardio: numa tarefa das 23:00 rodando atrasada às 02:00 do
+        // dia seguinte, marcar "hoje" faria o quadro achar que a execução
+        // desta noite já aconteceu, e ela seria pulada.
+        t.lastResetDate = ocorrencia;
         mudouAlgo = true;
         movidas++;
     });
 
-    // Tarefa vencida mas que não estava concluída também precisa marcar o dia,
-    // senão ela ficaria "vencida" pra sempre e seria reavaliada a cada minuto.
+    // Tarefa vencida mas que não estava concluída também precisa marcar a
+    // ocorrência, senão ficaria "vencida" pra sempre e seria reavaliada a
+    // cada minuto.
     rec.tasks.forEach(t => {
-        if (recorrenteEstaVencida(t, agora)) {
-            t.lastResetDate = hoje;
+        const ocorrencia = ultimaOcorrenciaRecorrente(t, agora);
+        if (ocorrencia && (!t.lastResetDate || t.lastResetDate < ocorrencia)) {
+            t.lastResetDate = ocorrencia;
             mudouAlgo = true;
         }
     });
@@ -5234,7 +5260,7 @@ function runRecurringResetIfDue() {
     rec.lastResetDate = hoje; // mantido só pra compatibilidade com dados antigos
 
     if (movidas > 0) {
-        logAudit(`Tarefas recorrentes: ${movidas} tarefa(s) reiniciadas (reinício das 0${RECURRING_RESET_HOUR}:00)`);
+        logAudit(`Tarefas recorrentes: ${movidas} tarefa(s) reiniciadas automaticamente`);
         renderBoard();
         showToast(`${movidas} tarefa(s) recorrente(s) foram reiniciadas`, 'success');
     } else if (mudouAlgo) {
@@ -5333,6 +5359,32 @@ function setRecurringMonthday(cardId, monthday) {
     if (!tarefa) return;
 
     tarefa.monthday = monthday;
+    tarefa.lastResetDate = recurringDateKey();
+
+    const card = (state.cards || []).find(c => c.id === cardId);
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}": ${descreveRecorrencia(tarefa)}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Horário em que a tarefa reinicia. Recebe o texto do <input type="time">
+// ("07:00"); valor vazio ou torto cai no padrão, pra nunca deixar a tarefa
+// com um horário que o agendador não saiba interpretar.
+function setRecurringTime(cardId, valor) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+
+    const partes = (valor || '').split(':');
+    let hora = parseInt(partes[0], 10);
+    let minuto = parseInt(partes[1], 10);
+    if (!Number.isInteger(hora) || hora < 0 || hora > 23) hora = RECURRING_RESET_HOUR;
+    if (!Number.isInteger(minuto) || minuto < 0 || minuto > 59) minuto = RECURRING_RESET_MINUTE;
+
+    tarefa.resetHour = hora;
+    tarefa.resetMinute = minuto;
+    // Reinicia a contagem a partir de hoje: mudar o horário não deve fazer a
+    // tarefa disparar de imediato por causa de uma ocorrência já vencida.
     tarefa.lastResetDate = recurringDateKey();
 
     const card = (state.cards || []).find(c => c.id === cardId);
@@ -5510,6 +5562,17 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
             `;
         }
 
+        // Horário do reinício — vale pras três frequências (numa diária é
+        // "todo dia a esta hora"; numa semanal/mensal, a hora do dia marcado).
+        const seletorHorario = marcado ? `
+            <span class="recurring-task-target">
+                <label>Às</label>
+                <input type="time" class="recurring-time-input"
+                       data-recurring-time="${escapeHtml(card.id)}"
+                       value="${horarioDaRecorrenciaTexto(tarefa)}" ${isObserver ? 'disabled' : ''}>
+            </span>
+        ` : '';
+
         // Seletor de raia: só faz sentido depois de marcada como recorrente.
         const seletorRaia = marcado ? `
             <span class="recurring-task-target">
@@ -5545,6 +5608,7 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
                 </label>
                 ${seletorFrequencia}
                 ${seletorQuando}
+                ${seletorHorario}
                 ${seletorColuna}
                 ${seletorRaia}
             </div>
@@ -5584,6 +5648,12 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
     list.querySelectorAll('select[data-recurring-monthday]').forEach(sel => {
         sel.addEventListener('change', () => {
             setRecurringMonthday(sel.dataset.recurringMonthday, parseInt(sel.value, 10));
+        });
+    });
+
+    list.querySelectorAll('input[data-recurring-time]').forEach(inp => {
+        inp.addEventListener('change', () => {
+            setRecurringTime(inp.dataset.recurringTime, inp.value);
         });
     });
 }
