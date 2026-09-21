@@ -470,8 +470,31 @@ h1, h2, h3, h4 {
     color: var(--accent);
 }
 
-#filterBarContent.filters-hidden {
+/* Seção minimizada (vale pra barra de Ações e pra de Busca/Filtros) */
+#filterBarContent.filters-hidden,
+#boardActionsContent.filters-hidden {
     display: none !important;
+}
+
+/* Linha com os dois "minimizar", lado a lado */
+.board-toggles {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-bottom: 0.4rem;
+}
+
+/* Os botões já têm margem própria; dentro da linha ela sobra */
+.board-toggles .toggle-filters-btn {
+    margin-bottom: 0;
+}
+
+.board-toggles-sep {
+    color: var(--border);
+    font-size: 0.78rem;
+    user-select: none;
 }
 
 .filter-bar.filter-bar-compact {
@@ -870,6 +893,18 @@ h1, h2, h3, h4 {
     border-radius: var(--radius-s);
     transition: background-color 0.2s;
     padding-right: 0.2rem;
+}
+
+/* Dentro de uma raia, o container não rola nem estica: quem faz isso é a
+   coluna. (Nas abas de "Concluído" não existe raia, então o .cards-container
+   de lá segue com flex:1 + rolagem própria, como sempre foi.) */
+.lane-container {
+    flex: 0 0 auto;
+    overflow-y: visible;
+    /* 64px em vez de 90px: 5 raias vazias passam a caber na altura de um
+       notebook sem gerar rolagem, e ainda sobra alvo confortável pra soltar
+       o post-it arrastado. */
+    min-height: 64px;
 }
 
 .cards-container::-webkit-scrollbar {
@@ -2702,12 +2737,56 @@ body.observer-mode .cards-container.drag-over {
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+
+    /* A COLUNA é quem rola na vertical.
+       Antes, as 5 raias dividiam a altura da coluna (flex:1 em cada). Numa
+       tela baixa de notebook sobrava tão pouco espaço que cada raia ficava
+       menor que o mínimo do .cards-container (90px) — e, como a raia não
+       recortava nada, o conteúdo vazava POR CIMA da raia de baixo. Era isso
+       que fazia os post-its "subirem um em cima do outro".
+       Agora cada raia tem a altura do próprio conteúdo e a coluna rola. */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Barra de rolagem da coluna no mesmo estilo discreto das outras — sem ela,
+   o Chrome desenha a barra padrão (grossa e com setinhas), que destoa. */
+.column::-webkit-scrollbar {
+    width: 8px;
+}
+.column::-webkit-scrollbar-track {
+    background: transparent;
+}
+.column::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+.column::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+.column {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+/* Nome da pessoa fica fixo no topo enquanto a coluna rola — sem isso, ao
+   descer até a raia "Concluída" você perde de vista de quem é a coluna.
+   As margens negativas grudam o cabeçalho na borda da coluna, por cima do
+   padding, pra nenhum post-it aparecer atrás dele. */
+.column-header {
+    position: sticky;
+    top: calc(var(--density-col-pad) * -1);
+    margin-top: calc(var(--density-col-pad) * -1);
+    padding-top: var(--density-col-pad);
+    background-color: var(--card);
+    z-index: 3;
 }
 
 .lane {
     display: flex;
     flex-direction: column;
-    flex: 1;
+    /* Cresce com o conteúdo, sem dividir a altura da coluna com as outras */
+    flex: 0 0 auto;
     min-height: 0;
 }
 
@@ -2941,13 +3020,6 @@ body.observer-mode .cards-container.drag-over {
         padding: 0.6rem 0.8rem 1rem;
     }
 
-    /* Só em telas pequenas (largura): impede a raia de vazar conteúdo pra
-       raia de baixo quando o espaço vertical fica muito apertado. Em telas
-       normais isso não é necessário e cortava a tag/porcentagem do post-it
-       à toa. */
-    .lane {
-        overflow: hidden;
-    }
 }
 
 /* Mesma proteção, mas baseada em ALTURA — notebooks costumam ter largura
