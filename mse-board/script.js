@@ -562,6 +562,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : 'Visitante (somente leitura)';
         }
 
+        // Comentários particulares também funcionam na página solta do
+        // Dashboard — é de lá que o Admin costuma escrever.
+        setupComentariosParticulares();
+
         currentReportPeriod = 'day';
         renderDeliveryReport();
 
@@ -1525,6 +1529,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // state.cards/state.people pra montar a lista e pra decidir o reinício.
         setupTarefasRecorrentes();
 
+        // Comentários particulares (sino do cabeçalho + modais). Também só no
+        // Planejamento, e também depois do loadState — precisa de
+        // state.members pra saber quem é Admin.
+        setupComentariosParticulares();
+
         // Quem NÃO está cadastrado em "Membros e Permissões" não foi convidado — só pode
         // ver o Dashboard, e nada mais (sem acessar o quadro, colunas ou post-its).
         const isInvited = !!state.members[userData.name];
@@ -2039,6 +2048,11 @@ async function refreshBoardFromServer() {
             checkForNewMentions(freshBlob.mentions);
             state.mentions = freshBlob.mentions;
         }
+        if (freshBlob && Array.isArray(freshBlob.privateComments)) {
+            checkForNewPrivateComments(freshBlob.privateComments);
+            state.privateComments = freshBlob.privateComments;
+            updatePrivateNotesBadge();
+        }
     } catch (err) {
         console.error('Falha na atualização automática:', err);
     } finally {
@@ -2138,6 +2152,7 @@ async function loadState() {
         if (!state.customAvatars) state.customAvatars = {};
         if (!state.userPasswords) state.userPasswords = {};
         if (!state.passwordResetRequests) state.passwordResetRequests = [];
+        if (!state.privateComments) state.privateComments = [];
         if (!state.mentions) state.mentions = [];
         if (!state.loginAttempts) state.loginAttempts = {};
         if (!state.boardInfo) state.boardInfo = { name: 'Quadro Geral de Equipe', description: 'Adicione pessoas e atribua tarefas com checklists e anexos' };
@@ -3331,6 +3346,15 @@ function renderDeliveryReport() {
 
     // ---------- Tarefas por pessoa, em formato de planilha (todas as raias) ----------
     const activeContainer = document.getElementById('reportActiveTasksByPerson');
+
+    // A coluna "Particular" só existe no quadro de Planejamento. Nos outros,
+    // ela é escondida por inteiro (cabeçalho + células) pra não sobrar uma
+    // coluna vazia na planilha.
+    const mostrarColunaParticular = CURRENT_DEPARTMENT === 'planejamento';
+    const totalColunas = mostrarColunaParticular ? 9 : 8;
+    const cabecalhoParticular = document.getElementById('dashPrivateHeader');
+    if (cabecalhoParticular) cabecalhoParticular.style.display = mostrarColunaParticular ? '' : 'none';
+
     const byColumn = {};
     const laneLabels = { afazer: 'A Fazer', todo: 'Fazendo', testing: 'Em Teste', paused: 'Pausado', done: 'Concluída' };
 
@@ -3382,7 +3406,7 @@ function renderDeliveryReport() {
     });
 
     if (columnIds.length === 0) {
-        activeContainer.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUMA TAREFA ENCONTRADA COM ESSE FILTRO.</td></tr>`;
+        activeContainer.innerHTML = `<tr><td colspan="${totalColunas}" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">NENHUMA TAREFA ENCONTRADA COM ESSE FILTRO.</td></tr>`;
         return;
     }
 
@@ -3392,7 +3416,7 @@ function renderDeliveryReport() {
 
         const personHeaderRow = `
             <tr class="dash-person-group-row">
-                <td colspan="8">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
+                <td colspan="${totalColunas}">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
             </tr>
         `;
 
@@ -3425,6 +3449,7 @@ function renderDeliveryReport() {
                             ? `<textarea class="dash-obs-box" placeholder="Escrever observação..." onclick="event.stopPropagation()" onblur="saveDashboardObservation('${c.id}', this.value)">${escapeHtml(c.observacao || '')}</textarea>`
                             : `<div class="dash-obs-readonly">${escapeHtml(c.observacao || '—')}</div>`}
                     </td>
+                    ${mostrarColunaParticular ? `<td class="dash-private-cell" onclick="event.stopPropagation()">${buildPrivateCommentCell(c)}</td>` : ''}
                     <td onclick="event.stopPropagation()">
                         ${canEditDashboard ? `
                         <button type="button" class="dash-hide-task-btn" title="Remover só do Dashboard (a tarefa continua no quadro normal)" onclick="hideCardFromDashboard('${c.id}')">
@@ -3438,6 +3463,36 @@ function renderDeliveryReport() {
 
         return personHeaderRow + taskRows;
     }).join('');
+}
+
+// Célula "Particular" da tabela do Dashboard.
+//
+// Quem vê o botão:
+//   - Admin do Planejamento: sempre (é quem pode escrever).
+//   - Qualquer outra pessoa: só se existir comentário endereçado A ELA nessa
+//     tarefa — aí é leitura, sem poder responder nem ver o dos outros.
+// Fora do Planejamento a célula fica vazia.
+function buildPrivateCommentCell(card) {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return '';
+
+    const visiveis = getComentariosParticularesVisiveis(card.id);
+    const podeEscrever = podeEscreverComentarioParticular();
+    if (!podeEscrever && visiveis.length === 0) return '';
+
+    // Usa a mesma regra do sino (naoLidaPorMim), pra Admin também ver
+    // destacada a tarefa em que a pessoa respondeu.
+    const naoLidos = visiveis.filter(naoLidaPorMim).length;
+    const titulo = podeEscrever
+        ? 'Conversa particular (só os Admins e a pessoa do assunto veem)'
+        : 'Conversa particular sobre esta tarefa — clique para responder';
+
+    return `
+        <button type="button" class="dash-private-btn${naoLidos > 0 ? ' has-unread' : ''}" title="${titulo}"
+                onclick="openPrivateCommentModal('${card.id}')">
+            <i class="fa-solid fa-user-lock"></i>
+            ${visiveis.length > 0 ? `<span class="dash-private-count">${visiveis.length}</span>` : ''}
+        </button>
+    `;
 }
 
 // Remove uma tarefa só da visualização do Dashboard de Entregas — ela
@@ -4257,10 +4312,664 @@ function moveCard(cardId, newPersonId, newStatus) {
 }
 
 // ==========================================
+// COMENTÁRIOS PARTICULARES (Dashboard, só no quadro de Planejamento)
+// ==========================================
+// Conversa reservada sobre UMA tarefa, entre os Admins e UMA pessoa. O Admin
+// começa o assunto; a pessoa responde ali mesmo. Os dois lados podem anexar
+// fotos e arquivos. Nada disso aparece nos comentários normais do post-it nem
+// pro resto da equipe.
+//
+// Como as conversas são separadas: cada mensagem carrega "threadUser", que é
+// a PESSOA do assunto (nunca o Admin). Assim "a conversa sobre esta tarefa
+// com o João" é sempre o mesmo fio, tanto faz qual Admin escreveu.
+//
+// Quem enxerga um fio: a própria pessoa (threadUser) e quem tem cargo Admin.
+// Admin é um CARGO, não uma pessoa — então outro Admin também vê o fio, do
+// mesmo jeito que já via na primeira versão. O que ninguém de fora vê é o
+// conteúdo: quem não é Admin só enxerga o próprio fio.
+//
+// Mora no board_state (state.privateComments), não numa coluna nova da tabela
+// `cards`: não precisa de migração de banco, e a notificação depende de todo
+// mundo reler a mesma lista — que é o que a sincronização automática já faz
+// com o blob a cada 6 segundos (mesmo caminho de state.mentions).
+
+function ensurePrivateComments() {
+    if (!Array.isArray(state.privateComments)) state.privateComments = [];
+
+    // Migração do formato antigo (mensagem de mão única: toUser/byUser/readAt)
+    // pro formato de conversa (threadUser/readBy/attachments).
+    state.privateComments.forEach(pc => {
+        if (!pc.threadUser) pc.threadUser = pc.toUser || pc.byUser;
+        if (!Array.isArray(pc.attachments)) pc.attachments = [];
+        if (!pc.readBy || typeof pc.readBy !== 'object') {
+            pc.readBy = {};
+            // No formato antigo só o destinatário tinha marca de leitura
+            if (pc.readAt && pc.toUser) pc.readBy[pc.toUser] = pc.readAt;
+        }
+    });
+
+    return state.privateComments;
+}
+
+function ehAdminDoQuadro(user) {
+    return !!user && (state.members || {})[user] === 'Admin';
+}
+
+// Quem pode ABRIR um assunto novo: só cargo Admin, e só no Planejamento.
+// (Responder num assunto existente é liberado pra pessoa dele — ver
+// podeResponderNoAssunto.)
+function podeEscreverComentarioParticular() {
+    return CURRENT_DEPARTMENT === 'planejamento' && ehAdminDoQuadro(currentUserName);
+}
+
+// Eu participo deste fio?
+function participoDoAssunto(threadUser) {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return false;
+    return threadUser === currentUserName || ehAdminDoQuadro(currentUserName);
+}
+
+function podeResponderNoAssunto(threadUser) {
+    return participoDoAssunto(threadUser);
+}
+
+// Mensagens de um fio (tarefa + pessoa), em ordem cronológica
+function getMensagensDoAssunto(cardId, threadUser) {
+    return ensurePrivateComments()
+        .filter(pc => pc.cardId === cardId && pc.threadUser === threadUser)
+        .sort((a, b) => a.ts - b.ts);
+}
+
+// Comentários de uma tarefa que ESTA pessoa pode ver: Admin vê todos os fios;
+// qualquer outra pessoa só vê o fio dela.
+function getComentariosParticularesVisiveis(cardId) {
+    const todos = ensurePrivateComments().filter(pc => pc.cardId === cardId);
+    if (ehAdminDoQuadro(currentUserName)) return todos;
+    return todos.filter(pc => pc.threadUser === currentUserName);
+}
+
+// Os fios abertos numa tarefa que eu posso ver (lista de e-mails de pessoas)
+function getAssuntosDaTarefa(cardId) {
+    const vistos = [];
+    getComentariosParticularesVisiveis(cardId).forEach(pc => {
+        if (!vistos.includes(pc.threadUser)) vistos.push(pc.threadUser);
+    });
+    return vistos.sort((a, b) => deriveNameFromEmail(a).localeCompare(deriveNameFromEmail(b), 'pt-BR'));
+}
+
+// Mensagem não lida por mim = eu participo, não fui eu que escrevi, e ainda
+// não abri. É isso que alimenta o contador do sino e o destaque na tabela.
+function naoLidaPorMim(pc) {
+    if (!participoDoAssunto(pc.threadUser)) return false;
+    if (pc.byUser === currentUserName) return false;
+    return !(pc.readBy && pc.readBy[currentUserName]);
+}
+
+function getComentariosParticularesNaoLidos() {
+    return ensurePrivateComments().filter(naoLidaPorMim);
+}
+
+function updatePrivateNotesBadge() {
+    const badge = document.getElementById('privateNotesBadge');
+    if (!badge) return;
+    const n = getComentariosParticularesNaoLidos().length;
+    badge.textContent = n > 9 ? '9+' : String(n);
+    badge.style.display = n > 0 ? 'inline-flex' : 'none';
+}
+
+// ---------- Modal da conversa de UMA tarefa ----------
+
+let privateCommentCardId = null;
+let privateCommentThreadUser = null;
+// Arquivos escolhidos mas ainda não enviados (some ao fechar o modal)
+let privateCommentPendingFiles = [];
+
+function openPrivateCommentModal(cardId, threadUser) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+
+    privateCommentCardId = cardId;
+    privateCommentPendingFiles = [];
+
+    const ehAdmin = ehAdminDoQuadro(currentUserName);
+    const assuntos = getAssuntosDaTarefa(cardId);
+
+    // Qual conversa abrir: a pedida, senão a primeira que existir, senão
+    // (Admin) um assunto novo com o palpite de destinatário.
+    if (threadUser && participoDoAssunto(threadUser)) {
+        privateCommentThreadUser = threadUser;
+    } else if (!ehAdmin) {
+        privateCommentThreadUser = currentUserName;
+    } else if (assuntos.length > 0) {
+        privateCommentThreadUser = assuntos[0];
+    } else {
+        const coluna = (state.people || []).find(p => p.id === card.personId);
+        privateCommentThreadUser = coluna ? adivinhaUsuarioDaColuna(coluna, listaDeDestinatarios()) : null;
+    }
+
+    document.getElementById('privateCommentCardTitle').textContent = card.title || '(sem título)';
+    renderPrivateCommentThreadPicker();
+    renderPrivateCommentThread();
+    renderPrivateCommentAttachDraft();
+    marcarComentariosParticularesComoLidos(cardId, privateCommentThreadUser);
+
+    const texto = document.getElementById('privateCommentText');
+    if (texto) texto.value = '';
+    const fileInput = document.getElementById('privateCommentFiles');
+    if (fileInput) fileInput.value = '';
+
+    document.getElementById('privateCommentModal').style.display = 'flex';
+}
+
+// Todo mundo cadastrado em Membros, menos a conta de serviço e eu mesmo
+function listaDeDestinatarios() {
+    return Object.keys(state.members || {})
+        .filter(u => u !== BOOTSTRAP_ADMIN_EMAIL && u !== currentUserName)
+        .sort((a, b) => deriveNameFromEmail(a).localeCompare(deriveNameFromEmail(b), 'pt-BR'));
+}
+
+// Seletor "Assunto com": pro Admin é a lista inteira de pessoas (dá pra abrir
+// assunto novo com qualquer uma); pra quem não é Admin nem aparece, porque só
+// existe um fio possível — o dela.
+function renderPrivateCommentThreadPicker() {
+    const wrap = document.getElementById('privateCommentThreadPicker');
+    const select = document.getElementById('privateCommentTo');
+    if (!wrap || !select) return;
+
+    if (!ehAdminDoQuadro(currentUserName)) {
+        wrap.style.display = 'none';
+        return;
+    }
+
+    wrap.style.display = 'block';
+
+    const comAssunto = getAssuntosDaTarefa(privateCommentCardId);
+    const candidatos = listaDeDestinatarios();
+    // Junta quem já tem conversa com quem ainda não tem, sem repetir
+    const todos = [...comAssunto, ...candidatos.filter(u => !comAssunto.includes(u))];
+
+    if (todos.length === 0) {
+        select.innerHTML = '<option value="">(nenhuma pessoa cadastrada em Membros)</option>';
+        return;
+    }
+
+    select.innerHTML = todos.map(u => {
+        const qtd = getMensagensDoAssunto(privateCommentCardId, u).length;
+        const marca = qtd > 0 ? ` (${qtd})` : ' — novo assunto';
+        return `<option value="${escapeHtml(u)}" ${u === privateCommentThreadUser ? 'selected' : ''}>${escapeHtml(deriveNameFromEmail(u))}${marca}</option>`;
+    }).join('');
+}
+
+// Tenta casar o nome da coluna ("Ana (Engenharia)") com um e-mail cadastrado
+// ("ana.silva@mse.com.br"). Só um palpite pro seletor já vir preenchido — o
+// Admin confirma ou troca antes de enviar.
+function adivinhaUsuarioDaColuna(coluna, candidatos) {
+    if (coluna.memberEmail && candidatos.includes(coluna.memberEmail)) return coluna.memberEmail;
+
+    const nomeColuna = (coluna.name || '').toLowerCase();
+    if (!nomeColuna) return candidatos[0] || null;
+
+    return candidatos.find(u => {
+        const primeiroNome = deriveNameFromEmail(u).split(' ')[0].toLowerCase();
+        return primeiroNome.length >= 3 && nomeColuna.includes(primeiroNome);
+    }) || candidatos[0] || null;
+}
+
+function renderPrivateCommentThread() {
+    const box = document.getElementById('privateCommentThread');
+    if (!box || !privateCommentCardId) return;
+
+    const composer = document.getElementById('privateCommentComposer');
+    const podeResponder = privateCommentThreadUser && podeResponderNoAssunto(privateCommentThreadUser);
+    if (composer) composer.style.display = podeResponder ? 'block' : 'none';
+
+    if (!privateCommentThreadUser) {
+        box.innerHTML = '<p class="private-comment-empty">Escolha para quem é o comentário.</p>';
+        return;
+    }
+
+    const lista = getMensagensDoAssunto(privateCommentCardId, privateCommentThreadUser);
+
+    if (lista.length === 0) {
+        box.innerHTML = '<p class="private-comment-empty">Nenhum comentário ainda. Escreva o primeiro abaixo.</p>';
+        return;
+    }
+
+    box.innerHTML = lista.map(pc => montaLinhaComentarioParticular(pc, true)).join('');
+    ligarBotoesDeExcluir(box);
+    box.scrollTop = box.scrollHeight; // abre já mostrando a mensagem mais nova
+}
+
+function ligarBotoesDeExcluir(box) {
+    box.querySelectorAll('button[data-del-private]').forEach(btn => {
+        btn.addEventListener('click', () => excluirComentarioParticular(btn.dataset.delPrivate));
+    });
+}
+
+function montaAnexosDoComentario(pc) {
+    if (!pc.attachments || pc.attachments.length === 0) return '';
+    const itens = pc.attachments.map(att => {
+        if (att.isImage) {
+            return `<a href="${att.url}" target="_blank" rel="noopener" title="Clique para ampliar: ${escapeHtml(att.name)}"><img src="${att.url}" class="private-comment-img" alt="${escapeHtml(att.name)}"></a>`;
+        }
+        return `<a href="${att.url}" target="_blank" rel="noopener" download="${escapeHtml(att.name)}" class="attachment-doc" title="${escapeHtml(att.name)}"><i class="fa-solid fa-file"></i> ${escapeHtml(att.name)}</a>`;
+    }).join('');
+    return `<div class="private-comment-attachments">${itens}</div>`;
+}
+
+function montaLinhaComentarioParticular(pc, dentroDaTarefa) {
+    const d = new Date(pc.ts);
+    const quando = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    // Só quem escreveu pode apagar a própria mensagem
+    const botaoExcluir = (pc.byUser === currentUserName)
+        ? `<button type="button" class="private-comment-del" data-del-private="${escapeHtml(pc.id)}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>`
+        : '';
+
+    const contexto = dentroDaTarefa
+        ? ''
+        : `<span class="private-comment-card">em "${escapeHtml(pc.cardTitle || '')}" · assunto com ${escapeHtml(deriveNameFromEmail(pc.threadUser))}</span>`;
+
+    const souEu = pc.byUser === currentUserName;
+    const naoLida = naoLidaPorMim(pc);
+    const texto = (pc.text || '').trim();
+
+    return `
+        <div class="private-comment-item${souEu ? ' is-mine' : ''}${naoLida ? ' is-unread' : ''}">
+            <div class="private-comment-meta">
+                <span><strong>${escapeHtml(deriveNameFromEmail(pc.byUser))}</strong>${souEu ? ' (você)' : ''}</span>
+                <span>${quando}</span>
+            </div>
+            ${contexto}
+            ${texto ? `<div class="private-comment-text">${linkifyText(texto)}</div>` : ''}
+            ${montaAnexosDoComentario(pc)}
+            ${botaoExcluir}
+        </div>
+    `;
+}
+
+// ---------- Anexos ainda não enviados ----------
+
+function adicionarArquivosAoComentario(fileList) {
+    privateCommentPendingFiles = privateCommentPendingFiles.concat(Array.from(fileList || []));
+    renderPrivateCommentAttachDraft();
+}
+
+function renderPrivateCommentAttachDraft() {
+    const box = document.getElementById('privateCommentAttachDraft');
+    if (!box) return;
+
+    if (privateCommentPendingFiles.length === 0) {
+        box.innerHTML = '';
+        return;
+    }
+
+    box.innerHTML = privateCommentPendingFiles.map((f, i) =>
+        `<span class="existing-attachment-chip"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(f.name)} <button type="button" data-drop-file="${i}" title="Tirar este arquivo">&times;</button></span>`
+    ).join('');
+
+    box.querySelectorAll('button[data-drop-file]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            privateCommentPendingFiles.splice(parseInt(btn.dataset.dropFile, 10), 1);
+            renderPrivateCommentAttachDraft();
+        });
+    });
+}
+
+// ---------- Enviar ----------
+
+async function enviarComentarioParticular() {
+    const card = (state.cards || []).find(c => c.id === privateCommentCardId);
+    if (!card) return;
+
+    // Admin pode trocar o destinatário na hora de enviar (abre assunto novo)
+    const select = document.getElementById('privateCommentTo');
+    if (ehAdminDoQuadro(currentUserName) && select && select.value) {
+        privateCommentThreadUser = select.value;
+    }
+
+    if (!privateCommentThreadUser) { showToast('Escolha para quem é o comentário.'); return; }
+    if (!podeResponderNoAssunto(privateCommentThreadUser)) return;
+
+    const texto = document.getElementById('privateCommentText').value.trim();
+    const temArquivos = privateCommentPendingFiles.length > 0;
+
+    if (!texto && !temArquivos) {
+        showToast('Escreva algo ou anexe um arquivo antes de enviar.');
+        return;
+    }
+
+    const btn = document.getElementById('sendPrivateCommentBtn');
+    const rotuloOriginal = btn ? btn.innerHTML : '';
+    if (btn) {
+        // O upload pode demorar; trava o botão pra não enviar duas vezes
+        btn.disabled = true;
+        btn.innerHTML = temArquivos
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> Enviando arquivos...'
+            : '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+    }
+
+    let anexos = [];
+    try {
+        if (temArquivos) anexos = await processFiles(privateCommentPendingFiles);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = rotuloOriginal; }
+    }
+
+    ensurePrivateComments().push({
+        id: `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        cardId: card.id,
+        cardTitle: card.title,
+        threadUser: privateCommentThreadUser,
+        byUser: currentUserName,
+        text: texto,
+        attachments: anexos,
+        ts: Date.now(),
+        // Quem escreve já leu a própria mensagem
+        readBy: { [currentUserName]: Date.now() }
+    });
+
+    saveState();
+    // O texto do comentário NÃO entra no log de auditoria de propósito — o log
+    // é visível a outros Admins e o recado é particular.
+    logAudit(`Escreveu um comentário particular no assunto com ${privateCommentThreadUser} na tarefa "${card.title}"`);
+
+    document.getElementById('privateCommentText').value = '';
+    privateCommentPendingFiles = [];
+    const fileInput = document.getElementById('privateCommentFiles');
+    if (fileInput) fileInput.value = '';
+
+    renderPrivateCommentAttachDraft();
+    renderPrivateCommentThreadPicker();
+    renderPrivateCommentThread();
+    if (typeof renderDeliveryReport === 'function') renderDeliveryReport();
+    showToast('Comentário particular enviado.', 'success');
+}
+
+function excluirComentarioParticular(id) {
+    const pc = ensurePrivateComments().find(x => x.id === id);
+    if (!pc || pc.byUser !== currentUserName) return;
+
+    showConfirm('Excluir este comentário particular?', () => {
+        state.privateComments = state.privateComments.filter(x => x.id !== id);
+        saveState();
+        renderPrivateCommentThreadPicker();
+        renderPrivateCommentThread();
+        renderPrivateNotesList();
+        updatePrivateNotesBadge();
+        if (typeof renderDeliveryReport === 'function') renderDeliveryReport();
+    });
+}
+
+// Abrir a conversa marca como lidas as mensagens que não são minhas.
+function marcarComentariosParticularesComoLidos(cardId, threadUser) {
+    if (!threadUser) return;
+
+    const pendentes = ensurePrivateComments().filter(
+        pc => pc.cardId === cardId && pc.threadUser === threadUser && naoLidaPorMim(pc)
+    );
+    if (pendentes.length === 0) return;
+
+    pendentes.forEach(pc => {
+        if (!pc.readBy) pc.readBy = {};
+        pc.readBy[currentUserName] = Date.now();
+    });
+    saveState();
+    updatePrivateNotesBadge();
+}
+
+// ---------- Caixa de entrada (sino do cabeçalho) ----------
+
+function renderPrivateNotesList() {
+    const box = document.getElementById('privateNotesList');
+    if (!box) return;
+
+    // Tudo que eu participo e não fui eu que escrevi, mais recente primeiro
+    const meus = ensurePrivateComments()
+        .filter(pc => participoDoAssunto(pc.threadUser) && pc.byUser !== currentUserName)
+        .sort((a, b) => b.ts - a.ts);
+
+    if (meus.length === 0) {
+        box.innerHTML = '<p class="private-comment-empty">Nenhum comentário particular para você.</p>';
+        return;
+    }
+
+    box.innerHTML = meus.map(pc => `
+        <div class="private-note-entry" data-open-card="${escapeHtml(pc.cardId)}" data-open-thread="${escapeHtml(pc.threadUser)}">
+            ${montaLinhaComentarioParticular(pc, false)}
+        </div>
+    `).join('');
+
+    ligarBotoesDeExcluir(box);
+
+    // Clicar na notificação abre a conversa daquela tarefa
+    box.querySelectorAll('.private-note-entry').forEach(entry => {
+        entry.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('a')) return;
+            document.getElementById('privateNotesModal').style.display = 'none';
+            openPrivateCommentModal(entry.dataset.openCard, entry.dataset.openThread);
+        });
+    });
+}
+
+function abrirCaixaDeComentariosParticulares() {
+    renderPrivateNotesList();
+    document.getElementById('privateNotesModal').style.display = 'flex';
+
+    // Abrir a caixa marca tudo como lido
+    const naoLidos = getComentariosParticularesNaoLidos();
+    if (naoLidos.length > 0) {
+        naoLidos.forEach(pc => {
+            if (!pc.readBy) pc.readBy = {};
+            pc.readBy[currentUserName] = Date.now();
+        });
+        saveState();
+        updatePrivateNotesBadge();
+    }
+}
+
+// ---------- Notificação de chegada ----------
+
+let knownPrivateCommentIds = null;
+
+// Chamada pela sincronização automática, no mesmo lugar onde as menções e as
+// mensagens de chat são conferidas.
+function checkForNewPrivateComments(frescos) {
+    if (knownPrivateCommentIds === null) {
+        // Primeira passada da sessão: só memoriza, não avisa retroativamente
+        knownPrivateCommentIds = new Set(frescos.map(pc => pc.id));
+        return;
+    }
+
+    const novos = frescos.filter(pc => !knownPrivateCommentIds.has(pc.id));
+    knownPrivateCommentIds = new Set(frescos.map(pc => pc.id));
+
+    // Avisa tanto a pessoa (recado do Admin) quanto os Admins (resposta dela)
+    const praMim = novos.filter(pc => pc.byUser !== currentUserName && participoDoAssunto(pc.threadUser));
+    if (praMim.length === 0) return;
+
+    // Um pop-up por mensagem nova, com botão pra ir direto na conversa.
+    // Limitado a 3 de uma vez pra não empilhar a tela; o resto fica no sino.
+    praMim.slice(0, 3).forEach(pc => showPrivateCommentPopup(pc));
+
+    if (praMim.length > 3) {
+        showToast(`<i class="fa-solid fa-user-lock"></i> e mais ${praMim.length - 3} comentário(s) particular(es) — veja no cadeado do topo`, 'success');
+    }
+}
+
+// Pop-up próprio (não é a notificação do navegador): cartãozinho no canto
+// avisando que chegou mensagem, com um botão que abre a conversa na hora.
+function showPrivateCommentPopup(pc) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    // Se já existe um pop-up dessa mesma mensagem na tela, não duplica
+    if (container.querySelector(`[data-popup-pc="${pc.id}"]`)) return;
+
+    const previa = (pc.text || '').trim()
+        ? `${pc.text.slice(0, 80)}${pc.text.length > 80 ? '…' : ''}`
+        : 'Enviou um arquivo.';
+
+    const popup = document.createElement('div');
+    popup.className = 'private-popup';
+    popup.dataset.popupPc = pc.id;
+    popup.innerHTML = `
+        <button type="button" class="private-popup-close" title="Fechar">&times;</button>
+        <div class="private-popup-head">
+            <span class="private-popup-icon"><i class="fa-solid fa-user-lock"></i></span>
+            <span class="private-popup-title">Você tem uma mensagem</span>
+        </div>
+        <div class="private-popup-from">${escapeHtml(deriveNameFromEmail(pc.byUser))} · ${escapeHtml(pc.cardTitle || '')}</div>
+        <div class="private-popup-preview">${escapeHtml(previa)}</div>
+        <button type="button" class="private-popup-action">
+            <i class="fa-solid fa-arrow-right"></i> Ver mensagem
+        </button>
+    `;
+
+    popup.querySelector('.private-popup-close').addEventListener('click', () => popup.remove());
+
+    popup.querySelector('.private-popup-action').addEventListener('click', () => {
+        popup.remove();
+        irParaComentarioParticular(pc);
+    });
+
+    container.appendChild(popup);
+
+    // Some sozinho depois de meio minuto — tempo de sobra pra ler e clicar,
+    // e a mensagem continua no cadeado do topo de qualquer jeito.
+    setTimeout(() => popup.remove(), 30000);
+}
+
+// Abre a conversa da mensagem avisada. No quadro o Dashboard pode estar
+// fechado, então fecha o que estiver aberto por cima antes.
+function irParaComentarioParticular(pc) {
+    const notes = document.getElementById('privateNotesModal');
+    if (notes) notes.style.display = 'none';
+    openPrivateCommentModal(pc.cardId, pc.threadUser);
+}
+
+// ---------- Verificação própria (independente do refresh do quadro) ----------
+//
+// A sincronização automática do quadro para enquanto QUALQUER modal está
+// aberto (pra não atrapalhar quem digita). Só que o Dashboard é um modal —
+// então, sem isto aqui, quem estivesse com o Dashboard ou a própria conversa
+// aberta nunca receberia o aviso de mensagem nova. Este verificador roda
+// sozinho, só lê o blob e só mexe em state.privateComments.
+
+let privateCommentsPollTimer = null;
+
+async function pollPrivateComments() {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!currentUserName) return;
+
+    const blob = await fetchBoardStateFromServer();
+    if (!blob || !Array.isArray(blob.privateComments)) return;
+
+    // Junta o que veio do servidor com o que tem aqui, casando por id. Não é
+    // uma substituição direta de propósito: uma mensagem recém-enviada (ou
+    // uma marca de "li isto") pode ainda não ter chegado ao servidor, e
+    // trocar a lista inteira a faria sumir da tela por alguns segundos.
+    const porId = new Map(blob.privateComments.map(pc => [pc.id, pc]));
+    (state.privateComments || []).forEach(local => {
+        const doServidor = porId.get(local.id);
+        if (!doServidor) {
+            porId.set(local.id, local); // ainda não subiu
+        } else {
+            // Mantém as marcas de leitura dos dois lados
+            doServidor.readBy = Object.assign({}, doServidor.readBy || {}, local.readBy || {});
+        }
+    });
+
+    const juntos = Array.from(porId.values());
+    checkForNewPrivateComments(juntos);
+    state.privateComments = juntos;
+    ensurePrivateComments();
+    updatePrivateNotesBadge();
+
+    // Se a conversa estiver aberta na tela, redesenha pra mostrar o que chegou
+    const modal = document.getElementById('privateCommentModal');
+    if (modal && modal.style.display === 'flex') {
+        renderPrivateCommentThread();
+        marcarComentariosParticularesComoLidos(privateCommentCardId, privateCommentThreadUser);
+    }
+}
+
+// ---------- Ligação dos botões ----------
+
+// Roda tanto no quadro (board.html) quanto na página solta do Dashboard
+// (dashboard-entregas.html). Cada elemento é ligado só se existir naquela
+// página — a página do Dashboard, por exemplo, não tem o sino do cabeçalho.
+function setupComentariosParticulares() {
+    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+
+    const sino = document.getElementById('privateNotesBtn');
+    if (sino) {
+        // O sino aparece pra todo mundo no Planejamento: quem recebe precisa
+        // ver o aviso, e Admin também precisa ver as respostas que chegam.
+        sino.style.display = 'inline-flex';
+        sino.addEventListener('click', abrirCaixaDeComentariosParticulares);
+    }
+
+    const fecharCaixa = document.getElementById('closePrivateNotesModalBtn');
+    if (fecharCaixa) {
+        fecharCaixa.addEventListener('click', () => {
+            document.getElementById('privateNotesModal').style.display = 'none';
+        });
+    }
+
+    const fecharThread = document.getElementById('closePrivateCommentModalBtn');
+    if (fecharThread) {
+        fecharThread.addEventListener('click', () => {
+            document.getElementById('privateCommentModal').style.display = 'none';
+            privateCommentPendingFiles = [];
+        });
+    }
+
+    const enviar = document.getElementById('sendPrivateCommentBtn');
+    if (enviar) enviar.addEventListener('click', enviarComentarioParticular);
+
+    // Trocar de pessoa no seletor troca a conversa mostrada
+    const select = document.getElementById('privateCommentTo');
+    if (select) {
+        select.addEventListener('change', () => {
+            privateCommentThreadUser = select.value || null;
+            renderPrivateCommentThread();
+            marcarComentariosParticularesComoLidos(privateCommentCardId, privateCommentThreadUser);
+        });
+    }
+
+    const fileInput = document.getElementById('privateCommentFiles');
+    if (fileInput) {
+        fileInput.addEventListener('change', () => {
+            adicionarArquivosAoComentario(fileInput.files);
+            fileInput.value = ''; // permite escolher o mesmo arquivo de novo
+        });
+    }
+
+    // Ctrl+Enter envia (Enter sozinho quebra linha)
+    const texto = document.getElementById('privateCommentText');
+    if (texto) {
+        texto.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                enviarComentarioParticular();
+            }
+        });
+    }
+
+    updatePrivateNotesBadge();
+
+    // 10 segundos: rápido o bastante pra parecer conversa, e é só uma leitura
+    // do blob (o mesmo que a sincronização do quadro já faz a cada 6s).
+    if (privateCommentsPollTimer) clearInterval(privateCommentsPollTimer);
+    privateCommentsPollTimer = setInterval(pollPrivateComments, 10000);
+}
+
+// ==========================================
 // TAREFAS RECORRENTES (só no quadro de Planejamento)
 // ==========================================
-// Uma tarefa marcada como recorrente é uma rotina diária: todo dia às 07:00
-// ela SAI de "Concluída" e volta pra raia "Fazendo", na coluna de origem.
+// Uma tarefa marcada como recorrente é uma rotina que se repete: diária,
+// semanal (num dia da semana) ou mensal (num dia do mês). Sempre às 07:00 ela
+// SAI de "Concluída" e volta pra raia escolhida, na coluna de origem.
 //
 // Não existe cron/agendador no servidor, então quem dispara o reinício é o
 // próprio navegador de quem está com o quadro aberto (ou de quem abrir
@@ -4281,26 +4990,121 @@ function recurringDateKey(date) {
     return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
+// Com que frequência uma tarefa recorrente se repete.
+//   diaria  → todo dia às 07:00
+//   semanal → num dia da semana escolhido (weekday: 0=domingo … 6=sábado)
+//   mensal  → num dia do mês escolhido (monthday: 1 a 31)
+const RECURRING_FREQUENCIES = [
+    { key: 'diaria', label: 'Diária' },
+    { key: 'semanal', label: 'Semanal' },
+    { key: 'mensal', label: 'Mensal' }
+];
+
+const RECURRING_WEEKDAYS = [
+    { key: 1, label: 'Segunda-feira' },
+    { key: 2, label: 'Terça-feira' },
+    { key: 3, label: 'Quarta-feira' },
+    { key: 4, label: 'Quinta-feira' },
+    { key: 5, label: 'Sexta-feira' },
+    { key: 6, label: 'Sábado' },
+    { key: 0, label: 'Domingo' }
+];
+
 // Garante que a estrutura existe no state (quadros antigos não têm).
 // lastResetDate começa valendo HOJE de propósito: assim, ao ligar a
 // funcionalidade, nada é movido na hora — o primeiro reinício de verdade
-// acontece amanhã às 07:00.
+// acontece na próxima data agendada.
 function ensureRecurringState() {
     if (!state.recurringTasks || typeof state.recurringTasks !== 'object' || Array.isArray(state.recurringTasks)) {
         state.recurringTasks = { tasks: [], lastResetDate: recurringDateKey() };
     }
-    if (!Array.isArray(state.recurringTasks.tasks)) state.recurringTasks.tasks = [];
-    if (!state.recurringTasks.lastResetDate) state.recurringTasks.lastResetDate = recurringDateKey();
-    return state.recurringTasks;
+    const rec = state.recurringTasks;
+    if (!Array.isArray(rec.tasks)) rec.tasks = [];
+    if (!rec.lastResetDate) rec.lastResetDate = recurringDateKey();
+
+    // Migração: antes só existia "todo dia" e uma única data de controle pro
+    // quadro inteiro (rec.lastResetDate). Agora cada tarefa tem a própria
+    // frequência e a própria data do último reinício — sem isso, uma tarefa
+    // semanal e uma diária brigariam pela mesma data de controle.
+    rec.tasks.forEach(t => {
+        if (!t.frequency) t.frequency = 'diaria';
+        if (t.frequency === 'semanal' && typeof t.weekday !== 'number') t.weekday = 1;
+        if (t.frequency === 'mensal' && typeof t.monthday !== 'number') t.monthday = 1;
+        if (!t.lastResetDate) t.lastResetDate = rec.lastResetDate;
+    });
+
+    return rec;
 }
 
 function isRecurringCard(cardId) {
     return ensureRecurringState().tasks.some(t => t.cardId === cardId);
 }
 
-// Marca/desmarca uma tarefa como recorrente. Guarda junto a coluna de origem
-// (homePersonId) — é pra lá que ela volta quando estiver parada numa aba de
-// "Concluído", que é uma coluna de verdade e não uma raia.
+// Quantos dias tem o mês da data passada (28, 29, 30 ou 31).
+function diasNoMes(date) {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+// A data bate com a regra de repetição da tarefa?
+function dataBateComRecorrencia(t, date) {
+    if (t.frequency === 'semanal') {
+        return date.getDay() === (typeof t.weekday === 'number' ? t.weekday : 1);
+    }
+    if (t.frequency === 'mensal') {
+        // Dia 31 num mês de 30 dias cai no dia 30; dia 30 em fevereiro cai no
+        // 28/29. Sem isso, uma tarefa marcada pro dia 31 simplesmente pularia
+        // os meses curtos.
+        const alvo = Math.min(typeof t.monthday === 'number' ? t.monthday : 1, diasNoMes(date));
+        return date.getDate() === alvo;
+    }
+    return true; // diária
+}
+
+// Última vez que a tarefa DEVERIA ter reiniciado, olhando pra trás a partir
+// de hoje. Devolve a data no formato AAAA-MM-DD, ou null se não achou.
+//
+// Existe pra dar conta do atraso: se ninguém abriu o quadro na segunda de
+// manhã, a tarefa semanal ainda reinicia quando alguém abrir na quarta, em
+// vez de sumir até a segunda seguinte.
+function ultimaOcorrenciaRecorrente(t, agora) {
+    const d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+
+    // 400 dias cobre com folga qualquer regra mensal (o maior intervalo
+    // possível é ~31 dias) e evita laço infinito se algo vier torto.
+    for (let i = 0; i < 400; i++) {
+        if (dataBateComRecorrencia(t, d)) {
+            // No próprio dia de hoje só conta se as 07:00 já passaram
+            const ehHoje = i === 0;
+            if (!ehHoje || agora.getHours() >= RECURRING_RESET_HOUR) {
+                return recurringDateKey(d);
+            }
+        }
+        d.setDate(d.getDate() - 1);
+    }
+    return null;
+}
+
+// Está na hora de reiniciar esta tarefa?
+function recorrenteEstaVencida(t, agora) {
+    const ocorrencia = ultimaOcorrenciaRecorrente(t, agora);
+    if (!ocorrencia) return false;
+    // Datas em AAAA-MM-DD comparam certo como texto
+    return !t.lastResetDate || t.lastResetDate < ocorrencia;
+}
+
+// Frase curta descrevendo quando a tarefa reinicia ("Toda segunda-feira").
+function descreveRecorrencia(t) {
+    const hora = `0${RECURRING_RESET_HOUR}:00`;
+    if (t.frequency === 'semanal') {
+        const dia = RECURRING_WEEKDAYS.find(w => w.key === t.weekday);
+        return `Toda ${dia ? dia.label.toLowerCase() : 'segunda-feira'} às ${hora}`;
+    }
+    if (t.frequency === 'mensal') {
+        return `Todo dia ${t.monthday || 1} do mês às ${hora}`;
+    }
+    return `Todo dia às ${hora}`;
+}
+
 function toggleRecurringCard(cardId, ligado) {
     const rec = ensureRecurringState();
     const card = (state.cards || []).find(c => c.id === cardId);
@@ -4320,7 +5124,15 @@ function toggleRecurringCard(cardId, ligado) {
                 const aberta = (state.people || []).find(p => p.id === recurringSelectedPersonId && !p.isDone);
                 if (aberta) homePersonId = aberta.id;
             }
-            rec.tasks.push({ cardId, homePersonId, targetStatus: 'todo' });
+            rec.tasks.push({
+                cardId,
+                homePersonId,
+                targetStatus: 'todo',
+                frequency: 'diaria',
+                // Nasce já "reiniciada hoje" pra não disparar no mesmo instante
+                // em que foi marcada — o primeiro reinício é na próxima data.
+                lastResetDate: recurringDateKey()
+            });
             logAudit(`"${card.title}" virou tarefa recorrente (volta pra Fazendo todo dia às 0${RECURRING_RESET_HOUR}:00)`);
         }
     } else {
@@ -4347,17 +5159,23 @@ function runRecurringResetIfDue() {
     const agora = new Date();
     const hoje = recurringDateKey(agora);
 
-    if (rec.lastResetDate === hoje) return;
+    // Antes das 07:00 nenhuma regra dispara, seja qual for a frequência
     if (agora.getHours() < RECURRING_RESET_HOUR) return;
 
     // Tira da lista as tarefas cujo post-it foi excluído
+    const antes = rec.tasks.length;
     rec.tasks = rec.tasks.filter(t => state.cards.some(c => c.id === t.cardId));
+    let mudouAlgo = rec.tasks.length !== antes;
 
     let movidas = 0;
 
     rec.tasks.forEach(t => {
         const card = state.cards.find(c => c.id === t.cardId);
         if (!card) return;
+
+        // Cada tarefa tem a própria agenda (diária/semanal/mensal) e a própria
+        // data de último reinício — uma semanal não impede a diária de rodar.
+        if (!recorrenteEstaVencida(t, agora)) return;
 
         const pessoaAtual = state.people.find(p => p.id === card.personId);
         const estaNumaAbaConcluido = !!(pessoaAtual && pessoaAtual.isDone);
@@ -4398,20 +5216,32 @@ function runRecurringResetIfDue() {
         const raiaDestino = t.targetStatus || 'todo';
         moveCard(card.id, destino, raiaDestino);
         if (tinhaMarcado) persistCard(card); // moveCard só grava coluna/raia/conclusão
+
+        t.lastResetDate = hoje;
+        mudouAlgo = true;
         movidas++;
     });
 
-    rec.lastResetDate = hoje;
+    // Tarefa vencida mas que não estava concluída também precisa marcar o dia,
+    // senão ela ficaria "vencida" pra sempre e seria reavaliada a cada minuto.
+    rec.tasks.forEach(t => {
+        if (recorrenteEstaVencida(t, agora)) {
+            t.lastResetDate = hoje;
+            mudouAlgo = true;
+        }
+    });
+
+    rec.lastResetDate = hoje; // mantido só pra compatibilidade com dados antigos
 
     if (movidas > 0) {
         logAudit(`Tarefas recorrentes: ${movidas} tarefa(s) reiniciadas (reinício das 0${RECURRING_RESET_HOUR}:00)`);
         renderBoard();
         showToast(`${movidas} tarefa(s) recorrente(s) foram reiniciadas`, 'success');
-    } else {
-        saveState(); // grava a data de hoje mesmo sem ter movido nada
+    } else if (mudouAlgo) {
+        saveState();
     }
 
-    renderRecurringTasksList();
+    if (mudouAlgo) renderRecurringTasksList();
 }
 
 // Raias pra onde uma tarefa recorrente pode voltar. É a mesma lista de raias
@@ -4456,6 +5286,57 @@ function setRecurringHomePerson(cardId, personId) {
     const pessoa = (state.people || []).find(p => p.id === personId);
     const card = (state.cards || []).find(c => c.id === cardId);
     logAudit(`Tarefa recorrente "${card ? card.title : cardId}" passou a voltar para a coluna ${pessoa ? pessoa.name : '(nenhuma)'}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Troca a frequência (diária / semanal / mensal) de uma tarefa recorrente.
+function setRecurringFrequency(cardId, frequency) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+
+    tarefa.frequency = frequency;
+    // Preenche o dia com um padrão razoável ao trocar de frequência, senão a
+    // regra ficaria sem o dado que ela precisa pra saber quando disparar.
+    if (frequency === 'semanal' && typeof tarefa.weekday !== 'number') tarefa.weekday = 1;
+    if (frequency === 'mensal' && typeof tarefa.monthday !== 'number') tarefa.monthday = 1;
+    // Reinicia a contagem a partir de hoje: trocar a regra não deve fazer a
+    // tarefa disparar de imediato por causa de uma data velha.
+    tarefa.lastResetDate = recurringDateKey();
+
+    const card = (state.cards || []).find(c => c.id === cardId);
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}": ${descreveRecorrencia(tarefa)}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Dia da semana de uma tarefa semanal (0 = domingo … 6 = sábado).
+function setRecurringWeekday(cardId, weekday) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+
+    tarefa.weekday = weekday;
+    tarefa.lastResetDate = recurringDateKey();
+
+    const card = (state.cards || []).find(c => c.id === cardId);
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}": ${descreveRecorrencia(tarefa)}`);
+    saveState();
+    renderRecurringTasksList();
+}
+
+// Dia do mês de uma tarefa mensal (1 a 31; meses curtos caem no último dia).
+function setRecurringMonthday(cardId, monthday) {
+    const rec = ensureRecurringState();
+    const tarefa = rec.tasks.find(t => t.cardId === cardId);
+    if (!tarefa) return;
+
+    tarefa.monthday = monthday;
+    tarefa.lastResetDate = recurringDateKey();
+
+    const card = (state.cards || []).find(c => c.id === cardId);
+    logAudit(`Tarefa recorrente "${card ? card.title : cardId}": ${descreveRecorrencia(tarefa)}`);
     saveState();
     renderRecurringTasksList();
 }
@@ -4590,6 +5471,45 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
             ? `Agora em: ${escapeHtml(pessoaAtual.name)}`
             : `Agora em: ${RECURRING_LANE_LABELS[card.status || 'todo'] || 'Fazendo'}`;
 
+        // Frase da agenda ("Toda segunda-feira às 07:00"), embaixo do título
+        const linhaAgenda = marcado
+            ? `<span class="recurring-task-schedule"><i class="fa-solid fa-clock-rotate-left"></i> ${escapeHtml(descreveRecorrencia(tarefa))}</span>`
+            : '';
+
+        // Com que frequência se repete
+        const seletorFrequencia = marcado ? `
+            <span class="recurring-task-target">
+                <label>Repete</label>
+                <select data-recurring-freq="${escapeHtml(card.id)}" ${isObserver ? 'disabled' : ''}>
+                    ${RECURRING_FREQUENCIES.map(f => `<option value="${f.key}" ${f.key === (tarefa.frequency || 'diaria') ? 'selected' : ''}>${f.label}</option>`).join('')}
+                </select>
+            </span>
+        ` : '';
+
+        // Em que dia — só aparece nas frequências que precisam escolher um dia.
+        // Na diária não há o que escolher (é todo dia).
+        let seletorQuando = '';
+        if (marcado && tarefa.frequency === 'semanal') {
+            seletorQuando = `
+                <span class="recurring-task-target">
+                    <label>No dia</label>
+                    <select data-recurring-weekday="${escapeHtml(card.id)}" ${isObserver ? 'disabled' : ''}>
+                        ${RECURRING_WEEKDAYS.map(w => `<option value="${w.key}" ${w.key === (typeof tarefa.weekday === 'number' ? tarefa.weekday : 1) ? 'selected' : ''}>${w.label}</option>`).join('')}
+                    </select>
+                </span>
+            `;
+        } else if (marcado && tarefa.frequency === 'mensal') {
+            const diaEscolhido = typeof tarefa.monthday === 'number' ? tarefa.monthday : 1;
+            const opcoesDia = Array.from({ length: 31 }, (_, i) => i + 1)
+                .map(d => `<option value="${d}" ${d === diaEscolhido ? 'selected' : ''}>Dia ${d}</option>`).join('');
+            seletorQuando = `
+                <span class="recurring-task-target">
+                    <label>No dia</label>
+                    <select data-recurring-monthday="${escapeHtml(card.id)}" ${isObserver ? 'disabled' : ''}>${opcoesDia}</select>
+                </span>
+            `;
+        }
+
         // Seletor de raia: só faz sentido depois de marcada como recorrente.
         const seletorRaia = marcado ? `
             <span class="recurring-task-target">
@@ -4620,8 +5540,11 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
                     <span class="recurring-task-text">
                         <span class="recurring-task-title">${escapeHtml(card.title || '(sem título)')}</span>
                         <span class="recurring-task-where">${ondeEsta}</span>
+                        ${linhaAgenda}
                     </span>
                 </label>
+                ${seletorFrequencia}
+                ${seletorQuando}
                 ${seletorColuna}
                 ${seletorRaia}
             </div>
@@ -4643,6 +5566,24 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
     list.querySelectorAll('select[data-recurring-home]').forEach(sel => {
         sel.addEventListener('change', () => {
             setRecurringHomePerson(sel.dataset.recurringHome, sel.value);
+        });
+    });
+
+    list.querySelectorAll('select[data-recurring-freq]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            setRecurringFrequency(sel.dataset.recurringFreq, sel.value);
+        });
+    });
+
+    list.querySelectorAll('select[data-recurring-weekday]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            setRecurringWeekday(sel.dataset.recurringWeekday, parseInt(sel.value, 10));
+        });
+    });
+
+    list.querySelectorAll('select[data-recurring-monthday]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            setRecurringMonthday(sel.dataset.recurringMonthday, parseInt(sel.value, 10));
         });
     });
 }

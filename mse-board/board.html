@@ -253,6 +253,12 @@
         </button>
 
         <div class="user-info">
+            <!-- Sino dos comentários particulares. Só aparece no quadro de
+                 Planejamento (ver setupComentariosParticulares). -->
+            <button type="button" class="header-icon-btn" id="privateNotesBtn" title="Comentários particulares" style="display:none;">
+                <i class="fa-solid fa-user-lock"></i>
+                <span id="privateNotesBadge" class="private-notes-badge" style="display:none;">0</span>
+            </button>
             <button type="button" class="header-icon-btn" id="chatToggleBtn" title="Chat">
                 <svg viewBox="0 0 20 20" fill="none"><path d="M2.5 5.8c0-1.3 1.1-2.4 2.4-2.4h10.2c1.3 0 2.4 1.1 2.4 2.4v6c0 1.3-1.1 2.4-2.4 2.4H7.6L4 17.4V14.2H4.9c-1.3 0-2.4-1.1-2.4-2.4v-6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
                 <span id="chatUnreadBadge" class="chat-unread-badge" style="display:none;"></span>
@@ -823,17 +829,71 @@
         </div>
     </div>
 
+    <!-- Modal: Comentário Particular de uma tarefa (Dashboard, Planejamento) -->
+    <div id="privateCommentModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closePrivateCommentModalBtn">&times;</span>
+            <h3><i class="fa-solid fa-user-lock"></i> Comentário Particular</h3>
+            <p class="settings-subtitle" id="privateCommentCardTitle"></p>
+            <p class="settings-subtitle">
+                Conversa reservada sobre esta tarefa: só os Admins e a pessoa do assunto
+                enxergam. A pessoa pode responder aqui mesmo, e os dois lados podem anexar
+                fotos e arquivos. Nada disso aparece no post-it nem para o resto da equipe.
+            </p>
+
+            <!-- Seletor de conversa: só o Admin vê (ele pode ter um assunto
+                 com cada pessoa na mesma tarefa). Quem não é Admin só tem o
+                 próprio assunto, então o seletor fica escondido. -->
+            <div class="input-group" id="privateCommentThreadPicker">
+                <label for="privateCommentTo">Assunto com</label>
+                <select id="privateCommentTo"></select>
+            </div>
+
+            <div id="privateCommentThread" class="private-comment-thread"></div>
+
+            <div id="privateCommentComposer">
+                <div class="input-group">
+                    <label for="privateCommentText">Sua mensagem</label>
+                    <textarea id="privateCommentText" rows="3" placeholder="Escreva aqui... (Ctrl+Enter envia)"></textarea>
+                </div>
+
+                <div id="privateCommentAttachDraft" class="private-comment-attach-draft"></div>
+
+                <div class="private-comment-actions">
+                    <label class="private-comment-attach-btn" title="Anexar fotos ou arquivos">
+                        <i class="fa-solid fa-paperclip"></i> Anexar
+                        <input type="file" id="privateCommentFiles" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" style="display:none;">
+                    </label>
+                    <button type="button" id="sendPrivateCommentBtn" class="btn-primary">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Caixa de comentários particulares recebidos (sino do cabeçalho) -->
+    <div id="privateNotesModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closePrivateNotesModalBtn">&times;</span>
+            <h3><i class="fa-solid fa-user-lock"></i> Meus Comentários Particulares</h3>
+            <p class="settings-subtitle">Mensagens que chegaram para você nos comentários particulares do Dashboard. Clique em uma para abrir a conversa e responder.</p>
+            <div id="privateNotesList" class="private-comment-thread"></div>
+        </div>
+    </div>
+
     <!-- Modal: Tarefas Recorrentes -->
     <div id="recurringTasksModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" id="closeRecurringTasksModalBtn">&times;</span>
             <h3>Tarefas Recorrentes</h3>
             <p class="settings-subtitle">
-                Escolha a pessoa, depois marque as tarefas dela que se repetem todo dia.
-                <strong>Todo dia às 07:00</strong> a tarefa marcada sai de "Concluída" e volta
-                sozinha para a raia que você escolher (Fazendo, A Fazer, Em Teste ou Pausado),
-                na coluna dela, com o checklist desmarcado. Tarefa que não estiver concluída
-                fica como está.
+                Escolha a pessoa, depois marque as tarefas dela que se repetem.
+                Cada tarefa pode ser <strong>diária</strong>, <strong>semanal</strong> (num dia da semana)
+                ou <strong>mensal</strong> (num dia do mês). <strong>Sempre às 07:00</strong> a tarefa
+                sai de "Concluída" e volta sozinha para a raia que você escolher (Fazendo, A Fazer,
+                Em Teste ou Pausado), na coluna dela, com o checklist desmarcado. Tarefa que não
+                estiver concluída fica como está.
             </p>
             <p class="settings-subtitle" id="recurringTasksStatus"></p>
 
@@ -963,6 +1023,7 @@
                                 <th>%</th>
                                 <th>Avanço</th>
                                 <th>Observações</th>
+                                <th id="dashPrivateHeader">Particular</th>
                                 <th></th>
                             </tr>
                         </thead>
