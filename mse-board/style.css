@@ -4188,6 +4188,15 @@ body.dashboard-only-mode .dashboard-modal-content {
     white-space: nowrap;
 }
 
+/* Frase da agenda embaixo do título ("Toda segunda-feira às 07:00") */
+.recurring-task-schedule {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    display: block;
+    margin-top: 0.1rem;
+}
+
 /* Seletores "Volta para" / "Na coluna" de cada tarefa recorrente */
 .recurring-task-target {
     display: flex;
@@ -4201,6 +4210,16 @@ body.dashboard-only-mode .dashboard-modal-content {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.recurring-time-input {
+    padding: 0.3rem 0.45rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.78rem;
     font-family: var(--font-mono);
 }
 
@@ -4270,4 +4289,318 @@ body.dashboard-only-mode .dashboard-modal-content {
 .recurring-person-chevron {
     color: var(--text-muted);
     flex-shrink: 0;
+}
+
+/* ==========================================
+   COMENTÁRIOS PARTICULARES (Dashboard, Planejamento)
+   ========================================== */
+
+/* Contador de não lidos no sino do cabeçalho. Diferente da bolinha do chat
+   (que é só um ponto), aqui mostra quantos são. */
+.private-notes-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--red);
+    color: #fff;
+    border: 2px solid var(--navy);
+    border-radius: 999px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Botão da coluna "Particular" na tabela do Dashboard */
+.dash-private-cell {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.dash-private-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.28rem 0.5rem;
+    font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.dash-private-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Tem comentário novo pra quem está olhando */
+.dash-private-btn.has-unread {
+    color: var(--red);
+    border-color: var(--red);
+    font-weight: 700;
+}
+
+.dash-private-count {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+
+/* Lista de comentários (thread da tarefa e caixa de entrada do sino) */
+.private-comment-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 40vh;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+}
+
+.private-comment-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.private-comment-item {
+    position: relative;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--text-muted);
+    border-radius: var(--radius-s);
+    padding: 0.55rem 0.75rem;
+    background-color: var(--bg);
+}
+
+/* Ainda não lido por quem está vendo */
+.private-comment-item.is-unread {
+    border-left-color: var(--red);
+    background-color: var(--card);
+}
+
+.private-comment-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.private-comment-card {
+    display: block;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+}
+
+.private-comment-text {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-right: 1.2rem;
+}
+
+.private-comment-del {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.private-comment-item:hover .private-comment-del {
+    opacity: 1;
+}
+
+.private-comment-del:hover {
+    color: var(--red);
+}
+
+/* ---------- Conversa: bolhas, anexos e compositor ---------- */
+
+/* Minha própria mensagem — encostada à direita e em tom de destaque, pra
+   distinguir de relance quem falou o quê. */
+.private-comment-item.is-mine {
+    border-left-color: var(--accent);
+    background-color: rgba(37, 99, 235, 0.06);
+    margin-left: 1.5rem;
+}
+
+.private-comment-item:not(.is-mine) {
+    margin-right: 1.5rem;
+}
+
+.private-comment-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+}
+
+.private-comment-img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: var(--radius-s);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    transition: opacity 0.2s;
+}
+
+.private-comment-img:hover {
+    opacity: 0.8;
+}
+
+.private-comment-attach-draft {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.6rem;
+}
+
+.private-comment-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.private-comment-attach-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.private-comment-attach-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.private-comment-actions .btn-primary {
+    flex: 1;
+}
+
+/* Linha clicável na caixa do sino */
+.private-note-entry {
+    cursor: pointer;
+}
+
+/* ---------- Pop-up de mensagem nova ---------- */
+/* Cartãozinho próprio (não é a notificação do navegador). Fica no mesmo
+   canto dos avisos normais e some sozinho depois de 30s. */
+.private-popup {
+    position: relative;
+    width: 300px;
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-m);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+    padding: 0.8rem 0.9rem;
+    animation: privatePopupIn 0.22s ease-out;
+}
+
+@keyframes privatePopupIn {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Quem prefere menos movimento não recebe a animação de entrada */
+@media (prefers-reduced-motion: reduce) {
+    .private-popup { animation: none; }
+}
+
+.private-popup-close {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.private-popup-close:hover {
+    color: var(--text-primary);
+}
+
+.private-popup-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.3rem;
+}
+
+.private-popup-icon {
+    color: var(--accent);
+    font-size: 0.9rem;
+}
+
+.private-popup-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.private-popup-from {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+    word-break: break-word;
+}
+
+.private-popup-preview {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-primary);
+    margin-bottom: 0.65rem;
+    word-break: break-word;
+}
+
+.private-popup-action {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border: none;
+    border-radius: var(--radius-s);
+    background-color: var(--accent);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background-color 0.15s ease;
+}
+
+.private-popup-action:hover {
+    background-color: var(--accent-hover);
 }

@@ -106,6 +106,7 @@
                             <th>%</th>
                             <th>Avanço</th>
                             <th>Observações</th>
+                            <th id="dashPrivateHeader">Particular</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -130,6 +131,49 @@
         <span id="reportOnTimePct"></span>
         <span id="reportLatePct"></span>
         <div id="reportChart"></div>
+    </div>
+
+    <!-- Modal: Comentário Particular de uma tarefa (só Planejamento) -->
+    <div id="privateCommentModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closePrivateCommentModalBtn">&times;</span>
+            <h3><i class="fa-solid fa-user-lock"></i> Comentário Particular</h3>
+            <p class="settings-subtitle" id="privateCommentCardTitle"></p>
+            <p class="settings-subtitle">
+                Conversa reservada sobre esta tarefa: só os Admins e a pessoa do assunto
+                enxergam. A pessoa pode responder aqui mesmo, e os dois lados podem anexar
+                fotos e arquivos. Nada disso aparece no post-it nem para o resto da equipe.
+            </p>
+
+            <!-- Seletor de conversa: só o Admin vê (ele pode ter um assunto
+                 com cada pessoa na mesma tarefa). Quem não é Admin só tem o
+                 próprio assunto, então o seletor fica escondido. -->
+            <div class="input-group" id="privateCommentThreadPicker">
+                <label for="privateCommentTo">Assunto com</label>
+                <select id="privateCommentTo"></select>
+            </div>
+
+            <div id="privateCommentThread" class="private-comment-thread"></div>
+
+            <div id="privateCommentComposer">
+                <div class="input-group">
+                    <label for="privateCommentText">Sua mensagem</label>
+                    <textarea id="privateCommentText" rows="3" placeholder="Escreva aqui... (Ctrl+Enter envia)"></textarea>
+                </div>
+
+                <div id="privateCommentAttachDraft" class="private-comment-attach-draft"></div>
+
+                <div class="private-comment-actions">
+                    <label class="private-comment-attach-btn" title="Anexar fotos ou arquivos">
+                        <i class="fa-solid fa-paperclip"></i> Anexar
+                        <input type="file" id="privateCommentFiles" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" style="display:none;">
+                    </label>
+                    <button type="button" id="sendPrivateCommentBtn" class="btn-primary">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="confirmModal" class="modal">
