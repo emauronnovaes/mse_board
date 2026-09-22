@@ -1717,8 +1717,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('archivedModal').style.display = 'none';
         });
 
-        // Fecha modais clicando fora
+        // Fecha modais clicando fora — MENOS os que têm formulário longo, onde
+        // um clique fora por acidente apagaria tudo que já foi digitado. O caso
+        // que motivou isso: selecionar texto arrastando o mouse e soltar o botão
+        // fora da caixa conta como clique no fundo. Nesses, só o X fecha.
+        const MODAIS_QUE_SO_FECHAM_NO_X = ['cardModal', 'privateCommentModal'];
         document.querySelectorAll('.modal').forEach(modal => {
+            if (MODAIS_QUE_SO_FECHAM_NO_X.includes(modal.id)) return;
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.style.display = 'none';
             });
@@ -1740,12 +1745,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         document.getElementById('closeModalBtn').addEventListener('click', () => {
+            // Guarda o que estava escrito antes de fechar: fechar no X não é
+            // "descartar", é só sair. Ao reabrir, o rascunho volta com um aviso
+            // e um botão pra descartar de propósito.
+            salvarRascunhoDaTarefa();
             cardModal.style.display = 'none';
         });
 
+        // Clicar fora fecha o modal de PESSOA (formulário curto, pouco a perder),
+        // mas NÃO o de tarefa. Motivo: ao selecionar texto arrastando o mouse
+        // dentro do formulário, se o botão é solto fora da caixa o navegador
+        // conta isso como clique no fundo — e o formulário inteiro ia embora
+        // no meio da digitação. No de tarefa, só o X fecha.
         window.addEventListener('click', (e) => {
             if (e.target === personModal) personModal.style.display = 'none';
-            if (e.target === cardModal) cardModal.style.display = 'none';
         });
 
         document.getElementById('newPersonForm').addEventListener('submit', async (e) => {
@@ -1818,6 +1831,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
             }
 
+            // Salvou de verdade: o rascunho não serve mais pra nada
+            descartarRascunhoDaTarefa(editingId);
+
             renderBoard();
             document.getElementById('newCardForm').reset();
             renderCoverPreview(null);
@@ -1886,6 +1902,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Botões de minimizar as duas barras de cima (Ações e Busca/Filtros).
         // A escolha fica lembrada por navegador — quem trabalha em notebook
         // minimiza uma vez e o quadro abre assim nas próximas.
+        ligarRascunhoAutomatico();
         ligarBarraMinimizavel('toggleFiltersBtn', 'toggleFiltersIcon', 'filterBarContent', 'mse_filters_hidden');
         ligarBarraMinimizavel('toggleActionsBtn', 'toggleActionsIcon', 'boardActionsContent', 'mse_actions_hidden');
     }
@@ -7262,6 +7279,165 @@ function renderPersonAvatarPreview(person) {
     }
 }
 
+// ==========================================
+// RASCUNHO DO FORMULÁRIO DE TAREFA
+// ==========================================
+// Rede de segurança pra não perder o que já foi digitado. Guarda o conteúdo
+// do formulário no próprio navegador enquanto a pessoa escreve, e devolve na
+// próxima vez que o mesmo formulário for aberto.
+//
+// Cobre fechar no X sem querer, recarregar a página, queda de energia e aba
+// fechada por engano. É no localStorage de propósito: é rascunho pessoal e
+// ainda não é uma tarefa — não faz sentido mandar pro servidor nem aparecer
+// pros outros.
+//
+// Uma chave por departamento E por tarefa: editar a tarefa A e a B ao mesmo
+// tempo não mistura os rascunhos, e "nova tarefa" tem a chave dela.
+function chaveDoRascunho(editingId) {
+    const alvo = editingId || 'nova';
+    return `mse_card_draft_${CURRENT_DEPARTMENT}_${alvo}`;
+}
+
+// Campos de texto/seleção do formulário. Anexos, capa e campos
+// personalizados ficam de fora: arquivo não dá pra guardar em texto, e a capa
+// em base64 estourava o limite do localStorage sozinha.
+const CAMPOS_DO_RASCUNHO = [
+    'targetPersonSelect', 'cardTitle', 'cardResumo', 'cardDesc',
+    'cardColor', 'cardPriority', 'cardDueDate', 'cardStartDate'
+];
+
+function rascunhoEstaVazio(dados) {
+    // Só conta como rascunho se tiver texto de verdade. Sem isso, abrir e
+    // fechar o formulário sem escrever nada já deixaria um "rascunho" com as
+    // opções padrão dos seletores.
+    return !['cardTitle', 'cardResumo', 'cardDesc'].some(id => (dados.campos[id] || '').trim());
+}
+
+function salvarRascunhoDaTarefa() {
+    const form = document.getElementById('newCardForm');
+    if (!form) return;
+
+    const editingId = document.getElementById('editingCardId').value;
+    const dados = { campos: {}, labelIds: [], stickerId: null, ts: Date.now() };
+
+    CAMPOS_DO_RASCUNHO.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) dados.campos[id] = el.value;
+    });
+
+    try {
+        dados.labelIds = readSelectedLabelIds();
+        dados.stickerId = selectedStickerId;
+    } catch (err) { /* pickers ainda não montados — segue sem eles */ }
+
+    try {
+        if (rascunhoEstaVazio(dados)) {
+            localStorage.removeItem(chaveDoRascunho(editingId));
+        } else {
+            localStorage.setItem(chaveDoRascunho(editingId), JSON.stringify(dados));
+        }
+    } catch (err) {
+        // Janela privada ou armazenamento cheio: o formulário continua
+        // funcionando, só não guarda rascunho.
+        console.warn('Não foi possível guardar o rascunho:', err);
+    }
+}
+
+function lerRascunhoDaTarefa(editingId) {
+    try {
+        const cru = localStorage.getItem(chaveDoRascunho(editingId));
+        if (!cru) return null;
+        const dados = JSON.parse(cru);
+        return (dados && dados.campos) ? dados : null;
+    } catch (err) {
+        return null;
+    }
+}
+
+function descartarRascunhoDaTarefa(editingId) {
+    try {
+        localStorage.removeItem(chaveDoRascunho(editingId));
+    } catch (err) { /* sem localStorage, nada a limpar */ }
+    const aviso = document.getElementById('cardDraftNotice');
+    if (aviso) aviso.style.display = 'none';
+}
+
+// Coloca o rascunho de volta no formulário. Chamada DEPOIS de o formulário
+// já ter sido preenchido (em branco, na criação; com a tarefa, na edição),
+// então o que estiver guardado tem prioridade — é o mais recente.
+function restaurarRascunhoDaTarefa(editingId) {
+    const aviso = document.getElementById('cardDraftNotice');
+    const dados = lerRascunhoDaTarefa(editingId);
+
+    if (!dados) {
+        if (aviso) aviso.style.display = 'none';
+        return;
+    }
+
+    CAMPOS_DO_RASCUNHO.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && dados.campos[id] !== undefined) el.value = dados.campos[id];
+    });
+
+    if (Array.isArray(dados.labelIds)) renderLabelPicker(dados.labelIds);
+    if (dados.stickerId !== undefined) renderStickerPicker(dados.stickerId);
+    updateChecklistLineNumbers();
+
+    if (aviso) {
+        const quando = new Date(dados.ts || Date.now());
+        const texto = document.getElementById('cardDraftNoticeText');
+        if (texto) {
+            texto.textContent = `Rascunho recuperado de ${quando.toLocaleDateString('pt-BR')} às `
+                + quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+        aviso.style.display = 'flex';
+    }
+}
+
+// Liga o salvamento automático enquanto a pessoa digita. Só uma vez, na
+// inicialização — os campos não são recriados, então basta escutar neles.
+let rascunhoTimer = null;
+
+function ligarRascunhoAutomatico() {
+    const form = document.getElementById('newCardForm');
+    if (!form) return;
+
+    const agendarSalvamento = () => {
+        // Espera parar de digitar: salvar a cada tecla gravaria no
+        // localStorage centenas de vezes à toa.
+        clearTimeout(rascunhoTimer);
+        rascunhoTimer = setTimeout(salvarRascunhoDaTarefa, 600);
+    };
+
+    CAMPOS_DO_RASCUNHO.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', agendarSalvamento);
+        el.addEventListener('change', agendarSalvamento);
+    });
+
+    // Fechar/recarregar a aba salva na hora, sem esperar o tempo do timer
+    window.addEventListener('beforeunload', () => {
+        const modal = document.getElementById('cardModal');
+        if (modal && modal.style.display === 'flex') salvarRascunhoDaTarefa();
+    });
+
+    const descartarBtn = document.getElementById('discardCardDraftBtn');
+    if (descartarBtn) {
+        descartarBtn.addEventListener('click', () => {
+            const editingId = document.getElementById('editingCardId').value;
+            showConfirm('Descartar o rascunho e limpar o formulário?', () => {
+                descartarRascunhoDaTarefa(editingId);
+                if (editingId) {
+                    openCardModalForEdit(editingId); // volta pro conteúdo salvo da tarefa
+                } else {
+                    openCardModalForCreate();
+                }
+            });
+        });
+    }
+}
+
 function openCardModalForCreate() {
     document.getElementById('cardModalTitle').innerHTML = '<i class="fa-solid fa-thumbtack"></i> Criar Nova Tarefa';
     document.getElementById('cardFormSubmitBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar Tarefa';
@@ -7278,6 +7454,7 @@ function openCardModalForCreate() {
     renderStickerPicker();
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
+    restaurarRascunhoDaTarefa('');
     document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -7311,6 +7488,7 @@ function openCardModalForEdit(cardId) {
     document.getElementById('commentsSection').style.display = 'block';
     renderCommentsList(card.id);
 
+    restaurarRascunhoDaTarefa(card.id);
     document.getElementById('cardModal').style.display = 'flex';
 }
 

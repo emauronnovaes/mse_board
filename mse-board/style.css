@@ -4676,3 +4676,47 @@ body.dashboard-only-mode .dashboard-modal-content {
 .private-popup-action:hover {
     background-color: var(--accent-hover);
 }
+
+/* Aviso de rascunho recuperado no formulário de tarefa */
+.card-draft-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.9rem;
+    border: 1px solid var(--gold);
+    border-left: 3px solid var(--gold);
+    border-radius: var(--radius-s);
+    background-color: rgba(217, 145, 26, 0.08);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.card-draft-notice i {
+    color: var(--gold);
+}
+
+.card-draft-notice span {
+    flex: 1;
+    min-width: 0;
+}
+
+.card-draft-notice button {
+    background: none;
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-s);
+    color: var(--gold-hover);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.card-draft-notice button:hover {
+    background-color: var(--gold);
+    color: #fff;
+}
