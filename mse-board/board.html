@@ -379,6 +379,14 @@
             <form id="newCardForm">
                 <input type="hidden" id="editingCardId" value="">
 
+                <!-- Só aparece quando havia texto guardado de uma vez anterior
+                     (ver restaurarRascunhoDaTarefa). -->
+                <div id="cardDraftNotice" class="card-draft-notice" style="display:none;">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span id="cardDraftNoticeText">Rascunho recuperado</span>
+                    <button type="button" id="discardCardDraftBtn">Descartar</button>
+                </div>
+
                 <div class="input-group" id="templateSelectGroup">
                     <label for="templateSelect">Usar modelo (opcional)</label>
                     <select id="templateSelect">
