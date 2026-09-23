@@ -17,6 +17,13 @@
     --gold-hover: #b8780f;
     --green: #1f9d57;
     --red: #d23b3b;
+    /* Laranja claro — usado no "A Fazer" das Pendências por Pessoa. Vermelho
+       ali dava peso de alerta a tarefa que só não começou ainda.
+       São dois tons do mesmo laranja: o claro pinta barra, bolinha e borda,
+       onde a cor é só cor; o fechado pinta o número do topo, que no claro
+       ficava lavado demais no fundo branco pra quem enxerga menos. */
+    --orange: #e8843c;
+    --orange-texto: #c9650f;
     --text-primary: #192231;
     --text-muted: #98a1b0;
 
@@ -4837,6 +4844,74 @@ body.dashboard-only-mode .dashboard-modal-content {
     grid-template-columns: 180px 40px 1fr;
     align-items: center;
     gap: 0.6rem;
+}
+
+/* Só quem pode esconder pessoas ganha a coluna do olho — pros outros a barra
+   continua ocupando a largura toda, como era antes. */
+.pend-chart.tem-olho .pend-chart-row {
+    grid-template-columns: 180px 40px 1fr auto;
+}
+
+.pend-olho {
+    background: none;
+    border: none;
+    padding: 0.25rem 0.3rem;
+    /* Tamanho próprio, sem depender do ícone: o Font Awesome vem de CDN e,
+       se ele não carregar, um botão vazio teria largura zero e ninguém
+       conseguiria clicar. */
+    min-width: 26px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1;
+    border-radius: var(--radius-s);
+    /* Discreto até o mouse chegar perto: é uma ação de arrumação, não algo
+       que deva competir com os números da tela. */
+    opacity: 0.45;
+    transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.pend-chart-row:hover .pend-olho { opacity: 1; }
+
+.pend-olho:hover {
+    color: var(--accent);
+    background-color: var(--line-2);
+}
+
+.pend-ocultos {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+}
+
+.pend-ocultos-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.pend-oculto-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-muted);
+    background-color: var(--line-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.pend-oculto-chip:hover {
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .pend-chart-name {
