@@ -3385,6 +3385,19 @@ function renderDeliveryReport() {
         const person = state.people.find(p => p.id === card.personId);
         const personId = person ? person.id : '__sem_coluna__';
 
+        // Esta tabela mostra só o que ainda está em andamento: A Fazer,
+        // Fazendo, Em Teste e Pausado. Tarefa concluída sai daqui.
+        //
+        // São DOIS jeitos de estar concluída, e os dois precisam ser cobertos:
+        // a raia "Concluída" dentro da coluna da pessoa (status === 'done') e
+        // a aba de "Concluído", que é uma coluna à parte (person.isDone).
+        //
+        // Os números de entregas (pódios, ranking, gráfico e a página de
+        // Estatísticas) NÃO passam por aqui — continuam contando as
+        // concluídas normalmente, que é o propósito deles.
+        if ((card.status || 'todo') === 'done') return;
+        if (person && person.isDone) return;
+
         // Aplica os filtros — pula o cartão se não bater
         if (taskFilterPersonId && personId !== taskFilterPersonId) return;
         if (taskFilterLane && (card.status || 'todo') !== taskFilterLane) return;
