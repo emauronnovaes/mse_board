@@ -499,6 +499,442 @@ async function tryInheritLoginFromSso() {
     }
 }
 
+// Páginas soltas do Dashboard/Estatísticas: escreve o departamento no
+// cabeçalho e propaga o ?dept= nos links de navegação entre elas.
+//
+// Essas páginas atendem qualquer departamento pelo ?dept= da URL, mas os
+// links do topo são fixos no HTML — sem ajustar aqui, sair do Dashboard de
+// Planejamento pelas Estatísticas levava pro quadro de Programação calado.
+function ajustarCabecalhoDoDashboardSolto() {
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+
+    // Nome do departamento ao lado do título ("Dashboard de Entregas")
+    const brand = document.querySelector('.standalone-topbar-brand span');
+    const nomeDaPagina = brand ? brand.textContent.split('(')[0].trim() : 'Dashboard';
+    if (brand && !brand.textContent.includes('(')) {
+        brand.textContent = `${nomeDaPagina} (${deptLabel})`;
+    }
+    // Reescreve o título inteiro em vez de remendar: a regra genérica lá do
+    // DOMContentLoaded já tinha mexido nele e o resultado saía embolado
+    // ("MSE Board (Planejamento)Dashboard de Entregas — ").
+    document.title = `${nomeDaPagina} (${deptLabel}) — MSE Board`;
+
+    // Links do topo carregam o departamento atual junto
+    document.querySelectorAll('.standalone-nav-links a').forEach(link => {
+        const destino = (link.getAttribute('href') || '').split('?')[0];
+        if (!destino || destino.startsWith('http')) return;
+        link.href = CURRENT_DEPARTMENT === 'programacao'
+            ? destino
+            : `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+    });
+}
+
+// ==========================================
+// PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
+// ==========================================
+// Mesma ideia do painel de pendências do Portal, só que o agrupamento é por
+// PESSOA (a coluna do quadro) em vez de por departamento, e "Concluída" não
+// entra — nem como coluna, nem nos números do topo. Esta tela é só do que
+// ainda está em aberto.
+//
+// Não guarda dados próprios: lê os mesmos post-its do quadro (state.cards) e
+// grava pelos mesmos caminhos (moveCard, persistCard). Mudar o status aqui
+// muda no quadro, e vice-versa.
+
+// As quatro raias em aberto do quadro. "done" fica de fora de propósito.
+const PENDENCIAS_LANES = [
+    { key: 'afazer',  label: 'A Fazer',  cor: 'var(--red)' },
+    { key: 'todo',    label: 'Fazendo',  cor: 'var(--accent)' },
+    { key: 'testing', label: 'Em Teste', cor: '#7c3aed' },
+    { key: 'paused',  label: 'Pausado',  cor: 'var(--gold)' }
+];
+
+// Filtro de pessoa da tela (vazio = todas). Fica só na memória: é navegação,
+// não configuração do quadro.
+let pendenciasPersonFilter = '';
+
+// Quem pode mexer: Admin e Editor. Observador (e quem não está em Membros)
+// só visualiza, igual ao resto do quadro.
+function podeEditarPendencias() {
+    const papel = getMemberRole(currentUserName);
+    return papel === 'Admin' || papel === 'Editor';
+}
+
+// Post-its que contam como pendência: em aberto, não arquivados e de uma
+// coluna de pessoa de verdade.
+function getPendencias() {
+    return (state.cards || []).filter(card => {
+        if (card.archived) return false;
+        // Concluída some dos dois jeitos possíveis: pela raia e pela aba
+        if ((card.status || 'todo') === 'done') return false;
+        const pessoa = (state.people || []).find(p => p.id === card.personId);
+        if (pessoa && pessoa.isDone) return false;
+        // "Sugestões Mia" é uma caixa de entrada, não a pendência de alguém
+        if (card.personId === 'suggestions') return false;
+        return true;
+    });
+}
+
+function nomeDaPessoaDaPendencia(personId) {
+    const p = (state.people || []).find(pp => pp.id === personId);
+    return p ? p.name : 'Sem coluna';
+}
+
+// Número curto e estável por post-it (#1, #2...), na ordem de criação — é o
+// "#12" que aparece no topo de cada card.
+let pendenciasNumeroPorCard = {};
+
+function recalcularNumerosDasPendencias() {
+    pendenciasNumeroPorCard = {};
+    [...(state.cards || [])]
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+        .forEach((c, i) => { pendenciasNumeroPorCard[c.id] = i + 1; });
+}
+
+// ---------- Desenho da tela ----------
+
+function renderPendencias() {
+    recalcularNumerosDasPendencias();
+    renderPendenciasPersonFilter();
+    renderPendenciasStats();
+    renderPendenciasChart();
+    renderPendenciasBoard();
+}
+
+// Só as pendências que passam pelo filtro de pessoa
+function getPendenciasFiltradas() {
+    const todas = getPendencias();
+    if (!pendenciasPersonFilter) return todas;
+    return todas.filter(c => c.personId === pendenciasPersonFilter);
+}
+
+function renderPendenciasPersonFilter() {
+    const select = document.getElementById('pendPersonFilter');
+    if (!select) return;
+
+    const comPendencia = [...new Set(getPendencias().map(c => c.personId))]
+        .map(id => (state.people || []).find(p => p.id === id))
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    select.innerHTML = '<option value="">Todas as pessoas</option>' +
+        comPendencia.map(p =>
+            `<option value="${escapeHtml(p.id)}" ${p.id === pendenciasPersonFilter ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+        ).join('');
+
+    const sub = document.getElementById('pendSubtitle');
+    if (sub) {
+        const qtdPessoas = comPendencia.length;
+        sub.textContent = `${qtdPessoas} pessoa(s) com pendência · só o que está em aberto`
+            + (podeEditarPendencias() ? ' · arraste os cards entre as colunas' : ' · somente leitura');
+    }
+}
+
+function renderPendenciasStats() {
+    const box = document.getElementById('pendStats');
+    if (!box) return;
+
+    const cards = getPendenciasFiltradas();
+    const cartoes = [
+        { rotulo: 'Total', valor: cards.length, cor: 'var(--navy-2)' },
+        ...PENDENCIAS_LANES.map(l => ({
+            rotulo: l.label,
+            valor: cards.filter(c => (c.status || 'todo') === l.key).length,
+            cor: l.cor
+        }))
+    ];
+
+    box.innerHTML = cartoes.map(c => `
+        <div class="pend-stat" style="border-left-color:${c.cor};">
+            <div class="pend-stat-label">${escapeHtml(c.rotulo)}</div>
+            <div class="pend-stat-value" style="color:${c.cor};">${c.valor}</div>
+        </div>
+    `).join('');
+}
+
+function renderPendenciasChart() {
+    const legenda = document.getElementById('pendChartLegend');
+    const box = document.getElementById('pendChart');
+    if (!box) return;
+
+    if (legenda) {
+        legenda.innerHTML = PENDENCIAS_LANES.map(l =>
+            `<span class="pend-legend-item"><i style="background:${l.cor}"></i>${l.label}</span>`
+        ).join('');
+    }
+
+    // Agrupa por pessoa (respeitando o filtro) e ordena de quem tem mais
+    // pendência pra quem tem menos — a pergunta que a tela responde.
+    const porPessoa = {};
+    getPendenciasFiltradas().forEach(card => {
+        (porPessoa[card.personId] = porPessoa[card.personId] || []).push(card);
+    });
+
+    const linhas = Object.keys(porPessoa)
+        .map(id => ({ id, nome: nomeDaPessoaDaPendencia(id), cards: porPessoa[id] }))
+        .sort((a, b) => b.cards.length - a.cards.length || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    if (linhas.length === 0) {
+        box.innerHTML = '<p class="pend-vazio">Nenhuma pendência em aberto.</p>';
+        return;
+    }
+
+    box.innerHTML = linhas.map(linha => {
+        const total = linha.cards.length;
+        // Cada barra vai a 100% mostrando a MISTURA de status da pessoa; o
+        // total aparece do lado pra não perder a noção de volume.
+        const faixas = PENDENCIAS_LANES.map(l => {
+            const n = linha.cards.filter(c => (c.status || 'todo') === l.key).length;
+            if (n === 0) return '';
+            const pct = (n / total) * 100;
+            return `<span class="pend-bar-seg" style="width:${pct}%; background:${l.cor};" title="${l.label}: ${n}"></span>`;
+        }).join('');
+
+        return `
+            <div class="pend-chart-row">
+                <span class="pend-chart-name" title="${escapeHtml(linha.nome)}">${escapeHtml(linha.nome)}</span>
+                <span class="pend-chart-total">${total}</span>
+                <span class="pend-bar">${faixas}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderPendenciasBoard() {
+    const box = document.getElementById('pendBoard');
+    if (!box) return;
+
+    const cards = getPendenciasFiltradas();
+    const podeEditar = podeEditarPendencias();
+
+    box.innerHTML = PENDENCIAS_LANES.map(lane => {
+        const daLane = cards
+            .filter(c => (c.status || 'todo') === lane.key)
+            .sort((a, b) => nomeDaPessoaDaPendencia(a.personId).localeCompare(nomeDaPessoaDaPendencia(b.personId), 'pt-BR')
+                || (a.title || '').localeCompare(b.title || '', 'pt-BR'));
+
+        return `
+            <section class="pend-col" data-lane="${lane.key}" style="--pend-cor:${lane.cor};">
+                <header class="pend-col-head">
+                    <span class="pend-col-title"><i class="pend-dot"></i>${lane.label}</span>
+                    <span class="pend-col-count">${daLane.length}</span>
+                </header>
+                <div class="pend-col-body" data-lane="${lane.key}">
+                    ${daLane.map(c => montaCardDePendencia(c, podeEditar)).join('')
+                      || '<p class="pend-vazio-col">Nada aqui.</p>'}
+                </div>
+                ${podeEditar ? `<button type="button" class="pend-novo-btn" data-novo="${lane.key}">+ Novo item</button>` : ''}
+            </section>
+        `;
+    }).join('');
+
+    ligarInteracoesDasPendencias();
+}
+
+function montaCardDePendencia(card, podeEditar) {
+    const numero = pendenciasNumeroPorCard[card.id] || 0;
+    const pessoa = nomeDaPessoaDaPendencia(card.personId);
+    const resumo = (card.resumo || '').trim();
+    const obs = (card.observacao || '').trim();
+
+    const prazo = card.dueDate
+        ? `<span class="pend-card-prazo${isOverdue(card) ? ' is-late' : ''}"><i class="fa-solid fa-calendar-days"></i> ${formatDateBR(card.dueDate)}</span>`
+        : '';
+
+    // O seletor inclui "Concluída": é assim que a pessoa encerra a tarefa —
+    // ao escolher, o card sai desta tela (que é só do que está em aberto).
+    const seletor = podeEditar ? `
+        <select class="pend-card-status" data-status-de="${escapeHtml(card.id)}">
+            ${PENDENCIAS_LANES.map(l => `<option value="${l.key}" ${l.key === (card.status || 'todo') ? 'selected' : ''}>${l.label}</option>`).join('')}
+            <option value="done">Concluída ✓</option>
+        </select>
+    ` : `<span class="pend-card-status-ro">${PENDENCIAS_LANES.find(l => l.key === (card.status || 'todo'))?.label || 'Fazendo'}</span>`;
+
+    return `
+        <article class="pend-card" data-card="${escapeHtml(card.id)}" ${podeEditar ? 'draggable="true"' : ''}>
+            <div class="pend-card-top">
+                <span class="pend-card-meta">#${numero} · ${escapeHtml(pessoa)}</span>
+                ${podeEditar ? `<button type="button" class="pend-card-del" data-excluir="${escapeHtml(card.id)}" title="Excluir tarefa">&times;</button>` : ''}
+            </div>
+            <h4 class="pend-card-title">${escapeHtml(card.title || '(sem título)')}</h4>
+            <p class="pend-card-desc${resumo ? '' : ' is-empty'}">${resumo ? escapeHtml(resumo) : 'Sem resumo'}</p>
+            <p class="pend-card-obs">
+                <strong>Obs:</strong>
+                <span class="pend-obs-text${obs ? '' : ' is-empty'}" ${podeEditar ? `data-obs-de="${escapeHtml(card.id)}" title="Clique para editar"` : ''}>${obs ? escapeHtml(obs) : 'adicionar observação...'}</span>
+            </p>
+            <div class="pend-card-foot">
+                ${prazo}
+                ${seletor}
+            </div>
+        </article>
+    `;
+}
+
+// ---------- Interações ----------
+
+function ligarInteracoesDasPendencias() {
+    const box = document.getElementById('pendBoard');
+    if (!box) return;
+
+    // Trocar status pelo seletor
+    box.querySelectorAll('select[data-status-de]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            moverPendencia(sel.dataset.statusDe, sel.value);
+        });
+    });
+
+    // Excluir
+    box.querySelectorAll('button[data-excluir]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const card = (state.cards || []).find(c => c.id === btn.dataset.excluir);
+            if (!card) return;
+            showConfirm(`Excluir "${card.title}"? Essa ação remove a tarefa do quadro.`, () => {
+                deleteCardById(card.id);
+                renderPendencias();
+                showToast('Tarefa excluída.', 'success');
+            });
+        });
+    });
+
+    // Observação editável no próprio card
+    box.querySelectorAll('[data-obs-de]').forEach(el => {
+        el.addEventListener('click', () => editarObservacaoDaPendencia(el));
+    });
+
+    // Arrastar entre colunas
+    box.querySelectorAll('.pend-card[draggable="true"]').forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', card.dataset.card);
+            card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+    });
+
+    box.querySelectorAll('.pend-col-body').forEach(col => {
+        col.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            col.classList.add('is-drop-target');
+        });
+        col.addEventListener('dragleave', () => col.classList.remove('is-drop-target'));
+        col.addEventListener('drop', (e) => {
+            e.preventDefault();
+            col.classList.remove('is-drop-target');
+            const cardId = e.dataTransfer.getData('text/plain');
+            if (cardId) moverPendencia(cardId, col.dataset.lane);
+        });
+    });
+
+    // Novo item
+    box.querySelectorAll('button[data-novo]').forEach(btn => {
+        btn.addEventListener('click', () => abrirNovaPendencia(btn));
+    });
+}
+
+function moverPendencia(cardId, novoStatus) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || !podeEditarPendencias()) return;
+    if ((card.status || 'todo') === novoStatus) return;
+
+    // Mantém a pessoa; aqui só o status muda
+    moveCard(cardId, card.personId, novoStatus);
+
+    if (novoStatus === 'done') {
+        showToast(`"${card.title}" concluída — saiu das pendências.`, 'success');
+    }
+    renderPendencias();
+}
+
+function editarObservacaoDaPendencia(el) {
+    const cardId = el.dataset.obsDe;
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+
+    el.contentEditable = 'true';
+    el.classList.remove('is-empty');
+    el.textContent = card.observacao || '';
+    el.focus();
+    document.execCommand('selectAll', false, null);
+
+    const encerrar = (gravar) => {
+        el.contentEditable = 'false';
+        el.removeEventListener('blur', aoSair);
+        el.removeEventListener('keydown', aoTeclar);
+        if (gravar) {
+            // saveDashboardObservation já compara com o valor atual e só
+            // grava se mudou de verdade
+            saveDashboardObservation(cardId, el.textContent.trim());
+        }
+        renderPendencias();
+    };
+    const aoSair = () => encerrar(true);
+    const aoTeclar = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); encerrar(false); }
+    };
+
+    el.addEventListener('blur', aoSair);
+    el.addEventListener('keydown', aoTeclar);
+}
+
+// Formulário curto no pé da coluna: título + pessoa. O resto (resumo,
+// checklist, prazo) continua sendo editado no quadro.
+function abrirNovaPendencia(btn) {
+    const lane = btn.dataset.novo;
+    const col = btn.closest('.pend-col');
+    if (!col || col.querySelector('.pend-novo-form')) return;
+
+    const pessoas = (state.people || []).filter(p => !p.isDone && p.id !== 'suggestions');
+    if (pessoas.length === 0) {
+        showToast('Crie uma coluna de pessoa no quadro antes de adicionar pendências.');
+        return;
+    }
+
+    const form = document.createElement('div');
+    form.className = 'pend-novo-form';
+    form.innerHTML = `
+        <input type="text" class="pend-novo-titulo" placeholder="Título da tarefa" maxlength="200">
+        <select class="pend-novo-pessoa">
+            ${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === pendenciasPersonFilter ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+        <div class="pend-novo-acoes">
+            <button type="button" class="pend-novo-cancelar">Cancelar</button>
+            <button type="button" class="pend-novo-criar">Criar</button>
+        </div>
+    `;
+    btn.before(form);
+
+    const input = form.querySelector('.pend-novo-titulo');
+    input.focus();
+
+    const criar = () => {
+        const titulo = input.value.trim();
+        if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
+
+        const novoId = addCard({
+            personId: form.querySelector('.pend-novo-pessoa').value,
+            title: titulo,
+            lines: [],
+            color: 'yellow',
+            priority: 'media',
+            dueDate: '',
+            author: currentUserName || 'Desconhecido',
+            attachments: []
+        });
+        // addCard nasce em "A Fazer"; move pra coluna onde o botão foi clicado
+        if (novoId && lane !== 'afazer') moveCard(novoId, form.querySelector('.pend-novo-pessoa').value, lane);
+
+        renderPendencias();
+        showToast('Tarefa criada.', 'success');
+    };
+
+    form.querySelector('.pend-novo-criar').addEventListener('click', criar);
+    form.querySelector('.pend-novo-cancelar').addEventListener('click', () => form.remove());
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); criar(); }
+        if (e.key === 'Escape') { e.preventDefault(); form.remove(); }
+    });
+}
+
 window.addEventListener('error', (e) => {
     console.error('Erro capturado:', e.error || e.message);
     if (typeof state !== 'undefined' && state && state.errorLog) {
@@ -537,6 +973,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Só busca os dados e mostra o relatório — pula toda a inicialização
     // do quadro (login, drag-and-drop, sidebar, chat, etc).
     // ==========================================
+    // PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
+    // Mesmo caminho das outras páginas soltas: herda o login do Portal,
+    // busca os dados e desenha só esta tela — sem quadro, sem chat.
+    if (document.body.dataset.standalonePendencias) {
+        await tryInheritLoginFromSso();
+        await loadState();
+
+        let viewerEmail = null;
+        try {
+            const stored = JSON.parse(localStorage.getItem('mse_user'));
+            viewerEmail = stored && stored.name;
+        } catch (e) { /* sem sessão — entra como visitante, só lendo */ }
+        currentUserName = viewerEmail;
+
+        const viewerLabelEl = document.getElementById('standaloneViewerLabel');
+        if (viewerLabelEl) {
+            viewerLabelEl.textContent = viewerEmail
+                ? `${viewerEmail}${podeEditarPendencias() ? '' : ' (somente leitura)'}`
+                : 'Visitante (somente leitura)';
+        }
+
+        ajustarCabecalhoDoDashboardSolto();
+        renderPendencias();
+
+        const filtro = document.getElementById('pendPersonFilter');
+        if (filtro) {
+            filtro.addEventListener('change', () => {
+                pendenciasPersonFilter = filtro.value;
+                renderPendencias();
+            });
+        }
+
+        // Mantém a tela em dia com quem está mexendo no quadro ao mesmo tempo.
+        // Não redesenha durante um arraste nem com um formulário aberto, pra
+        // não puxar o card da mão de quem está usando.
+        setInterval(async () => {
+            if (document.querySelector('.pend-card.is-dragging')) return;
+            if (document.querySelector('.pend-novo-form')) return;
+            if (document.querySelector('[contenteditable="true"]')) return;
+            const frescos = await fetchCardsFromServer();
+            const pessoas = await fetchPeopleFromServer();
+            if (frescos === null || pessoas === null) return;
+            if (JSON.stringify(frescos) === JSON.stringify(state.cards)
+                && JSON.stringify(pessoas) === JSON.stringify(state.people)) return;
+            state.cards = frescos;
+            state.people = pessoas;
+            renderPendencias();
+        }, 8000);
+
+        return;
+    }
+
     if (document.body.dataset.standaloneDashboard) {
         // Processa o token de SSO que o Portal manda na URL (?sso=...) —
         // sem isso, a sessão nunca era reconhecida no primeiro acesso vindo
@@ -561,6 +1049,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? `${viewerEmail}${canEditDashboard ? ' (Admin — pode editar)' : ' (somente leitura)'}`
                 : 'Visitante (somente leitura)';
         }
+
+        // Mostra de qual quadro são os dados e mantém o departamento ao trocar
+        // de página. Sem isso, as duas páginas soltas ficam iguais na tela
+        // (dá pra achar que é o mesmo quadro) e o link de uma pra outra jogava
+        // a pessoa de volta pra Programação sem avisar.
+        ajustarCabecalhoDoDashboardSolto();
 
         // Comentários particulares também funcionam na página solta do
         // Dashboard — é de lá que o Admin costuma escrever.
@@ -1463,21 +1957,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
 
-        // Menu lateral — só existe no quadro de PLANEJAMENTO, e lá só pra
-        // quem tem papel de Admin. Em Programação (ou qualquer outro
-        // departamento) ninguém vê, nem Admin.
+        // Menu lateral — só existe no quadro de PLANEJAMENTO e, lá dentro,
+        // só pra conta admin@mse.com.br. NÃO basta ter papel de Admin: o
+        // quadro tem vários Admins (que criam post-its, gerenciam membros
+        // pelo botão do menu de cima), mas as ferramentas do menu lateral
+        // (backup, auditoria, webhooks, log de erros) ficam só nessa conta.
         //
-        // A checagem de departamento é o que manda: as ferramentas do menu
-        // lateral (dashboards, relatórios, backups) foram feitas pro fluxo de
-        // Planejamento. O papel vem de state.members, que é por departamento,
-        // então "Admin" aqui já significa "Admin em Planejamento".
+        // A checagem é pelo e-mail de propósito, não pelo papel: papel é por
+        // departamento (state.members vem do board_state de cada um), então
+        // checar papel deixaria a regra frouxa conforme quem foi promovido
+        // em Planejamento.
         //
         // Pra qualquer outra pessoa continua escondido — já nasce assim no
         // HTML, o que evita o "flash" de aparecer e sumir ao carregar a
         // página. Aqui é só display:none e não .remove() porque mais abaixo
         // o código mexe em #sidebarFootRole e #sidebarFootAvatar (que vivem
         // dentro da sidebar) sem checar se existem — removendo, quebraria.
-        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && isAdminViewer;
+        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && userData.name === BOOTSTRAP_ADMIN_EMAIL;
         const sidebarEl = document.getElementById('sidebar');
         const mobileToggleEl = document.getElementById('mobileSidebarToggle');
         if (podeVerMenuLateral) {
