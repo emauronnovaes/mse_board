@@ -499,6 +499,36 @@ async function tryInheritLoginFromSso() {
     }
 }
 
+// Páginas soltas do Dashboard/Estatísticas: escreve o departamento no
+// cabeçalho e propaga o ?dept= nos links de navegação entre elas.
+//
+// Essas páginas atendem qualquer departamento pelo ?dept= da URL, mas os
+// links do topo são fixos no HTML — sem ajustar aqui, sair do Dashboard de
+// Planejamento pelas Estatísticas levava pro quadro de Programação calado.
+function ajustarCabecalhoDoDashboardSolto() {
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+
+    // Nome do departamento ao lado do título ("Dashboard de Entregas")
+    const brand = document.querySelector('.standalone-topbar-brand span');
+    const nomeDaPagina = brand ? brand.textContent.split('(')[0].trim() : 'Dashboard';
+    if (brand && !brand.textContent.includes('(')) {
+        brand.textContent = `${nomeDaPagina} (${deptLabel})`;
+    }
+    // Reescreve o título inteiro em vez de remendar: a regra genérica lá do
+    // DOMContentLoaded já tinha mexido nele e o resultado saía embolado
+    // ("MSE Board (Planejamento)Dashboard de Entregas — ").
+    document.title = `${nomeDaPagina} (${deptLabel}) — MSE Board`;
+
+    // Links do topo carregam o departamento atual junto
+    document.querySelectorAll('.standalone-nav-links a').forEach(link => {
+        const destino = (link.getAttribute('href') || '').split('?')[0];
+        if (!destino || destino.startsWith('http')) return;
+        link.href = CURRENT_DEPARTMENT === 'programacao'
+            ? destino
+            : `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+    });
+}
+
 window.addEventListener('error', (e) => {
     console.error('Erro capturado:', e.error || e.message);
     if (typeof state !== 'undefined' && state && state.errorLog) {
@@ -561,6 +591,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? `${viewerEmail}${canEditDashboard ? ' (Admin — pode editar)' : ' (somente leitura)'}`
                 : 'Visitante (somente leitura)';
         }
+
+        // Mostra de qual quadro são os dados e mantém o departamento ao trocar
+        // de página. Sem isso, as duas páginas soltas ficam iguais na tela
+        // (dá pra achar que é o mesmo quadro) e o link de uma pra outra jogava
+        // a pessoa de volta pra Programação sem avisar.
+        ajustarCabecalhoDoDashboardSolto();
 
         // Comentários particulares também funcionam na página solta do
         // Dashboard — é de lá que o Admin costuma escrever.
@@ -1463,21 +1499,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
 
-        // Menu lateral — só existe no quadro de PLANEJAMENTO, e lá só pra
-        // quem tem papel de Admin. Em Programação (ou qualquer outro
-        // departamento) ninguém vê, nem Admin.
+        // Menu lateral — só existe no quadro de PLANEJAMENTO e, lá dentro,
+        // só pra conta admin@mse.com.br. NÃO basta ter papel de Admin: o
+        // quadro tem vários Admins (que criam post-its, gerenciam membros
+        // pelo botão do menu de cima), mas as ferramentas do menu lateral
+        // (backup, auditoria, webhooks, log de erros) ficam só nessa conta.
         //
-        // A checagem de departamento é o que manda: as ferramentas do menu
-        // lateral (dashboards, relatórios, backups) foram feitas pro fluxo de
-        // Planejamento. O papel vem de state.members, que é por departamento,
-        // então "Admin" aqui já significa "Admin em Planejamento".
+        // A checagem é pelo e-mail de propósito, não pelo papel: papel é por
+        // departamento (state.members vem do board_state de cada um), então
+        // checar papel deixaria a regra frouxa conforme quem foi promovido
+        // em Planejamento.
         //
         // Pra qualquer outra pessoa continua escondido — já nasce assim no
         // HTML, o que evita o "flash" de aparecer e sumir ao carregar a
         // página. Aqui é só display:none e não .remove() porque mais abaixo
         // o código mexe em #sidebarFootRole e #sidebarFootAvatar (que vivem
         // dentro da sidebar) sem checar se existem — removendo, quebraria.
-        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && isAdminViewer;
+        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && userData.name === BOOTSTRAP_ADMIN_EMAIL;
         const sidebarEl = document.getElementById('sidebar');
         const mobileToggleEl = document.getElementById('mobileSidebarToggle');
         if (podeVerMenuLateral) {
