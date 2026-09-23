@@ -4720,3 +4720,431 @@ body.dashboard-only-mode .dashboard-modal-content {
     background-color: var(--gold);
     color: #fff;
 }
+
+/* ==========================================
+   PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
+   ========================================== */
+
+.pend-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.pend-title {
+    font-size: 1.35rem;
+    margin: 0;
+}
+
+.pend-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0.2rem 0 0;
+}
+
+.pend-person-filter {
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-family: inherit;
+    min-width: 200px;
+}
+
+/* --- Números do topo --- */
+.pend-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 1.1rem;
+}
+
+.pend-stat {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+    border-radius: var(--radius-m);
+    padding: 0.8rem 1rem;
+}
+
+.pend-stat-label {
+    font-size: 0.66rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.pend-stat-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* --- Distribuição por pessoa --- */
+.pend-chart-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.2rem;
+}
+
+.pend-chart-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.pend-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.pend-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.pend-legend-item i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.pend-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.pend-chart-row {
+    display: grid;
+    grid-template-columns: 180px 40px 1fr;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.pend-chart-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pend-chart-total {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.pend-bar {
+    display: flex;
+    height: 13px;
+    border-radius: 999px;
+    overflow: hidden;
+    background-color: var(--line-2);
+}
+
+.pend-bar-seg {
+    display: block;
+    height: 100%;
+}
+
+/* --- Kanban --- */
+.pend-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 0.9rem;
+    align-items: start;
+}
+
+.pend-col {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--pend-cor);
+    border-radius: var(--radius-m);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.pend-col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.pend-col-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--pend-cor);
+}
+
+.pend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: var(--pend-cor);
+    flex-shrink: 0;
+}
+
+.pend-col-count {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    background-color: var(--line-2);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+}
+
+.pend-col-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.7rem;
+    min-height: 90px;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: var(--radius-s);
+    transition: background-color 0.15s ease;
+}
+
+.pend-col-body.is-drop-target {
+    background-color: var(--bg);
+    outline: 2px dashed var(--pend-cor);
+    outline-offset: -4px;
+}
+
+/* --- Card --- */
+.pend-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--pend-cor);
+    border-radius: var(--radius-s);
+    padding: 0.6rem 0.7rem;
+    cursor: grab;
+}
+
+.pend-card.is-dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+}
+
+.pend-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+
+.pend-card-meta {
+    font-size: 0.62rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+.pend-card-del {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.pend-card:hover .pend-card-del {
+    opacity: 1;
+}
+
+.pend-card-del:hover {
+    color: var(--red);
+}
+
+.pend-card-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.35;
+    margin: 0 0 0.25rem;
+    word-break: break-word;
+}
+
+.pend-card-desc {
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--text-primary);
+    margin: 0 0 0.35rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.pend-card-desc.is-empty,
+.pend-obs-text.is-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.pend-card-obs {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin: 0 0 0.45rem;
+    word-break: break-word;
+}
+
+.pend-obs-text {
+    cursor: text;
+}
+
+.pend-obs-text[contenteditable="true"] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+    background-color: var(--bg);
+    font-style: normal;
+    color: var(--text-primary);
+}
+
+.pend-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.pend-card-prazo {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.pend-card-prazo.is-late {
+    color: var(--red);
+    font-weight: 700;
+}
+
+.pend-card-status,
+.pend-card-status-ro {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-family: inherit;
+    padding: 0.22rem 0.4rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--bg);
+    color: var(--text-primary);
+}
+
+.pend-card-status-ro {
+    color: var(--text-muted);
+}
+
+/* --- Vazios e novo item --- */
+.pend-vazio,
+.pend-vazio-col {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.pend-vazio-col {
+    font-size: 0.74rem;
+    font-style: italic;
+    text-align: center;
+    padding: 0.6rem 0;
+}
+
+.pend-novo-btn {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.6rem;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.pend-novo-btn:hover {
+    color: var(--pend-cor);
+    background-color: var(--line-2);
+}
+
+.pend-novo-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid var(--border);
+    background-color: var(--bg);
+}
+
+.pend-novo-form input,
+.pend-novo-form select {
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-family: inherit;
+}
+
+.pend-novo-acoes {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.pend-novo-acoes button {
+    flex: 1;
+    padding: 0.35rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.pend-novo-acoes .pend-novo-criar {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
