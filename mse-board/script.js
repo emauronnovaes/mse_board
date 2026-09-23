@@ -543,7 +543,9 @@ function ajustarCabecalhoDoDashboardSolto() {
 
 // As quatro raias em aberto do quadro. "done" fica de fora de propósito.
 const PENDENCIAS_LANES = [
-    { key: 'afazer',  label: 'A Fazer',  cor: 'var(--red)' },
+    // corTexto só existe onde a cor vira texto e o tom de fundo não serve;
+    // sem ela, vale a mesma cor das barras.
+    { key: 'afazer',  label: 'A Fazer',  cor: 'var(--orange)', corTexto: 'var(--orange-texto)' },
     { key: 'todo',    label: 'Fazendo',  cor: 'var(--accent)' },
     { key: 'testing', label: 'Em Teste', cor: '#7c3aed' },
     { key: 'paused',  label: 'Pausado',  cor: 'var(--gold)' }
@@ -552,6 +554,59 @@ const PENDENCIAS_LANES = [
 // Filtro de pessoa da tela (vazio = todas). Fica só na memória: é navegação,
 // não configuração do quadro.
 let pendenciasPersonFilter = '';
+
+// ---------- Esconder pessoas da tela ----------
+// Tirar gente da lista é uma preferência de quem está OLHANDO, não uma mudança
+// no quadro: os post-its continuam lá, a pessoa continua com as tarefas dela e
+// ninguém mais vê diferença. Por isso fica no navegador de quem escondeu, e
+// não no estado compartilhado — assim não há risco de alguém sumir do quadro
+// dos outros sem querer. O preço é que a lista não acompanha em outro
+// computador; se precisar disso, tem que ir pro servidor.
+const PENDENCIAS_OLHO_LIBERADO_PARA = ['matheus.batista@mse.com.br'];
+
+let pendenciasPessoasOcultas = new Set();
+
+function podeEsconderPessoasDaPendencia() {
+    const email = (currentUserName || '').trim().toLowerCase();
+    return PENDENCIAS_OLHO_LIBERADO_PARA.includes(email);
+}
+
+function chaveDasPessoasOcultas() {
+    return `mse_pend_ocultos_${(currentUserName || '').trim().toLowerCase()}`;
+}
+
+function carregarPessoasOcultasDaPendencia() {
+    pendenciasPessoasOcultas = new Set();
+    if (!podeEsconderPessoasDaPendencia()) return;
+    try {
+        const salvo = JSON.parse(localStorage.getItem(chaveDasPessoasOcultas()));
+        if (Array.isArray(salvo)) pendenciasPessoasOcultas = new Set(salvo);
+    } catch (e) { /* nada salvo ainda, ou salvo corrompido — começa vazio */ }
+}
+
+function salvarPessoasOcultasDaPendencia() {
+    try {
+        localStorage.setItem(chaveDasPessoasOcultas(), JSON.stringify([...pendenciasPessoasOcultas]));
+    } catch (e) {
+        showToast('Não consegui guardar essa preferência no navegador.', 'error');
+    }
+}
+
+function esconderPessoaDaPendencia(personId) {
+    pendenciasPessoasOcultas.add(personId);
+    // Se a pessoa escondida era justamente a do filtro, a tela ficaria vazia
+    // sem explicação — volta pra "Todas as pessoas".
+    if (pendenciasPersonFilter === personId) pendenciasPersonFilter = '';
+    salvarPessoasOcultasDaPendencia();
+    renderPendencias();
+    showToast(`${nomeDaPessoaDaPendencia(personId)} saiu da sua lista. As tarefas dela continuam no quadro.`, 'success');
+}
+
+function mostrarPessoaDaPendencia(personId) {
+    pendenciasPessoasOcultas.delete(personId);
+    salvarPessoasOcultasDaPendencia();
+    renderPendencias();
+}
 
 // Quem pode mexer: Admin e Editor. Observador (e quem não está em Membros)
 // só visualiza, igual ao resto do quadro.
@@ -571,6 +626,9 @@ function getPendencias() {
         if (pessoa && pessoa.isDone) return false;
         // "Sugestões Mia" é uma caixa de entrada, não a pendência de alguém
         if (card.personId === 'suggestions') return false;
+        // Pessoas escondidas por quem está olhando somem daqui — e, com isso,
+        // dos números, do gráfico, das colunas e do seletor de uma vez só.
+        if (pendenciasPessoasOcultas.has(card.personId)) return false;
         return true;
     });
 }
@@ -640,14 +698,15 @@ function renderPendenciasStats() {
         ...PENDENCIAS_LANES.map(l => ({
             rotulo: l.label,
             valor: cards.filter(c => (c.status || 'todo') === l.key).length,
-            cor: l.cor
+            cor: l.cor,
+            corTexto: l.corTexto || l.cor
         }))
     ];
 
     box.innerHTML = cartoes.map(c => `
         <div class="pend-stat" style="border-left-color:${c.cor};">
             <div class="pend-stat-label">${escapeHtml(c.rotulo)}</div>
-            <div class="pend-stat-value" style="color:${c.cor};">${c.valor}</div>
+            <div class="pend-stat-value" style="color:${c.corTexto || c.cor};">${c.valor}</div>
         </div>
     `).join('');
 }
@@ -674,8 +733,13 @@ function renderPendenciasChart() {
         .map(id => ({ id, nome: nomeDaPessoaDaPendencia(id), cards: porPessoa[id] }))
         .sort((a, b) => b.cards.length - a.cards.length || a.nome.localeCompare(b.nome, 'pt-BR'));
 
+    const podeEsconder = podeEsconderPessoasDaPendencia();
+    box.classList.toggle('tem-olho', podeEsconder);
+
     if (linhas.length === 0) {
-        box.innerHTML = '<p class="pend-vazio">Nenhuma pendência em aberto.</p>';
+        box.innerHTML = '<p class="pend-vazio">Nenhuma pendência em aberto.</p>'
+            + montaListaDePessoasEscondidas();
+        ligarBotoesDeEsconderPessoa();
         return;
     }
 
@@ -690,14 +754,55 @@ function renderPendenciasChart() {
             return `<span class="pend-bar-seg" style="width:${pct}%; background:${l.cor};" title="${l.label}: ${n}"></span>`;
         }).join('');
 
+        const olho = podeEsconder
+            ? `<button type="button" class="pend-olho" data-esconder="${escapeHtml(linha.id)}"
+                       title="Tirar ${escapeHtml(linha.nome)} da sua lista" aria-label="Tirar ${escapeHtml(linha.nome)} da sua lista">
+                   <i class="fa-solid fa-eye"></i>
+               </button>`
+            : '';
+
         return `
             <div class="pend-chart-row">
                 <span class="pend-chart-name" title="${escapeHtml(linha.nome)}">${escapeHtml(linha.nome)}</span>
                 <span class="pend-chart-total">${total}</span>
                 <span class="pend-bar">${faixas}</span>
+                ${olho}
             </div>
         `;
-    }).join('');
+    }).join('') + montaListaDePessoasEscondidas();
+
+    ligarBotoesDeEsconderPessoa();
+}
+
+// Quem foi escondido fica listado embaixo do gráfico. Sem isso, esconder é um
+// caminho sem volta: a pessoa some e não há de onde trazê-la de volta.
+function montaListaDePessoasEscondidas() {
+    if (!podeEsconderPessoasDaPendencia() || pendenciasPessoasOcultas.size === 0) return '';
+
+    const itens = [...pendenciasPessoasOcultas].map(id => `
+        <button type="button" class="pend-oculto-chip" data-mostrar="${escapeHtml(id)}"
+                title="Trazer de volta">
+            <i class="fa-solid fa-eye-slash"></i>${escapeHtml(nomeDaPessoaDaPendencia(id))}
+        </button>
+    `).join('');
+
+    return `
+        <div class="pend-ocultos">
+            <span class="pend-ocultos-label">Fora da sua lista (só sua) — clique pra trazer de volta:</span>
+            ${itens}
+        </div>
+    `;
+}
+
+function ligarBotoesDeEsconderPessoa() {
+    const box = document.getElementById('pendChart');
+    if (!box) return;
+    box.querySelectorAll('[data-esconder]').forEach(btn => {
+        btn.addEventListener('click', () => esconderPessoaDaPendencia(btn.dataset.esconder));
+    });
+    box.querySelectorAll('[data-mostrar]').forEach(btn => {
+        btn.addEventListener('click', () => mostrarPessoaDaPendencia(btn.dataset.mostrar));
+    });
 }
 
 function renderPendenciasBoard() {
@@ -993,6 +1098,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? `${viewerEmail}${podeEditarPendencias() ? '' : ' (somente leitura)'}`
                 : 'Visitante (somente leitura)';
         }
+
+        // Depois de saber quem está olhando: a lista de escondidos é por
+        // pessoa, então sem o e-mail em mãos ela viria da chave errada.
+        carregarPessoasOcultasDaPendencia();
 
         ajustarCabecalhoDoDashboardSolto();
         renderPendencias();
