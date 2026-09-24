@@ -519,13 +519,14 @@ function ajustarCabecalhoDoDashboardSolto() {
     // ("MSE Board (Planejamento)Dashboard de Entregas — ").
     document.title = `${nomeDaPagina} (${deptLabel}) — MSE Board`;
 
-    // Links do topo carregam o departamento atual junto
+    // Links do topo carregam o departamento atual junto — SEMPRE escrito,
+    // inclusive "programacao". Antes o caso de Programação saía sem
+    // parâmetro, o que desfazia o script inline da própria página e deixava
+    // o destino tendo que adivinhar o departamento.
     document.querySelectorAll('.standalone-nav-links a').forEach(link => {
         const destino = (link.getAttribute('href') || '').split('?')[0];
         if (!destino || destino.startsWith('http')) return;
-        link.href = CURRENT_DEPARTMENT === 'programacao'
-            ? destino
-            : `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+        link.href = `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
     });
 }
 
