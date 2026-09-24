@@ -548,7 +548,7 @@ const PENDENCIAS_LANES = [
     { key: 'afazer',  label: 'A Fazer',  cor: 'var(--orange)', corTexto: 'var(--orange-texto)' },
     { key: 'todo',    label: 'Fazendo',  cor: 'var(--accent)' },
     { key: 'testing', label: 'Em Teste', cor: '#7c3aed' },
-    { key: 'paused',  label: 'Pausado',  cor: 'var(--gold)' }
+    { key: 'paused',  label: 'Pausado',  cor: 'var(--yellow)', corTexto: 'var(--yellow-texto)' }
 ];
 
 // Filtro de pessoa da tela (vazio = todas). Fica só na memória: é navegação,
@@ -3859,11 +3859,13 @@ function renderDeliveryReport() {
     const buckets = groupCompletionsByPeriod(currentReportPeriod);
     const max = Math.max(1, ...buckets.map(b => b.count));
 
+    // Uma série só, então uma cor só — e rótulo apenas onde há valor, pra não
+    // encher a coluna de zeros sem informação.
     const rows = buckets.map(b => `
-        <div class="chart-row">
+        <div class="chart-row${b.count === 0 ? ' is-zero' : ''}">
             <span class="chart-row-label">${escapeHtml(b.label)}</span>
             <div class="chart-row-track"><div class="chart-row-fill" style="width:${(b.count / max) * 100}%"></div></div>
-            <span class="chart-row-count">${b.count}</span>
+            <span class="chart-row-count">${b.count === 0 ? '' : b.count}</span>
         </div>
     `).join('');
 
@@ -3875,25 +3877,36 @@ function renderDeliveryReport() {
 
     // ---------- Pódios: Mais Pontuais / Mais Atrasos ----------
     const withPct = byPerson.filter(p => p.onTimePct !== null);
-    const bestThree = [...withPct].sort((a, b) => b.onTimePct - a.onTimePct).slice(0, 3);
-    const worstThree = [...withPct].sort((a, b) => a.onTimePct - b.onTimePct).slice(0, 3);
+
+    // Um destaque de cada lado, não os três primeiros: a tabela logo abaixo já
+    // é o ranking completo e ordenado, então repetir três nomes aqui era a
+    // mesma informação duas vezes — e era boa parte do excesso de cor da tela.
+    const melhor = [...withPct].sort((a, b) => b.onTimePct - a.onTimePct)[0];
+    const pior = [...withPct].sort((a, b) => a.onTimePct - b.onTimePct)[0];
 
     function buildPodiumEntry(p, isWorst) {
+        if (!p) return '<div class="dashboard-podium-empty">Sem dados no período</div>';
+
         const avatarSrc = p.avatarKey
             ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 64) : p.avatarKey)
             : null;
         const avatarHtml = avatarSrc
             ? `<img src="${avatarSrc}" class="podium-entry-avatar" alt="">`
             : `<span class="podium-entry-avatar podium-entry-avatar-fallback">${getInitials(p.name)}</span>`;
-        const subLabel = isWorst ? `${p.late} atrasada${p.late > 1 ? 's' : ''} de ${p.onTime + p.late}` : `${p.onTime} de ${p.onTime + p.late} no prazo`;
+
+        const total = p.onTime + p.late;
+        const sub = isWorst
+            ? `${p.late} atrasada${p.late > 1 ? 's' : ''} de ${total}`
+            : `${p.onTime} de ${total} no prazo`;
+
         return `
             <div class="podium-entry">
-                ${dashRing(p.onTimePct, { size: 44, stroke: 5 })}
                 ${avatarHtml}
                 <div class="podium-entry-info">
                     <div class="podium-entry-name">${escapeHtml(p.name)}</div>
-                    <div class="podium-entry-sub">${subLabel}</div>
+                    <div class="podium-entry-sub">${sub}</div>
                 </div>
+                <div class="podium-entry-pct${isWorst ? ' is-late' : ''}">${p.onTimePct}%</div>
             </div>
         `;
     }
@@ -3901,24 +3914,17 @@ function renderDeliveryReport() {
     const podiumBestEl = document.getElementById('reportPodiumBest');
     const podiumWorstEl = document.getElementById('reportPodiumWorst');
 
-    podiumBestEl.innerHTML = bestThree.length > 0
-        ? bestThree.map(p => buildPodiumEntry(p, false)).join('')
-        : '<div class="dashboard-podium-empty">SEM DADOS SUFICIENTES NESSE PERÍODO</div>';
-
-    podiumWorstEl.innerHTML = worstThree.length > 0
-        ? worstThree.map(p => buildPodiumEntry(p, true)).join('')
-        : '<div class="dashboard-podium-empty">SEM DADOS SUFICIENTES NESSE PERÍODO</div>';
+    if (podiumBestEl) podiumBestEl.innerHTML = buildPodiumEntry(melhor, false);
+    if (podiumWorstEl) podiumWorstEl.innerHTML = buildPodiumEntry(pior, true);
 
     if (byPerson.length === 0) {
         tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS CONCLUÍDAS COM RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
     } else {
         tableBody.innerHTML = byPerson.map((p, idx) => {
-            const pctColor = p.onTimePct === null ? 'var(--text-muted)' : (p.onTimePct >= 70 ? 'var(--green)' : p.onTimePct >= 40 ? 'var(--gold)' : 'var(--red)');
-            const pctLabel = p.onTimePct === null ? '—' : `${p.onTimePct}%`;
-            const onTimeWidth = p.onTimePct === null ? 0 : p.onTimePct;
-            const lateWidth = p.onTimePct === null ? 0 : (100 - p.onTimePct);
-
-            const rankBadgeClass = idx === 0 ? 'dash-rank-gold' : idx === 1 ? 'dash-rank-silver' : idx === 2 ? 'dash-rank-bronze' : 'dash-rank-plain';
+            const semDados = p.onTimePct === null;
+            const pctLabel = semDados ? '—' : `${p.onTimePct}%`;
+            const onTimeWidth = semDados ? 0 : p.onTimePct;
+            const lateWidth = semDados ? 0 : (100 - p.onTimePct);
 
             const avatarSrc = p.avatarKey
                 ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 60) : p.avatarKey)
@@ -3926,27 +3932,30 @@ function renderDeliveryReport() {
             const avatarHtml = avatarSrc
                 ? `<img src="${avatarSrc}" class="dash-table-avatar" alt="">`
                 : `<span class="dash-table-avatar dash-table-avatar-fallback">${getInitials(p.name)}</span>`;
-            const displayName = p.name;
 
+            // A barra é o visual principal da linha, então ela é quem leva a
+            // cor. Número de posição, contagens e a % ficam em tinta neutra:
+            // pintar tudo fazia sete cores competirem na mesma linha e
+            // nenhuma significar coisa alguma.
             return `
                 <tr>
-                    <td><span class="dash-rank-badge ${rankBadgeClass}">${idx + 1}</span></td>
+                    <td><span class="dash-rank-badge">${idx + 1}</span></td>
                     <td>
                         <div class="dash-person-cell">
                             ${avatarHtml}
-                            <span>${escapeHtml(displayName)}</span>
+                            <span>${escapeHtml(p.name)}</span>
                         </div>
                     </td>
-                    <td class="dash-ontime-num">${p.onTime}</td>
-                    <td class="dash-late-num">${p.late}</td>
-                    <td class="dash-total-num">${p.total}</td>
+                    <td class="dash-num">${p.onTime}</td>
+                    <td class="dash-num">${p.late}</td>
+                    <td class="dash-num dash-num-total">${p.total}</td>
                     <td>
-                        <div class="dash-proportion-bar">
+                        <div class="dash-proportion-bar" title="${p.onTime} no prazo · ${p.late} atrasada(s)">
                             <div class="dash-proportion-ontime" style="width:${onTimeWidth}%;"></div>
                             <div class="dash-proportion-late" style="width:${lateWidth}%;"></div>
                         </div>
                     </td>
-                    <td><span class="dash-pct-label" style="color:${pctColor};">${pctLabel}</span></td>
+                    <td><span class="dash-pct-label${semDados ? ' is-empty' : ''}">${pctLabel}</span></td>
                 </tr>
             `;
         }).join('');

@@ -24,6 +24,13 @@
        ficava lavado demais no fundo branco pra quem enxerga menos. */
     --orange: #e8843c;
     --orange-texto: #c9650f;
+    /* Amarelo claro — usado no "Pausado" das Pendências por Pessoa. O --gold
+       de antes (#d9911a) era um âmbar escuro, perto demais do laranja do
+       "A Fazer": nas barras finas do gráfico os dois viravam a mesma cor.
+       Mesma dupla de tons do laranja: o claro pinta barra, bolinha e borda;
+       o fechado pinta o número do topo, que no claro some no fundo branco. */
+    --yellow: #f2cb45;
+    --yellow-texto: #96700a;
     --text-primary: #192231;
     --text-muted: #98a1b0;
 
@@ -3532,7 +3539,13 @@ body.observer-mode .cards-container.drag-over {
    navy só no cabeçalho/hero, rótulos mono maiúsculos, azul=ativo,
    verde=saudável, âmbar=atenção, vermelho=raro (só quando é crítico mesmo).
    ========================================== */
-.dashboard-modal-content {
+/* Estes tokens ficavam declarados só em .dashboard-modal-content, que existe
+   apenas dentro do board.html. Nas páginas soltas (Dashboard, Estatísticas,
+   Pendências) esse elemento não existe, então TODAS as 80+ referências a
+   var(--dsg-*) não resolviam: barras ficavam sem cor, avatares sem gradiente
+   e a tela inteira parecia "sem cor nenhuma". Subindo pro :root, valem em
+   qualquer página. */
+:root {
     --dsg-bg: #e8eaee;
     --dsg-card: #fff;
     --dsg-line: #e4e7ec;
@@ -3547,7 +3560,9 @@ body.observer-mode .cards-container.drag-over {
     --dsg-red: #d23b3b;
     --dsg-r: 14px;
     --dsg-shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+}
 
+.dashboard-modal-content {
     max-width: 1180px;
     width: 96vw;
     background-color: var(--dsg-bg) !important;
@@ -3721,9 +3736,6 @@ body.observer-mode .cards-container.drag-over {
     color: #fff; font-family: "IBM Plex Sans"; font-weight: 700; font-size: .88rem;
 }
 
-.dash-ontime-num { color: var(--dsg-green); font-weight: 700; }
-.dash-late-num   { color: var(--dsg-red); font-weight: 700; }
-.dash-total-num  { color: var(--dsg-ink); font-weight: 600; }
 
 .dash-proportion-bar {
     display: flex; width: 130px; height: 8px; border-radius: 4px; overflow: hidden;
@@ -5223,3 +5235,281 @@ body.dashboard-only-mode .dashboard-modal-content {
     border-color: var(--accent);
     color: #fff;
 }
+
+/* ==========================================
+   ESTATÍSTICAS DE ENTREGAS — redesenho
+   ==========================================
+   Duas cores na tela inteira, e só onde significam alguma coisa:
+   azul = no prazo, vermelho = atrasada. Todo o resto é tinta neutra.
+
+   Por que azul e não verde: verde+vermelho é a confusão clássica de
+   daltonismo. O validador do padrão de gráficos reprovou o par verde
+   #1f9d57 × vermelho #d23b3b (ΔE 4.2 sob deuteranopia, mínimo 8);
+   azul #2563eb × vermelho passou com ΔE 27.5 e ainda com contraste
+   melhor nos dois tons. Mesmo assim a cor nunca fica sozinha: tem
+   legenda, rótulo direto e os números na própria linha. */
+:root {
+    --est-ontime: #2563eb;
+    --est-late:   #d23b3b;
+}
+
+/* --- Manchete: os três números --- */
+.est-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.est-kpi {
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    padding: 0.95rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.est-kpi-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--dsg-mut);
+}
+
+/* Número grande em tinta neutra: quem carrega a identidade é a
+   bolinha do rótulo, não o número. */
+.est-kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--dsg-ink);
+}
+
+/* Bolinha de identidade, usada no rótulo e na legenda */
+.est-key {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+}
+.est-key-ontime { background-color: var(--est-ontime); }
+.est-key-late   { background-color: var(--est-late); }
+
+/* --- Destaques --- */
+.est-destaques {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.1rem;
+}
+
+.est-destaque {
+    background-color: var(--dsg-card);
+    border: 1px solid var(--dsg-line);
+    border-radius: var(--dsg-r);
+    padding: 0.8rem 1rem;
+}
+
+.est-destaque-label {
+    display: block;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--dsg-mut);
+    margin-bottom: 0.55rem;
+}
+
+.podium-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.podium-entry-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.podium-entry-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* "background: none" antes da cor é obrigatório: a regra antiga define um
+       linear-gradient, e background-color sozinho não apaga background-image —
+       o gradiente continuaria por cima, deixando as iniciais ilegíveis. */
+    background: none;
+    background-color: var(--dsg-line-2);
+    color: var(--dsg-body);
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.podium-entry-info { flex: 1; min-width: 0; }
+
+.podium-entry-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--dsg-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.podium-entry-sub {
+    font-size: 0.74rem;
+    color: var(--dsg-mut);
+    font-family: var(--font-mono);
+}
+
+/* Aqui a cor é permitida porque é o dado: é a % que o cartão existe
+   pra mostrar, e o rótulo ao lado já diz qual é qual. */
+.podium-entry-pct {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--est-ontime);
+    flex-shrink: 0;
+}
+.podium-entry-pct.is-late { color: var(--est-late); }
+
+.dashboard-podium-empty {
+    font-size: 0.8rem;
+    color: var(--dsg-mut);
+    font-style: italic;
+}
+
+/* --- Cabeçalho de seção + legenda --- */
+.est-sec {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0 0 0.6rem;
+}
+
+.est-sec-solo { margin-top: 1.6rem; }
+
+.est-sec-title {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--dsg-body);
+    font-weight: 600;
+}
+
+.est-legend {
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+}
+
+.est-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--dsg-mut);
+}
+
+/* --- Tabela --- */
+/* A barra é o visual principal, então ganha a coluna mais larga. */
+.est-th-bar { width: 38%; }
+
+/* Posição em tinta neutra. Antes era ouro/prata/bronze, que pintava
+   pela COLOCAÇÃO: filtrar o período repintava as pessoas, e a cor não
+   dizia nada sobre o desempenho — só sobre a linha em que caiu. */
+.dash-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background-color: var(--dsg-line-2);
+    color: var(--dsg-mut);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.74rem;
+}
+
+.dash-num {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--dsg-body);
+}
+
+.dash-num-total {
+    color: var(--dsg-ink);
+    font-weight: 700;
+}
+
+.dash-table-avatar-fallback {
+    background: none;
+    background-color: var(--dsg-line-2);
+    color: var(--dsg-body);
+    font-weight: 700;
+    font-size: 0.78rem;
+}
+
+/* Barra empilhada: cantos arredondados nas pontas e uma fresta da cor
+   do fundo entre os dois trechos, pra fronteira ficar visível mesmo
+   quando as duas cores encostam. */
+.dash-proportion-bar {
+    display: flex;
+    width: 100%;
+    max-width: 320px;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background-color: var(--dsg-line-2);
+    gap: 2px;
+}
+
+.dash-proportion-ontime {
+    background-color: var(--est-ontime);
+    border-radius: 5px 0 0 5px;
+}
+
+.dash-proportion-late {
+    background-color: var(--est-late);
+    border-radius: 0 5px 5px 0;
+}
+
+/* Rótulo direto no fim da barra — é o que dispensa procurar a legenda */
+.dash-pct-label {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--dsg-ink);
+}
+.dash-pct-label.is-empty { color: var(--dsg-mut); font-weight: 400; }
+
+/* --- Gráfico por período --- */
+/* Uma série só: uma cor só, sem legenda (o título já diz o que é). */
+.chart-row-fill { background-color: var(--est-ontime); }
+
+/* Período sem entrega fica recuado em vez de sumir: a lacuna também é
+   informação, mas não pode competir com os dias que tiveram entrega. */
+.chart-row.is-zero .chart-row-label { color: var(--dsg-mut-2); }
+.chart-row.is-zero .chart-row-track { opacity: 0.55; }
+
+.est-acoes {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 1.4rem;
+}
+.est-acoes .btn-secondary { flex: 1; min-width: 200px; }

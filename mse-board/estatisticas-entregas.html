@@ -62,19 +62,35 @@
 
     <div class="standalone-page-wrap">
         <div class="dashboard-section">
-            <div class="dsg-sec">Ranking de Entregas <span class="ct">no prazo × atrasado</span></div>
-
-            <div class="dashboard-podiums">
-                <div class="dashboard-podium-col">
-                    <div class="dashboard-podium-heading dashboard-podium-heading-warn"><i class="fa-solid fa-triangle-exclamation"></i> Atrasados</div>
-                    <div id="reportPodiumWorst"></div>
+            <!-- 1. A manchete primeiro: três números e acabou. -->
+            <div class="est-kpis">
+                <div class="est-kpi">
+                    <span class="est-kpi-label">Entregas concluídas</span>
+                    <span class="est-kpi-value" id="reportTotalDone">0</span>
                 </div>
-                <div class="dashboard-podium-col">
-                    <div class="dashboard-podium-heading"><i class="fa-solid fa-trophy"></i> No Prazo</div>
-                    <div id="reportPodiumBest"></div>
+                <div class="est-kpi">
+                    <span class="est-kpi-label"><i class="est-key est-key-ontime"></i> No prazo</span>
+                    <span class="est-kpi-value" id="reportOnTimePct">0%</span>
+                </div>
+                <div class="est-kpi">
+                    <span class="est-kpi-label"><i class="est-key est-key-late"></i> Atrasadas</span>
+                    <span class="est-kpi-value" id="reportLatePct">0%</span>
                 </div>
             </div>
 
+            <!-- 2. Um destaque de cada lado. O ranking completo é a tabela. -->
+            <div class="est-destaques">
+                <div class="est-destaque">
+                    <span class="est-destaque-label">Melhor desempenho</span>
+                    <div id="reportPodiumBest"></div>
+                </div>
+                <div class="est-destaque">
+                    <span class="est-destaque-label">Mais atrasos</span>
+                    <div id="reportPodiumWorst"></div>
+                </div>
+            </div>
+
+            <!-- 3. Filtro logo acima do que ele filtra. -->
             <div class="dashboard-filter-bar">
                 <div class="dashboard-filter-field">
                     <label>De</label>
@@ -88,33 +104,35 @@
                 <span class="dashboard-filter-note" id="reportPeriodNote">Todas as entregas registradas</span>
             </div>
 
+            <!-- 4. Ranking. A legenda existe porque a barra tem duas séries:
+                 identidade nunca pode depender só da cor. -->
+            <div class="est-sec">
+                <span class="est-sec-title">Ranking por responsável</span>
+                <span class="est-legend">
+                    <span class="est-legend-item"><i class="est-key est-key-ontime"></i> No prazo</span>
+                    <span class="est-legend-item"><i class="est-key est-key-late"></i> Atrasadas</span>
+                </span>
+            </div>
+
             <div class="dashboard-table-wrap">
                 <table class="dashboard-table">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>Responsável</th>
-                            <th>No Prazo</th>
+                            <th>No prazo</th>
                             <th>Atrasadas</th>
-                            <th>Total Entregue</th>
-                            <th>Proporção</th>
-                            <th>% No Prazo</th>
+                            <th>Total</th>
+                            <th class="est-th-bar">Proporção</th>
+                            <th>% no prazo</th>
                         </tr>
                     </thead>
                     <tbody id="reportByPerson"></tbody>
                 </table>
             </div>
-        </div>
 
-        <div class="dashboard-section" style="margin-top:0.5rem;">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="reportTotalDone">0</div><div class="stat-label">Concluídos (total)</div></div>
-                <div class="stat-card"><div class="stat-value" id="reportOnTimePct" style="color:var(--green);">0%</div><div class="stat-label">No prazo</div></div>
-                <div class="stat-card"><div class="stat-value" id="reportLatePct" style="color:var(--red);">0%</div><div class="stat-label">Atrasados</div></div>
-            </div>
-
-            <div class="input-group" style="margin-top:1.2rem;">
-                <label>Tarefas concluídas por período</label>
+            <div class="est-sec est-sec-solo">
+                <span class="est-sec-title">Entregas concluídas por período</span>
                 <div class="corner-options">
                     <button type="button" class="report-period-btn is-current" data-period="day">Dia</button>
                     <button type="button" class="report-period-btn" data-period="week">Semana</button>
@@ -122,12 +140,13 @@
                 </div>
             </div>
 
-            <div id="reportChart" class="chart-section" style="margin-top:0.8rem;"></div>
+            <div id="reportChart" class="chart-section"></div>
 
-            <div style="display:flex; gap:0.6rem; margin-top:1.2rem;">
-                <button type="button" id="exportReportCsvBtn" class="btn-secondary" style="flex:1;"><i class="fa-solid fa-download"></i> Exportar Excel (CSV)</button>
-                <button type="button" id="printReportBtn" class="btn-secondary" style="flex:1;"><i class="fa-solid fa-print"></i> Imprimir / Salvar PDF</button>
+            <div class="est-acoes">
+                <button type="button" id="exportReportCsvBtn" class="btn-secondary"><i class="fa-solid fa-download"></i> Exportar Excel (CSV)</button>
+                <button type="button" id="printReportBtn" class="btn-secondary"><i class="fa-solid fa-print"></i> Imprimir / Salvar PDF</button>
             </div>
+
         </div>
     </div>
 
