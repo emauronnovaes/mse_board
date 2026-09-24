@@ -60,6 +60,23 @@
         <span id="standaloneViewerLabel"></span>
     </div>
 
+    <!-- Propaga o ?dept= nos links do topo. É inline de propósito: as páginas
+         soltas carregam o script.js do servidor de produção, então enquanto
+         uma versão antiga estiver no ar a navegação continuaria mandando todo
+         mundo pra Programação. Aqui não depende de deploy do script.js. -->
+    <script>
+    (function () {
+        var dept = new URLSearchParams(location.search).get('dept');
+        if (!dept || dept === 'programacao') return;
+        document.querySelectorAll('.standalone-nav-links a').forEach(function (a) {
+            var destino = (a.getAttribute('href') || '').split('?')[0];
+            if (!destino || destino.indexOf('http') === 0) return;
+            a.setAttribute('href', destino + '?dept=' + encodeURIComponent(dept));
+        });
+    })();
+    </script>
+
+
     <div class="standalone-page-wrap">
         <div class="dashboard-section">
             <!-- 1. A manchete primeiro: três números e acabou. -->
