@@ -4058,7 +4058,9 @@ function renderDeliveryReport() {
 
             let barColor;
             if (c.status === 'done') barColor = 'var(--green)';
-            else if (c.dueDate && isOverdue(c)) barColor = 'var(--red)';
+            // Atrasada usa o mesmo laranja do resto dos dashboards
+            // (--est-late), pra "atrasado" ter uma cor só em todas as telas.
+            else if (c.dueDate && isOverdue(c)) barColor = 'var(--est-late)';
             else if (c.dueDate && isDueSoon(c)) barColor = 'var(--gold)';
             else barColor = 'var(--accent)';
 

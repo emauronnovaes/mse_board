@@ -5240,17 +5240,23 @@ body.dashboard-only-mode .dashboard-modal-content {
    ESTATÍSTICAS DE ENTREGAS — redesenho
    ==========================================
    Duas cores na tela inteira, e só onde significam alguma coisa:
-   azul = no prazo, vermelho = atrasada. Todo o resto é tinta neutra.
+   azul = no prazo, laranja = atrasada. Todo o resto é tinta neutra.
 
-   Por que azul e não verde: verde+vermelho é a confusão clássica de
-   daltonismo. O validador do padrão de gráficos reprovou o par verde
-   #1f9d57 × vermelho #d23b3b (ΔE 4.2 sob deuteranopia, mínimo 8);
-   azul #2563eb × vermelho passou com ΔE 27.5 e ainda com contraste
-   melhor nos dois tons. Mesmo assim a cor nunca fica sozinha: tem
-   legenda, rótulo direto e os números na própria linha. */
+   Por que azul e não verde: verde+laranja/vermelho é a confusão
+   clássica de daltonismo. O validador do padrão de gráficos reprovou
+   verde #1f9d57 × vermelho #d23b3b (ΔE 4.2 sob deuteranopia, mínimo 8).
+
+   Por que ESTE laranja: o laranja do projeto (--orange #e8843c) tem
+   contraste 2.69:1 no branco, abaixo do mínimo de 3:1 — reprovaria.
+   #db6a1e passa no contraste E separa melhor do azul que o vermelho
+   anterior (ΔE 31.3 contra 27.5). Ainda assim a cor nunca fica
+   sozinha: tem legenda, rótulo direto e os números na própria linha. */
 :root {
     --est-ontime: #2563eb;
-    --est-late:   #d23b3b;
+    /* "Atrasada" nas telas de dashboard. Os post-its do quadro seguem
+       com vermelho (.tag-due-overdue): lá é alerta pontual numa tarefa,
+       não uma série de gráfico. */
+    --est-late:   #db6a1e;
 }
 
 /* --- Manchete: os três números --- */
