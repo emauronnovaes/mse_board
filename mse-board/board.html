@@ -555,6 +555,25 @@
                 </div>
             </div>
 
+            <!-- Mover sem arrastar: em coluna longa ou em tela de notebook,
+                 arrastar até a raia certa é trabalhoso. Aqui é escolher e ir. -->
+            <div class="view-section" id="viewMoveSection">
+                <h4><i class="fa-solid fa-arrows-up-down-left-right"></i> Mover para</h4>
+                <div class="view-move-row">
+                    <label class="view-move-field">
+                        <span>Coluna</span>
+                        <select id="viewMovePerson"></select>
+                    </label>
+                    <label class="view-move-field">
+                        <span>Raia</span>
+                        <select id="viewMoveLane"></select>
+                    </label>
+                    <button type="button" id="viewMoveBtn" class="btn-secondary">
+                        <i class="fa-solid fa-arrow-right"></i> Mover
+                    </button>
+                </div>
+            </div>
+
             <div class="view-actions">
                 <button type="button" id="viewEditBtn" class="btn-primary"><i class="fa-solid fa-pen"></i> Editar Tarefa</button>
             </div>

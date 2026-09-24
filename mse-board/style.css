@@ -5624,3 +5624,51 @@ body.dashboard-only-mode .dashboard-modal-content {
 }
 
 .pending-attachment button:hover { color: var(--red); }
+
+/* ==========================================
+   "MOVER PARA" DENTRO DO POST-IT ABERTO
+   ========================================== */
+.view-move-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.view-move-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+    min-width: 140px;
+}
+
+.view-move-field span {
+    font-size: 0.66rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.view-move-field select {
+    padding: 0.45rem 0.55rem;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-family: inherit;
+}
+
+/* Aba de "Concluído" não tem raias: o seletor fica visível mas apagado,
+   em vez de sumir — some do nada assusta mais do que explica. */
+.view-move-field select:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.view-move-row .btn-secondary {
+    flex-shrink: 0;
+    padding: 0.5rem 0.9rem;
+}

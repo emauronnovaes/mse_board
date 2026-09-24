@@ -912,8 +912,12 @@ function ligarInteracoesDasPendencias() {
         card.addEventListener('dragstart', (e) => {
             e.dataTransfer.setData('text/plain', card.dataset.card);
             card.classList.add('is-dragging');
+            iniciarRolagemDeArrasto();
         });
-        card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+        card.addEventListener('dragend', () => {
+            card.classList.remove('is-dragging');
+            pararRolagemDeArrasto();
+        });
     });
 
     box.querySelectorAll('.pend-col-body').forEach(col => {
@@ -2468,6 +2472,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.addEventListener('click', (e) => {
             if (e.target === viewCardModal) viewCardModal.style.display = 'none';
         });
+
+        const viewMoveBtnEl = document.getElementById('viewMoveBtn');
+        if (viewMoveBtnEl) viewMoveBtnEl.addEventListener('click', moverPeloPostItAberto);
 
         document.getElementById('viewEditBtn').addEventListener('click', () => {
             const cardId = viewCardModal.dataset.cardId;
@@ -8248,6 +8255,7 @@ function openViewModal(cardId) {
     }
 
     renderViewCommentsList(cardId);
+    preencherMoverPara(card);
 
     modal.style.display = 'flex';
 }
@@ -8518,16 +8526,211 @@ function renderCommentsList(cardId) {
 // DRAG & DROP & CONTADORES
 // ==========================================
 
+// ==========================================
+// ROLAGEM AUTOMÁTICA ENQUANTO ARRASTA UM POST-IT
+// ==========================================
+// Arrastar só alcançava o que já estava na tela: pra levar um post-it lá pra
+// cima da coluna, ou pra uma pessoa que está fora do campo de visão, não
+// tinha como — segurar o card não rolava nada, e soltar pra rolar na mão
+// perdia o arraste.
+//
+// Agora, enquanto o card está na mão, chegar perto de uma borda rola sozinho:
+// as bordas de cima/baixo rolam a COLUNA sob o cursor, e as dos lados rolam a
+// faixa de colunas. É o mesmo gesto do Trello.
+//
+// Por que um laço de animação e não o próprio evento: o "dragover" só dispara
+// quando o mouse MEXE. Parado na borda esperando rolar, ele não dispara mais
+// e a rolagem travava. O laço roda sozinho a cada quadro, usando a última
+// posição conhecida do cursor.
+
+const ARRASTO_MARGEM = 90;   // a que distância da borda a rolagem começa (px)
+const ARRASTO_VELOCIDADE = 22; // quanto rola por quadro, no máximo (px)
+
+let arrastoPos = null;      // última posição do cursor { x, y }
+let arrastoLoopId = null;
+
+// Quanto rolar, de 0 a 1, conforme o cursor entra na faixa da borda: encostou
+// na margem começa devagar, colado na borda vai no máximo. Sem essa rampa a
+// rolagem liga no talo e passa do ponto.
+function forcaDaBorda(distancia) {
+    if (distancia >= ARRASTO_MARGEM) return 0;
+    return (ARRASTO_MARGEM - Math.max(distancia, 0)) / ARRASTO_MARGEM;
+}
+
+// Rola um elemento se o cursor estiver perto das bordas dele.
+function rolarSePertoDaBorda(el, pos, { vertical = false, horizontal = false }) {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+
+    // Só conta se o cursor estiver dentro do elemento (com uma folga)
+    const dentro = pos.x >= r.left - 40 && pos.x <= r.right + 40
+        && pos.y >= r.top - 40 && pos.y <= r.bottom + 40;
+    if (!dentro) return;
+
+    if (vertical && el.scrollHeight > el.clientHeight) {
+        const paraCima = forcaDaBorda(pos.y - r.top);
+        const paraBaixo = forcaDaBorda(r.bottom - pos.y);
+        if (paraCima > 0) el.scrollTop -= ARRASTO_VELOCIDADE * paraCima;
+        else if (paraBaixo > 0) el.scrollTop += ARRASTO_VELOCIDADE * paraBaixo;
+    }
+
+    if (horizontal && el.scrollWidth > el.clientWidth) {
+        const paraEsquerda = forcaDaBorda(pos.x - r.left);
+        const paraDireita = forcaDaBorda(r.right - pos.x);
+        if (paraEsquerda > 0) el.scrollLeft -= ARRASTO_VELOCIDADE * paraEsquerda;
+        else if (paraDireita > 0) el.scrollLeft += ARRASTO_VELOCIDADE * paraDireita;
+    }
+}
+
+function passoDaRolagemDeArrasto() {
+    if (!arrastoPos) return;
+
+    // Colunas: a que está sob o cursor rola na vertical. Usa
+    // elementFromPoint porque é o jeito de saber sobre QUAL coluna o card
+    // está passando agora, sem depender de eventos de cada uma.
+    const sob = document.elementFromPoint(arrastoPos.x, arrastoPos.y);
+    const coluna = sob && sob.closest ? sob.closest('.column') : null;
+    if (coluna) rolarSePertoDaBorda(coluna, arrastoPos, { vertical: true });
+
+    // A faixa de colunas rola na horizontal, pra alcançar outra pessoa
+    const grade = document.getElementById('peopleGrid');
+    if (grade) rolarSePertoDaBorda(grade, arrastoPos, { horizontal: true });
+
+    // A página das Pendências por Pessoa rola a coluna do kanban
+    const colPend = sob && sob.closest ? sob.closest('.pend-col-body') : null;
+    if (colPend) rolarSePertoDaBorda(colPend, arrastoPos, { vertical: true });
+
+    // E, se nada disso resolver, rola a janela — cobre telas baixas onde o
+    // alvo está fora da área visível inteira.
+    const alturaJanela = window.innerHeight;
+    const cima = forcaDaBorda(arrastoPos.y);
+    const baixo = forcaDaBorda(alturaJanela - arrastoPos.y);
+    if (!coluna && !colPend) {
+        if (cima > 0) window.scrollBy(0, -ARRASTO_VELOCIDADE * cima);
+        else if (baixo > 0) window.scrollBy(0, ARRASTO_VELOCIDADE * baixo);
+    }
+
+    arrastoLoopId = requestAnimationFrame(passoDaRolagemDeArrasto);
+}
+
+function iniciarRolagemDeArrasto() {
+    if (arrastoLoopId !== null) return;
+    arrastoLoopId = requestAnimationFrame(passoDaRolagemDeArrasto);
+}
+
+function pararRolagemDeArrasto() {
+    if (arrastoLoopId !== null) cancelAnimationFrame(arrastoLoopId);
+    arrastoLoopId = null;
+    arrastoPos = null;
+}
+
+// Acompanha o cursor durante o arraste. É no document e em captura pra valer
+// em qualquer lugar da tela, inclusive por cima de elementos que param a
+// propagação do evento.
+document.addEventListener('dragover', (e) => {
+    arrastoPos = { x: e.clientX, y: e.clientY };
+}, true);
+
+// Segurança: se o arraste terminar fora de um alvo válido, o dragend do card
+// pode não disparar. Esses dois garantem que o laço sempre para.
+document.addEventListener('drop', pararRolagemDeArrasto, true);
+document.addEventListener('dragend', pararRolagemDeArrasto, true);
+
+
+// ==========================================
+// MOVER PELO POST-IT ABERTO (sem arrastar)
+// ==========================================
+// As mesmas raias da coluna de uma pessoa, na ordem em que aparecem lá.
+const RAIAS_PARA_MOVER = [
+    { key: 'todo', label: 'Fazendo' },
+    { key: 'afazer', label: 'A Fazer' },
+    { key: 'testing', label: 'Em Teste' },
+    { key: 'paused', label: 'Pausado' },
+    { key: 'done', label: 'Concluída' }
+];
+
+// Preenche os seletores com a posição atual do post-it já escolhida.
+function preencherMoverPara(card) {
+    const secao = document.getElementById('viewMoveSection');
+    const selPessoa = document.getElementById('viewMovePerson');
+    const selRaia = document.getElementById('viewMoveLane');
+    if (!secao || !selPessoa || !selRaia) return;
+
+    // Observador não move nada
+    if (isObserver) {
+        secao.style.display = 'none';
+        return;
+    }
+    secao.style.display = 'block';
+
+    // Colunas de pessoa primeiro, abas de "Concluído" por último — mesma
+    // ordem do quadro, pra a lista não parecer embaralhada.
+    const pessoas = [
+        ...(state.people || []).filter(p => !p.isDone),
+        ...(state.people || []).filter(p => p.isDone)
+    ];
+
+    selPessoa.innerHTML = pessoas.map(p =>
+        `<option value="${escapeHtml(p.id)}" ${p.id === card.personId ? 'selected' : ''}>${escapeHtml(p.name)}${p.isDone ? ' (aba)' : ''}</option>`
+    ).join('');
+
+    const atual = card.status || 'todo';
+    selRaia.innerHTML = RAIAS_PARA_MOVER.map(l =>
+        `<option value="${l.key}" ${l.key === atual ? 'selected' : ''}>${l.label}</option>`
+    ).join('');
+
+    // Aba de "Concluído" não tem raias — o seletor de raia não faz sentido
+    const ajustaRaia = () => {
+        const escolhida = pessoas.find(p => p.id === selPessoa.value);
+        selRaia.disabled = !!(escolhida && escolhida.isDone);
+    };
+    selPessoa.onchange = ajustaRaia;
+    ajustaRaia();
+}
+
+function moverPeloPostItAberto() {
+    const modal = document.getElementById('viewCardModal');
+    const cardId = modal && modal.dataset.cardId;
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+
+    const destinoPessoa = document.getElementById('viewMovePerson').value;
+    const selRaia = document.getElementById('viewMoveLane');
+    // Numa aba de "Concluído" o post-it não fica numa raia; guarda 'done' pra
+    // ele não voltar pra "Fazendo" caso seja tirado da aba depois.
+    const destinoRaia = selRaia.disabled ? 'done' : selRaia.value;
+
+    if (card.personId === destinoPessoa && (card.status || 'todo') === destinoRaia) {
+        showToast('A tarefa já está aí.');
+        return;
+    }
+
+    moveCard(cardId, destinoPessoa, destinoRaia);
+
+    const pessoa = (state.people || []).find(p => p.id === destinoPessoa);
+    const nomeRaia = (RAIAS_PARA_MOVER.find(l => l.key === destinoRaia) || {}).label || '';
+    showToast(
+        `"${card.title}" foi para ${escapeHtml(pessoa ? pessoa.name : 'outra coluna')}`
+        + (selRaia.disabled ? '' : ` · ${nomeRaia}`),
+        'success'
+    );
+
+    renderBoard();
+    openViewModal(cardId); // reabre já mostrando a posição nova
+}
+
 function dragStart(e) {
     e.dataTransfer.setData('text/plain', e.target.id);
     const angle = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random());
     e.target.style.transform = `rotate(${angle.toFixed(2)}deg)`;
     e.target.classList.add('dragging');
+    iniciarRolagemDeArrasto();
 }
 
 function dragEnd(e) {
     e.target.style.transform = '';
     e.target.classList.remove('dragging');
+    pararRolagemDeArrasto();
 }
 
 function allowDrop(e) {
