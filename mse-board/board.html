@@ -444,6 +444,17 @@
                 <div class="input-group">
                     <label for="cardAttachments">Anexar Fotos ou Documentos</label>
                     <input type="file" id="cardAttachments" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.html,.htm">
+
+                    <!-- Área de colar: dá pra jogar um print direto do Ctrl+V
+                         (ou arrastar o arquivo pra cá) sem salvar em disco. -->
+                    <div id="cardPasteZone" class="paste-zone" tabindex="0">
+                        <i class="fa-solid fa-paste"></i>
+                        <span>Clique aqui e cole com <strong>Ctrl+V</strong>, ou arraste as imagens</span>
+                    </div>
+
+                    <!-- Miniaturas do que ainda vai ser enviado -->
+                    <div id="pendingAttachmentsList" class="pending-attachments-list"></div>
+
                     <div id="existingAttachmentsList" class="existing-attachments-list"></div>
                 </div>
 

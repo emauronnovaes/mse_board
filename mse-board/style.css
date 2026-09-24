@@ -5519,3 +5519,108 @@ body.dashboard-only-mode .dashboard-modal-content {
     margin-top: 1.4rem;
 }
 .est-acoes .btn-secondary { flex: 1; min-width: 200px; }
+
+/* ==========================================
+   COLAR / ARRASTAR IMAGENS NOS ANEXOS
+   ========================================== */
+
+.paste-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-s);
+    background-color: var(--bg);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.paste-zone:hover,
+.paste-zone:focus {
+    border-color: var(--accent);
+    color: var(--accent);
+    outline: none;
+}
+
+/* Enquanto um arquivo está sendo arrastado por cima */
+.paste-zone.is-over {
+    border-color: var(--accent);
+    border-style: solid;
+    background-color: rgba(37, 99, 235, 0.06);
+    color: var(--accent);
+}
+
+.paste-zone i { font-size: 0.9rem; }
+
+/* --- Miniaturas do que ainda vai ser enviado --- */
+.pending-attachments-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.pending-attachments-count {
+    width: 100%;
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.pending-attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 220px;
+    padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background-color: var(--card);
+    font-size: 0.74rem;
+}
+
+.pending-attachment-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background-color: var(--line-2);
+}
+
+.pending-attachment-doc {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.pending-attachment-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.pending-attachment button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.pending-attachment button:hover { color: var(--red); }

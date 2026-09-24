@@ -66,8 +66,41 @@
          mundo pra Programação. Aqui não depende de deploy do script.js. -->
     <script>
     (function () {
-        var dept = new URLSearchParams(location.search).get('dept');
-        if (!dept || dept === 'programacao') return;
+        var KEY = 'mse_dept_dashboards';
+        var params = new URLSearchParams(location.search);
+        var dept = params.get('dept');
+
+        if (!dept) {
+            // Abriu sem ?dept=. São dois casos bem diferentes:
+            //  - veio do Portal / link novo  -> é Programação mesmo (padrão);
+            //  - veio de outra página daqui  -> quase sempre é uma cópia velha
+            //    desta tela servida do CACHE do navegador, de antes desta
+            //    correção, cujos links ainda não levavam o departamento.
+            // Só no segundo caso recupera o que ficou guardado, senão abrir
+            // Programação de propósito seria sequestrado de volta pra
+            // Planejamento.
+            // Compara pela ORIGEM, não pelo caminho: no XAMPP o site mora em
+            // /mse_board/mse-board/ e em produção em /mse-board/, então casar
+            // pedaço de caminho quebrava num dos dois.
+            var veioDaquiDentro = document.referrer.indexOf(location.origin) === 0;
+            var lembrado = null;
+            try { lembrado = sessionStorage.getItem(KEY); } catch (e) { /* aba anônima */ }
+
+            if (veioDaquiDentro && lembrado) {
+                dept = lembrado;
+                params.set('dept', dept);
+                // Corrige a URL ANTES do script.js carregar: é de
+                // location.search que ele tira o departamento, e ele lê isso
+                // uma vez só, ao ser interpretado.
+                history.replaceState(null, '', location.pathname + '?' + params.toString());
+            }
+        }
+
+        dept = dept || 'programacao';
+        try { sessionStorage.setItem(KEY, dept); } catch (e) { /* aba anônima */ }
+
+        // Todo link sai com o departamento escrito, inclusive programacao:
+        // link explícito não depende de o destino adivinhar nada.
         document.querySelectorAll('.standalone-nav-links a').forEach(function (a) {
             var destino = (a.getAttribute('href') || '').split('?')[0];
             if (!destino || destino.indexOf('http') === 0) return;

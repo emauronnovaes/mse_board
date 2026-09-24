@@ -519,13 +519,14 @@ function ajustarCabecalhoDoDashboardSolto() {
     // ("MSE Board (Planejamento)Dashboard de Entregas — ").
     document.title = `${nomeDaPagina} (${deptLabel}) — MSE Board`;
 
-    // Links do topo carregam o departamento atual junto
+    // Links do topo carregam o departamento atual junto — SEMPRE escrito,
+    // inclusive "programacao". Antes o caso de Programação saía sem
+    // parâmetro, o que desfazia o script inline da própria página e deixava
+    // o destino tendo que adivinhar o departamento.
     document.querySelectorAll('.standalone-nav-links a').forEach(link => {
         const destino = (link.getAttribute('href') || '').split('?')[0];
         if (!destino || destino.startsWith('http')) return;
-        link.href = CURRENT_DEPARTMENT === 'programacao'
-            ? destino
-            : `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
+        link.href = `${destino}?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
     });
 }
 
@@ -2441,6 +2442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             renderBoard();
             document.getElementById('newCardForm').reset();
+            renderPendingAttachments(); // o reset esvazia o input; limpa as miniaturas junto
             renderCoverPreview(null);
             cardModal.style.display = 'none';
         });
@@ -2508,6 +2510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // A escolha fica lembrada por navegador — quem trabalha em notebook
         // minimiza uma vez e o quadro abre assim nas próximas.
         ligarRascunhoAutomatico();
+        ligarColarImagensNaTarefa();
         ligarBarraMinimizavel('toggleFiltersBtn', 'toggleFiltersIcon', 'filterBarContent', 'mse_filters_hidden');
         ligarBarraMinimizavel('toggleActionsBtn', 'toggleActionsIcon', 'boardActionsContent', 'mse_actions_hidden');
     }
@@ -5577,6 +5580,21 @@ function setupComentariosParticulares() {
         });
     }
 
+    // Colar print direto na conversa, igual ao formulário de tarefa. Mandar
+    // um print é metade do uso de um comentário particular — obrigar a salvar
+    // em disco antes tornava isso mais trabalhoso do que precisava.
+    const modalConversa = document.getElementById('privateCommentModal');
+    if (modalConversa) {
+        modalConversa.addEventListener('paste', (e) => {
+            if (modalConversa.style.display !== 'flex') return;
+            const arquivos = extrairImagensDoEvento(e);
+            if (arquivos.length === 0) return; // colou texto: deixa o campo tratar
+            e.preventDefault();
+            adicionarArquivosAoComentario(arquivos);
+            showToast(`${arquivos.length} arquivo(s) colado(s).`, 'success');
+        });
+    }
+
     // Ctrl+Enter envia (Enter sozinho quebra linha)
     const texto = document.getElementById('privateCommentText');
     if (texto) {
@@ -8084,6 +8102,7 @@ function openCardModalForCreate() {
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
     restaurarRascunhoDaTarefa('');
+    renderPendingAttachments();
     document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -8118,6 +8137,7 @@ function openCardModalForEdit(cardId) {
     renderCommentsList(card.id);
 
     restaurarRascunhoDaTarefa(card.id);
+    renderPendingAttachments();
     document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -8257,6 +8277,198 @@ function renderViewCommentsList(cardId) {
     }).join('');
 
     list.scrollTop = list.scrollHeight;
+}
+
+// ==========================================
+// COLAR E ARRASTAR IMAGENS NO FORMULÁRIO DE TAREFA
+// ==========================================
+// Um print vindo do Ctrl+V não é um arquivo em disco: chega como um Blob na
+// área de transferência, sem nome. Aqui ele vira um File de verdade e entra
+// na MESMA lista do <input type="file">, em vez de virar uma segunda lista
+// paralela — assim o envio (processFiles) continua sendo um caminho só, e
+// tanto faz se a imagem veio colada, arrastada ou escolhida no seletor.
+//
+// O truque é o DataTransfer: é a única forma de escrever em input.files.
+
+// Nome pra imagem colada, que vem sem nome nenhum. Leva data, hora E um
+// sufixo curto: sem o sufixo, duas imagens coladas dentro do mesmo segundo
+// ficavam com nome, tamanho e horário iguais e a segunda era descartada pelo
+// filtro de duplicados logo abaixo.
+let contadorDeColagens = 0;
+
+function nomeParaImagemColada(tipoMime) {
+    const ext = (tipoMime && tipoMime.split('/')[1] ? tipoMime.split('/')[1] : 'png')
+        .replace('jpeg', 'jpg')
+        .split('+')[0];
+    const d = new Date();
+    const dois = n => String(n).padStart(2, '0');
+    contadorDeColagens++;
+    return `colado-${d.getFullYear()}${dois(d.getMonth() + 1)}${dois(d.getDate())}`
+        + `-${dois(d.getHours())}${dois(d.getMinutes())}${dois(d.getSeconds())}`
+        + `-${contadorDeColagens}.${ext}`;
+}
+
+// Acrescenta arquivos ao input SEM perder os que já estavam lá — colar duas
+// vezes seguidas tem que somar, não substituir.
+function anexarArquivosAoInput(input, novosArquivos) {
+    if (!input || !novosArquivos || novosArquivos.length === 0) return 0;
+
+    const dt = new DataTransfer();
+    Array.from(input.files).forEach(f => dt.items.add(f));
+
+    let adicionados = 0;
+    Array.from(novosArquivos).forEach(f => {
+        if (!f) return;
+        // Evita duplicar o mesmo arquivo escolhido de novo sem querer no
+        // seletor. Não vale pra imagem colada: duas capturas da mesma tela
+        // têm o mesmo tamanho e seriam descartadas, mesmo sendo colagens
+        // diferentes de propósito — por isso o nome delas já sai único.
+        const ehColada = f.name.indexOf('colado-') === 0;
+        const repetido = !ehColada && Array.from(dt.files).some(
+            j => j.name === f.name && j.size === f.size && j.lastModified === f.lastModified
+        );
+        if (repetido) return;
+        dt.items.add(f);
+        adicionados++;
+    });
+
+    input.files = dt.files;
+    return adicionados;
+}
+
+function removerArquivoDoInput(input, indice) {
+    if (!input) return;
+    const dt = new DataTransfer();
+    Array.from(input.files).forEach((f, i) => { if (i !== indice) dt.items.add(f); });
+    input.files = dt.files;
+}
+
+// Miniaturas do que ainda não foi enviado. Sem isso, colar é um ato cego:
+// nada na tela muda e a pessoa não sabe se funcionou nem quantas já colou.
+function renderPendingAttachments() {
+    const box = document.getElementById('pendingAttachmentsList');
+    const input = document.getElementById('cardAttachments');
+    if (!box || !input) return;
+
+    const arquivos = Array.from(input.files);
+    if (arquivos.length === 0) {
+        box.innerHTML = '';
+        return;
+    }
+
+    box.innerHTML = `
+        <span class="pending-attachments-count">${arquivos.length} arquivo(s) a enviar</span>
+        ${arquivos.map((f, i) => {
+            const ehImagem = f.type.startsWith('image/');
+            const miniatura = ehImagem
+                ? `<img class="pending-attachment-thumb" alt="" data-preview="${i}">`
+                : `<span class="pending-attachment-thumb pending-attachment-doc"><i class="fa-solid fa-file"></i></span>`;
+            return `
+                <span class="pending-attachment" title="${escapeHtml(f.name)}">
+                    ${miniatura}
+                    <span class="pending-attachment-name">${escapeHtml(f.name)}</span>
+                    <button type="button" data-remover="${i}" title="Tirar este arquivo">&times;</button>
+                </span>
+            `;
+        }).join('')}
+    `;
+
+    // As miniaturas são geradas depois de montar o HTML porque cada uma
+    // precisa de uma URL temporária própria, revogada ao trocar de lista.
+    box.querySelectorAll('img[data-preview]').forEach(img => {
+        const f = arquivos[parseInt(img.dataset.preview, 10)];
+        if (!f) return;
+        const url = URL.createObjectURL(f);
+        img.src = url;
+        img.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+    });
+
+    box.querySelectorAll('button[data-remover]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            removerArquivoDoInput(input, parseInt(btn.dataset.remover, 10));
+            renderPendingAttachments();
+        });
+    });
+}
+
+// Pega as imagens de um evento de colar/arrastar. Um Ctrl+V de print traz
+// o Blob em clipboardData.files na maioria dos navegadores; quando não traz,
+// ainda dá pra achar em .items.
+function extrairImagensDoEvento(e) {
+    const dados = e.clipboardData || e.dataTransfer;
+    if (!dados) return [];
+
+    const achados = [];
+
+    if (dados.files && dados.files.length > 0) {
+        Array.from(dados.files).forEach(f => achados.push(f));
+    } else if (dados.items) {
+        Array.from(dados.items).forEach(item => {
+            if (item.kind !== 'file') return;
+            const f = item.getAsFile();
+            if (f) achados.push(f);
+        });
+    }
+
+    // Print colado chega sem nome ("image.png" ou vazio) — renomeia pra dar
+    // pra distinguir um do outro depois, dentro do post-it.
+    return achados.map(f => {
+        if (!f.type.startsWith('image/')) return f;
+        if (f.name && f.name !== 'image.png' && f.name !== 'blob') return f;
+        return new File([f], nomeParaImagemColada(f.type), { type: f.type, lastModified: Date.now() });
+    });
+}
+
+function ligarColarImagensNaTarefa() {
+    const modal = document.getElementById('cardModal');
+    const input = document.getElementById('cardAttachments');
+    const zona = document.getElementById('cardPasteZone');
+    if (!modal || !input) return;
+
+    const receber = (arquivos, origem) => {
+        const n = anexarArquivosAoInput(input, arquivos);
+        if (n > 0) {
+            renderPendingAttachments();
+            showToast(`${n} arquivo(s) ${origem}.`, 'success');
+        }
+        return n;
+    };
+
+    // Colar valendo no modal inteiro: a pessoa acabou de escrever o título e
+    // dá Ctrl+V — não faz sentido exigir que clique numa caixa antes.
+    modal.addEventListener('paste', (e) => {
+        if (modal.style.display !== 'flex') return;
+
+        const arquivos = extrairImagensDoEvento(e);
+        if (arquivos.length === 0) return; // colou texto: deixa o campo tratar
+
+        // Só toma o evento pra si quando tem arquivo mesmo, pra não atrapalhar
+        // um Ctrl+V de texto dentro do título ou do checklist.
+        e.preventDefault();
+        receber(arquivos, 'colado(s)');
+    });
+
+    // Arrastar da área de trabalho direto pra caixa
+    if (zona) {
+        ['dragenter', 'dragover'].forEach(ev => {
+            zona.addEventListener(ev, (e) => {
+                e.preventDefault();
+                zona.classList.add('is-over');
+            });
+        });
+        ['dragleave', 'drop'].forEach(ev => {
+            zona.addEventListener(ev, () => zona.classList.remove('is-over'));
+        });
+        zona.addEventListener('drop', (e) => {
+            e.preventDefault();
+            receber(extrairImagensDoEvento(e), 'adicionado(s)');
+        });
+        // Clicar na caixa dá foco nela, pra o Ctrl+V cair aqui
+        zona.addEventListener('click', () => zona.focus());
+    }
+
+    // Escolher pelo seletor também atualiza as miniaturas
+    input.addEventListener('change', renderPendingAttachments);
 }
 
 function renderExistingAttachments(card) {
