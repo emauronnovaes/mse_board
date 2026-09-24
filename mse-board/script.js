@@ -548,7 +548,7 @@ const PENDENCIAS_LANES = [
     { key: 'afazer',  label: 'A Fazer',  cor: 'var(--orange)', corTexto: 'var(--orange-texto)' },
     { key: 'todo',    label: 'Fazendo',  cor: 'var(--accent)' },
     { key: 'testing', label: 'Em Teste', cor: '#7c3aed' },
-    { key: 'paused',  label: 'Pausado',  cor: 'var(--gold)' }
+    { key: 'paused',  label: 'Pausado',  cor: 'var(--yellow)', corTexto: 'var(--yellow-texto)' }
 ];
 
 // Filtro de pessoa da tela (vazio = todas). Fica só na memória: é navegação,

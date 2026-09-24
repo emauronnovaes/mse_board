@@ -24,6 +24,13 @@
        ficava lavado demais no fundo branco pra quem enxerga menos. */
     --orange: #e8843c;
     --orange-texto: #c9650f;
+    /* Amarelo claro — usado no "Pausado" das Pendências por Pessoa. O --gold
+       de antes (#d9911a) era um âmbar escuro, perto demais do laranja do
+       "A Fazer": nas barras finas do gráfico os dois viravam a mesma cor.
+       Mesma dupla de tons do laranja: o claro pinta barra, bolinha e borda;
+       o fechado pinta o número do topo, que no claro some no fundo branco. */
+    --yellow: #f2cb45;
+    --yellow-texto: #96700a;
     --text-primary: #192231;
     --text-muted: #98a1b0;
 
