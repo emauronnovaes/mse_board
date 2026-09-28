@@ -5683,3 +5683,124 @@ body.dashboard-only-mode .dashboard-modal-content {
 }
 
 .view-section-move h4 { margin-bottom: 0.5rem; }
+
+/* ==========================================
+   MODO FOCO — raias de uma pessoa como colunas
+   ========================================== */
+
+/* Botão no cabeçalho de cada coluna de pessoa. Discreto até o mouse chegar:
+   é atalho de arrumação, não pode competir com o nome nem com a lixeira. */
+.column-foco-btn {
+    background: none;
+    border: none;
+    padding: 0.2rem 0.3rem;
+    /* Largura própria: o ícone vem do Font Awesome por CDN e, se ele não
+       carregar, um botão vazio teria zero de largura e ninguém clicaria. */
+    min-width: 24px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-s);
+    opacity: 0.45;
+    transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.column:hover .column-foco-btn { opacity: 1; }
+
+.column-foco-btn:hover {
+    color: var(--accent);
+    background-color: var(--line-2);
+}
+
+/* --- Faixa do modo foco --- */
+.foco-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--accent);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-s);
+    background-color: rgba(37, 99, 235, 0.06);
+}
+
+.foco-voltar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-s);
+    background-color: var(--card);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.foco-voltar:hover {
+    background-color: var(--accent);
+    color: #fff;
+}
+
+.foco-titulo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.foco-titulo i { color: var(--accent); }
+
+.foco-dica {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+/* --- Colunas de raia --- */
+/* No modo foco são só cinco colunas: deixa cada uma crescer pra ocupar a
+   largura disponível, em vez dos 340px fixos do quadro normal. */
+.columns-grid.is-foco .column-foco {
+    flex: 1 1 0;
+    min-width: 260px;
+    max-width: none;
+    border-top: 3px solid var(--foco-cor, var(--border));
+}
+
+.column-foco .column-header h3 {
+    font-size: 0.92rem;
+    color: var(--foco-cor, var(--text-primary));
+}
+
+/* O container da raia aqui é a coluna inteira: cresce e rola sozinho, em vez
+   de dividir a altura com as outras raias como acontece no quadro normal. */
+.column-foco .lane-container {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 120px;
+}
+
+.foco-ponto {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background-color: var(--foco-cor, var(--text-muted));
+}
+
+/* Mesma leitura de cor das outras telas: azul = em andamento,
+   laranja = parado, verde = concluído. */
+.column-foco-todo { --foco-cor: var(--accent); }
+.column-foco-afazer { --foco-cor: #6b7280; }
+.column-foco-testing { --foco-cor: #7c3aed; }
+.column-foco-paused { --foco-cor: var(--gold); }
+.column-foco-done { --foco-cor: var(--green); }
