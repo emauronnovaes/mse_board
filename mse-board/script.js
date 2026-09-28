@@ -531,6 +531,314 @@ function ajustarCabecalhoDoDashboardSolto() {
 }
 
 // ==========================================
+// RELATÓRIO EM PDF — BACKLOG E ENTREGAS
+// ==========================================
+// Antes, "Imprimir / Salvar PDF" mandava a própria tela pra impressora: saía
+// a tela, com filtros, botões e cores de interface. Agora monta um documento
+// próprio numa janela à parte, escrito pra papel — cabeçalho com a posição do
+// dia, os números em cima, a visão geral agrupada por status e o
+// detalhamento por responsável.
+//
+// Numa janela separada de propósito: o CSS do quadro tem centenas de regras
+// pensadas pra tela, e dobrar tudo isso com @media print vira uma briga sem
+// fim. Aqui o documento nasce com o estilo dele e mais nada.
+
+// Ordem em que os status aparecem: o que está em andamento primeiro, a fila
+// por último — senão "A Fazer", que costuma ser a maior lista, empurra as
+// outras pro fim do relatório.
+const RELATORIO_STATUS = [
+    { key: 'todo', label: 'Fazendo' },
+    { key: 'testing', label: 'Em Teste' },
+    { key: 'paused', label: 'Pausado' },
+    { key: 'afazer', label: 'A Fazer' }
+];
+
+function relatorioHojeISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// As atividades que entram no relatório: em aberto, não arquivadas e fora
+// das abas de "Concluído". O relatório é de backlog — o que já foi entregue
+// sai de cena.
+function getAtividadesDoRelatorio() {
+    return (state.cards || []).filter(card => {
+        if (card.archived) return false;
+        if ((card.status || 'todo') === 'done') return false;
+        const pessoa = (state.people || []).find(p => p.id === card.personId);
+        if (pessoa && pessoa.isDone) return false;
+        return true;
+    });
+}
+
+function nomeDoResponsavel(personId) {
+    const p = (state.people || []).find(pp => pp.id === personId);
+    return p ? p.name : 'Sem responsável';
+}
+
+// Ordena por prazo: o que vence antes vem primeiro, e quem não tem prazo vai
+// pro fim (sem prazo não é urgente, é indefinido).
+function ordenarPorVencimento(a, b) {
+    const pa = a.dueDate || '';
+    const pb = b.dueDate || '';
+    if (pa && pb) return pa.localeCompare(pb) || (a.title || '').localeCompare(b.title || '', 'pt-BR');
+    if (pa) return -1;
+    if (pb) return 1;
+    return (a.title || '').localeCompare(b.title || '', 'pt-BR');
+}
+
+// Etiqueta ao lado do prazo. São três situações diferentes que o prazo
+// sozinho não conta:
+//   - 100% com prazo vencido: o trabalho acabou, só falta dar baixa;
+//   - atrasada: passou do prazo e não está pronta;
+//   - vence hoje: é hoje que tem que sair.
+function situacaoDoPrazo(card, hoje) {
+    if (!card.dueDate) return null;
+    const pct = getProgress(card).percent;
+    if (card.dueDate < hoje) {
+        return pct >= 100
+            ? { texto: '100% — baixar', classe: 'sit-baixar' }
+            : { texto: 'atrasada', classe: 'sit-atrasada' };
+    }
+    if (card.dueDate === hoje) return { texto: 'vence hoje', classe: 'sit-hoje' };
+    return null;
+}
+
+function relEscapa(txt) {
+    return String(txt == null ? '' : txt)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function relData(iso) {
+    if (!iso) return '—';
+    const [a, m, d] = iso.split('-');
+    return `${d}/${m}/${a}`;
+}
+
+// Uma linha da tabela. "comResponsavel" muda entre a visão geral (que mostra
+// de quem é) e o detalhamento (onde a pessoa já é o título do bloco).
+function relLinha(card, hoje, comResponsavel) {
+    const pct = getProgress(card).percent;
+    const sit = situacaoDoPrazo(card, hoje);
+    const filaSemDono = !(state.people || []).some(p => p.id === card.personId && !p.isDone);
+
+    return `
+        <tr>
+            ${comResponsavel ? `<td class="rel-resp${filaSemDono ? ' rel-fila' : ''}">${relEscapa(nomeDoResponsavel(card.personId))}</td>` : ''}
+            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}</td>
+            <td class="rel-data">${relData(card.startDate || (card.createdAt ? new Date(card.createdAt).toISOString().slice(0, 10) : null))}</td>
+            <td class="rel-data">${relData(card.dueDate)}${sit ? ` <span class="rel-sit ${sit.classe}">${sit.texto}</span>` : ''}</td>
+            <td class="rel-avanco">
+                <span class="rel-barra"><span style="width:${pct}%"></span></span>
+                <span class="rel-pct">${pct}%</span>
+            </td>
+        </tr>
+    `;
+}
+
+function montarHtmlDoRelatorio() {
+    const hoje = relatorioHojeISO();
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+    const cards = getAtividadesDoRelatorio();
+
+    // ---- Números do topo ----
+    const porStatus = {};
+    RELATORIO_STATUS.forEach(s => {
+        porStatus[s.key] = cards.filter(c => (c.status || 'todo') === s.key);
+    });
+    const atrasadas = cards.filter(c => c.dueDate && c.dueDate < hoje && getProgress(c).percent < 100);
+    const venceHoje = cards.filter(c => c.dueDate === hoje);
+    const aguardandoBaixa = cards.filter(c => c.dueDate && c.dueDate < hoje && getProgress(c).percent >= 100);
+
+    const kpis = [
+        { rotulo: 'Total', valor: cards.length, classe: '' },
+        ...RELATORIO_STATUS.map(s => ({ rotulo: s.label, valor: porStatus[s.key].length, classe: 'kpi-' + s.key })),
+        { rotulo: 'Atrasadas', valor: atrasadas.length, classe: 'kpi-atrasada' }
+    ];
+
+    const avisos = [];
+    if (venceHoje.length) avisos.push(`${venceHoje.length} atividade(s) vencem hoje`);
+    if (aguardandoBaixa.length) avisos.push(`${aguardandoBaixa.length} com 100% e prazo vencido (aguardando baixa)`);
+    if (atrasadas.length) avisos.push(`${atrasadas.length} atrasada(s)`);
+
+    // ---- 1. Visão geral, agrupada por status ----
+    const visaoGeral = RELATORIO_STATUS.map(s => {
+        const doStatus = [...porStatus[s.key]].sort(ordenarPorVencimento);
+        if (doStatus.length === 0) return '';
+        return `
+            <tr class="rel-grupo"><td colspan="5">
+                <span class="rel-grupo-nome st-${s.key}">${s.label}</span>
+                <span class="rel-grupo-qtd">${doStatus.length} atividade(s)</span>
+            </td></tr>
+            ${doStatus.map(c => relLinha(c, hoje, true)).join('')}
+        `;
+    }).join('');
+
+    // ---- 2. Detalhamento por responsável ----
+    const porPessoa = {};
+    cards.forEach(c => { (porPessoa[c.personId] = porPessoa[c.personId] || []).push(c); });
+
+    const blocosPessoa = Object.keys(porPessoa)
+        .map(id => ({ id, nome: nomeDoResponsavel(id), cards: porPessoa[id] }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+        .map(p => {
+            const resumo = RELATORIO_STATUS
+                .map(s => {
+                    const n = p.cards.filter(c => (c.status || 'todo') === s.key).length;
+                    return n > 0 ? `${n} ${s.label.toLowerCase()}` : null;
+                })
+                .filter(Boolean).join(' · ');
+
+            const linhas = RELATORIO_STATUS.map(s => {
+                const doStatus = p.cards.filter(c => (c.status || 'todo') === s.key).sort(ordenarPorVencimento);
+                if (doStatus.length === 0) return '';
+                return `
+                    <tr class="rel-subgrupo"><td colspan="4"><span class="rel-grupo-nome st-${s.key}">${s.label}</span></td></tr>
+                    ${doStatus.map(c => relLinha(c, hoje, false)).join('')}
+                `;
+            }).join('');
+
+            return `
+                <section class="rel-pessoa">
+                    <h3>${relEscapa(p.nome)} <small>${p.cards.length} tarefa(s) — ${resumo}</small></h3>
+                    <table class="rel-tabela">
+                        <thead><tr><th>Atividade</th><th>Início</th><th>Prazo</th><th>Avanço</th></tr></thead>
+                        <tbody>${linhas}</tbody>
+                    </table>
+                </section>
+            `;
+        }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>MSE · ${relEscapa(deptLabel)} — Backlog e Entregas</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm 10mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #192231; margin: 0; font-size: 10px; line-height: 1.35;
+  }
+  .rel-topo {
+    background: #16243c; color: #fff; padding: 14px 16px; border-radius: 8px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  }
+  .rel-topo h1 { margin: 0; font-size: 17px; font-weight: 700; }
+  .rel-topo h1 b { color: #ff4d4d; }
+  .rel-topo p { margin: 3px 0 0; font-size: 10px; color: rgba(255,255,255,.72); }
+  .rel-posicao { text-align: right; font-size: 9px; color: rgba(255,255,255,.72); white-space: nowrap; }
+  .rel-posicao strong { display: block; font-size: 13px; color: #fff; }
+
+  .rel-kpis { display: flex; gap: 7px; margin: 12px 0 7px; }
+  .rel-kpi { flex: 1; border: 1px solid #e4e7ec; border-radius: 6px; padding: 7px 9px; }
+  .rel-kpi span { display: block; font-size: 7.5px; text-transform: uppercase; letter-spacing: .07em; color: #98a1b0; }
+  .rel-kpi b { font-size: 17px; font-weight: 700; }
+  .kpi-todo b { color: #2563eb; } .kpi-testing b { color: #7c3aed; }
+  .kpi-paused b { color: #db6a1e; } .kpi-afazer b { color: #4d5868; }
+  .kpi-atrasada b { color: #d23b3b; }
+
+  .rel-avisos { font-size: 9px; color: #4d5868; margin: 0 0 14px; }
+
+  h2 { font-size: 12px; margin: 16px 0 7px; }
+  .rel-pessoa h3 { font-size: 11px; margin: 0 0 5px; }
+  .rel-pessoa h3 small { font-weight: 400; color: #98a1b0; font-size: 8.5px; }
+
+  .rel-tabela { width: 100%; border-collapse: collapse; }
+  .rel-tabela th {
+    text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: #98a1b0; border-bottom: 1px solid #192231; padding: 4px 5px; font-weight: 600;
+  }
+  .rel-tabela td { padding: 3.5px 5px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+  .rel-resp { font-weight: 700; width: 17%; }
+  .rel-fila { font-weight: 400; font-style: italic; color: #4d5868; }
+  .rel-ativ { width: 40%; }
+  .rel-data { width: 13%; color: #4d5868; white-space: nowrap; }
+  .rel-avanco { width: 17%; white-space: nowrap; }
+
+  .rel-grupo td { background: #f4f6f9; padding: 5px; border-bottom: 1px solid #e4e7ec; }
+  .rel-subgrupo td { padding: 5px 5px 2px; border: none; }
+  .rel-grupo-nome {
+    font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    padding: 1.5px 5px; border-radius: 3px;
+  }
+  .st-todo { background: #e4edfd; color: #1d4ed8; }
+  .st-testing { background: #ece5fb; color: #6d28d9; }
+  .st-paused { background: #fbeade; color: #b35513; }
+  .st-afazer { background: #eef0f3; color: #4d5868; }
+  .rel-grupo-qtd { font-size: 8px; color: #4d5868; margin-left: 6px; }
+
+  .rel-sit { font-size: 7px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+  .sit-atrasada { background: #fae3e3; color: #a52222; }
+  .sit-hoje { background: #fbeade; color: #b35513; }
+  .sit-baixar { background: #e2f1e8; color: #14663a; }
+
+  .rel-barra {
+    display: inline-block; width: 52px; height: 4px; border-radius: 2px;
+    background: #eef0f3; overflow: hidden; vertical-align: middle; margin-right: 5px;
+  }
+  .rel-barra span { display: block; height: 100%; background: #2563eb; border-radius: 2px; }
+  .rel-pct { font-size: 8.5px; color: #4d5868; }
+
+  /* Um responsável não pode ser partido entre duas páginas no meio */
+  .rel-pessoa { break-inside: avoid; margin-bottom: 11px; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+
+  .rel-fonte { margin-top: 16px; font-size: 8px; color: #98a1b0; text-align: center; }
+  @media screen { body { max-width: 900px; margin: 20px auto; padding: 0 16px; } }
+</style></head><body>
+
+  <div class="rel-topo">
+    <div>
+      <h1><b>MSE</b> · ${relEscapa(deptLabel)} — Backlog e Entregas</h1>
+      <p>${relEscapa(deptLabel)} · Status das atividades por responsável</p>
+    </div>
+    <div class="rel-posicao">Posição em<strong>${relData(hoje)}</strong></div>
+  </div>
+
+  <div class="rel-kpis">
+    ${kpis.map(k => `<div class="rel-kpi ${k.classe}"><span>${k.rotulo}</span><b>${k.valor}</b></div>`).join('')}
+  </div>
+  ${avisos.length ? `<p class="rel-avisos">${avisos.join(' · ')}.</p>` : '<p class="rel-avisos"></p>'}
+
+  <h2>1. Visão geral — todas as atividades</h2>
+  <table class="rel-tabela">
+    <thead><tr><th>Responsável</th><th>Atividade</th><th>Início</th><th>Prazo</th><th>Avanço</th></tr></thead>
+    <tbody>${visaoGeral || '<tr><td colspan="5">Nenhuma atividade em aberto.</td></tr>'}</tbody>
+  </table>
+
+  <h2>2. Detalhamento por responsável</h2>
+  ${blocosPessoa || '<p>Nenhuma atividade em aberto.</p>'}
+
+  <p class="rel-fonte">Fonte: Portal MSE › ${relEscapa(deptLabel)} › Backlog e Entregas › Dashboard de Entregas · extraído em ${relData(hoje)}</p>
+</body></html>`;
+}
+
+function gerarRelatorioEmPdf() {
+    const janela = window.open('', '_blank');
+    if (!janela) {
+        showToast('O navegador bloqueou a janela do relatório. Libere os pop-ups deste site e tente de novo.');
+        return;
+    }
+
+    janela.document.write(montarHtmlDoRelatorio());
+    janela.document.close();
+
+    // Espera o documento assentar antes de chamar a impressão: chamando na
+    // hora, o navegador às vezes abre o diálogo com a página ainda em branco.
+    janela.onload = () => {
+        janela.focus();
+        janela.print();
+    };
+    setTimeout(() => {
+        // Rede de segurança pro caso de o onload não disparar (documento
+        // escrito por document.write às vezes já chega "carregado").
+        if (!janela.closed) { janela.focus(); janela.print(); }
+    }, 600);
+}
+
+// ==========================================
 // PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
 // ==========================================
 // Mesma ideia do painel de pendências do Portal, só que o agrupamento é por
@@ -1198,11 +1506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderDeliveryReport();
         });
         bindIfExists('exportReportCsvBtn', 'click', exportDeliveryReportCsv);
-        bindIfExists('printReportBtn', 'click', () => {
-            document.body.classList.add('printing-report');
-            window.print();
-            setTimeout(() => document.body.classList.remove('printing-report'), 500);
-        });
+        bindIfExists('printReportBtn', 'click', gerarRelatorioEmPdf);
 
         // Filtros da tabela "Tarefas por Responsável" (buscar, responsável,
         // status, limpar filtros) — na versão dentro do board isso já era
@@ -1979,11 +2283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         document.getElementById('exportReportCsvBtn').addEventListener('click', exportDeliveryReportCsv);
-        document.getElementById('printReportBtn').addEventListener('click', () => {
-            document.body.classList.add('printing-report');
-            window.print();
-            setTimeout(() => document.body.classList.remove('printing-report'), 500);
-        });
+        document.getElementById('printReportBtn').addEventListener('click', gerarRelatorioEmPdf);
 
         // Alertas de Vencimento
         document.getElementById('closeDueAlertsModalBtn').addEventListener('click', () => {
@@ -4052,7 +4352,26 @@ function renderDeliveryReport() {
 
     activeContainer.innerHTML = columnIds.map(personId => {
         const group = byColumn[personId];
-        const cards = group.cards.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'pt-BR'));
+        // Ordem de leitura da tabela: primeiro o que está em andamento, a
+        // fila por último, e dentro de cada status o que vence antes na
+        // frente. Antes era ordem alfabética por título, que não dizia nada
+        // sobre o que precisa de atenção hoje.
+        const ordemStatus = { todo: 0, testing: 1, paused: 2, afazer: 3, done: 4 };
+        const cards = group.cards.sort((a, b) => {
+            const sa = ordemStatus[a.status || 'todo'] ?? 9;
+            const sb = ordemStatus[b.status || 'todo'] ?? 9;
+            if (sa !== sb) return sa - sb;
+
+            // Prazo mais próximo primeiro; sem prazo vai pro fim do grupo
+            // (sem prazo não é urgente, é indefinido).
+            const pa = a.dueDate || '';
+            const pb = b.dueDate || '';
+            if (pa && pb && pa !== pb) return pa.localeCompare(pb);
+            if (pa && !pb) return -1;
+            if (!pa && pb) return 1;
+
+            return (a.title || '').localeCompare(b.title || '', 'pt-BR');
+        });
 
         const personHeaderRow = `
             <tr class="dash-person-group-row">
