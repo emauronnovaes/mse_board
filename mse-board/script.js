@@ -9002,6 +9002,15 @@ function preencherMoverPara(card) {
         const escolhida = pessoas.find(p => p.id === selPessoa.value);
         selRaia.disabled = !!(escolhida && escolhida.isDone);
     };
+
+    // Trocar a raia aplica na hora: mudar o status é o gesto mais comum aqui
+    // dentro, e exigir um segundo clique no botão só pra isso é atrito à toa.
+    // O botão continua existindo pra quem for TROCAR DE COLUNA — aí faz
+    // sentido confirmar, porque muda de responsável.
+    selRaia.onchange = () => {
+        if (selPessoa.value === card.personId) moverPeloPostItAberto();
+    };
+
     selPessoa.onchange = ajustaRaia;
     ajustaRaia();
 }

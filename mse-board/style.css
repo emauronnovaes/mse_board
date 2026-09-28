@@ -5672,3 +5672,14 @@ body.dashboard-only-mode .dashboard-modal-content {
     flex-shrink: 0;
     padding: 0.5rem 0.9rem;
 }
+
+/* Bloco de status no topo do post-it aberto: fundo levemente destacado
+   porque ele ficou no meio do conteúdo, não mais no rodapé com os botões. */
+.view-section-move {
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    padding: 0.7rem 0.85rem;
+}
+
+.view-section-move h4 { margin-bottom: 0.5rem; }
