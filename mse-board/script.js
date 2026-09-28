@@ -543,14 +543,13 @@ function ajustarCabecalhoDoDashboardSolto() {
 // pensadas pra tela, e dobrar tudo isso com @media print vira uma briga sem
 // fim. Aqui o documento nasce com o estilo dele e mais nada.
 
-// Ordem em que os status aparecem: o que está em andamento primeiro, a fila
-// por último — senão "A Fazer", que costuma ser a maior lista, empurra as
-// outras pro fim do relatório.
+// Ordem em que os status aparecem no relatório e na tabela do Dashboard.
+// Mantenha as duas iguais: é a mesma leitura em papel e em tela.
 const RELATORIO_STATUS = [
     { key: 'todo', label: 'Fazendo' },
+    { key: 'afazer', label: 'A Fazer' },
     { key: 'testing', label: 'Em Teste' },
-    { key: 'paused', label: 'Pausado' },
-    { key: 'afazer', label: 'A Fazer' }
+    { key: 'paused', label: 'Pausado' }
 ];
 
 function relatorioHojeISO() {
@@ -4352,11 +4351,11 @@ function renderDeliveryReport() {
 
     activeContainer.innerHTML = columnIds.map(personId => {
         const group = byColumn[personId];
-        // Ordem de leitura da tabela: primeiro o que está em andamento, a
-        // fila por último, e dentro de cada status o que vence antes na
-        // frente. Antes era ordem alfabética por título, que não dizia nada
-        // sobre o que precisa de atenção hoje.
-        const ordemStatus = { todo: 0, testing: 1, paused: 2, afazer: 3, done: 4 };
+        // Ordem de leitura da tabela: Fazendo, A Fazer, Em Teste, Pausado —
+        // a mesma do relatório (RELATORIO_STATUS). Dentro de cada status, o
+        // que vence antes vem na frente. Antes era ordem alfabética por
+        // título, que não dizia nada sobre o que precisa de atenção hoje.
+        const ordemStatus = { todo: 0, afazer: 1, testing: 2, paused: 3, done: 4 };
         const cards = group.cards.sort((a, b) => {
             const sa = ordemStatus[a.status || 'todo'] ?? 9;
             const sb = ordemStatus[b.status || 'todo'] ?? 9;
