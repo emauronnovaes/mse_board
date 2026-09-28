@@ -2745,7 +2745,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             renderBoard();
             document.getElementById('newCardForm').reset();
-            renderPendingAttachments(); // o reset esvazia o input; limpa as miniaturas junto
+            limparAnexosPendentes(); // salvou: o que estava na fila já virou anexo
             renderCoverPreview(null);
             cardModal.style.display = 'none';
         });
@@ -8427,7 +8427,7 @@ function openCardModalForCreate() {
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
     restaurarRascunhoDaTarefa('');
-    renderPendingAttachments();
+    limparAnexosPendentes();
     document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -8462,7 +8462,7 @@ function openCardModalForEdit(cardId) {
     renderCommentsList(card.id);
 
     restaurarRascunhoDaTarefa(card.id);
-    renderPendingAttachments();
+    limparAnexosPendentes();
     document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -8634,13 +8634,35 @@ function nomeParaImagemColada(tipoMime) {
         + `-${contadorDeColagens}.${ext}`;
 }
 
-// Acrescenta arquivos ao input SEM perder os que já estavam lá — colar duas
-// vezes seguidas tem que somar, não substituir.
-function anexarArquivosAoInput(input, novosArquivos) {
-    if (!input || !novosArquivos || novosArquivos.length === 0) return 0;
+// Lista do que está pra ser enviado. É a FONTE DA VERDADE, e não o
+// input.files, por um motivo que custou um bug: ao escolher arquivos pela
+// segunda vez, o navegador SUBSTITUI a seleção do <input type="file"> em vez
+// de somar. Quem lia o input como base perdia a primeira leva — era isso que
+// apagava as imagens já anexadas quando se clicava em "Escolher arquivos" de
+// novo antes de salvar.
+let anexosPendentesDaTarefa = [];
 
+// Escreve a lista de volta no input: é de lá que o envio (processFiles) lê no
+// submit, e DataTransfer é a única forma de montar um FileList na mão.
+// Atribuir input.files por código não dispara "change", então isso não
+// realimenta o próprio ouvinte.
+function sincronizarInputComPendentes() {
+    const input = document.getElementById('cardAttachments');
+    if (!input) return;
     const dt = new DataTransfer();
-    Array.from(input.files).forEach(f => dt.items.add(f));
+    anexosPendentesDaTarefa.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+}
+
+function limparAnexosPendentes() {
+    anexosPendentesDaTarefa = [];
+    sincronizarInputComPendentes();
+    renderPendingAttachments();
+}
+
+// Soma arquivos à lista (venham do seletor, de Ctrl+V ou de arrastar).
+function anexarArquivosAoInput(input, novosArquivos) {
+    if (!novosArquivos || novosArquivos.length === 0) return 0;
 
     let adicionados = 0;
     Array.from(novosArquivos).forEach(f => {
@@ -8650,23 +8672,21 @@ function anexarArquivosAoInput(input, novosArquivos) {
         // têm o mesmo tamanho e seriam descartadas, mesmo sendo colagens
         // diferentes de propósito — por isso o nome delas já sai único.
         const ehColada = f.name.indexOf('colado-') === 0;
-        const repetido = !ehColada && Array.from(dt.files).some(
+        const repetido = !ehColada && anexosPendentesDaTarefa.some(
             j => j.name === f.name && j.size === f.size && j.lastModified === f.lastModified
         );
         if (repetido) return;
-        dt.items.add(f);
+        anexosPendentesDaTarefa.push(f);
         adicionados++;
     });
 
-    input.files = dt.files;
+    sincronizarInputComPendentes();
     return adicionados;
 }
 
 function removerArquivoDoInput(input, indice) {
-    if (!input) return;
-    const dt = new DataTransfer();
-    Array.from(input.files).forEach((f, i) => { if (i !== indice) dt.items.add(f); });
-    input.files = dt.files;
+    anexosPendentesDaTarefa.splice(indice, 1);
+    sincronizarInputComPendentes();
 }
 
 // Miniaturas do que ainda não foi enviado. Sem isso, colar é um ato cego:
@@ -8676,7 +8696,7 @@ function renderPendingAttachments() {
     const input = document.getElementById('cardAttachments');
     if (!box || !input) return;
 
-    const arquivos = Array.from(input.files);
+    const arquivos = anexosPendentesDaTarefa;
     if (arquivos.length === 0) {
         box.innerHTML = '';
         return;
@@ -8793,8 +8813,18 @@ function ligarColarImagensNaTarefa() {
         zona.addEventListener('click', () => zona.focus());
     }
 
-    // Escolher pelo seletor também atualiza as miniaturas
-    input.addEventListener('change', renderPendingAttachments);
+    // Escolher pelo seletor SOMA à lista. Nesse ponto input.files já contém
+    // só o que acabou de ser escolhido (o navegador trocou a seleção), então
+    // o que estava antes vem da nossa lista, não do input.
+    input.addEventListener('change', () => {
+        const escolhidos = Array.from(input.files);
+        if (escolhidos.length === 0) return;
+        const n = anexarArquivosAoInput(input, escolhidos);
+        renderPendingAttachments();
+        if (n > 0 && anexosPendentesDaTarefa.length > n) {
+            showToast(`${n} arquivo(s) somado(s) aos anteriores.`, 'success');
+        }
+    });
 }
 
 function renderExistingAttachments(card) {
