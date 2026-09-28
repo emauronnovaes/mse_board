@@ -4277,6 +4277,14 @@ function renderDeliveryReport() {
     // ---------- Tarefas por pessoa, em formato de planilha (todas as raias) ----------
     const activeContainer = document.getElementById('reportActiveTasksByPerson');
 
+    // Esta tabela só existe no Dashboard de Entregas. A página de Estatísticas
+    // chama a MESMA função (pelos pódios, ranking e gráfico) mas não tem a
+    // tabela — e, sem esta saída, o código abaixo escrevia num elemento nulo,
+    // estourava, e a inicialização da página parava ali: os botões ligados
+    // DEPOIS (período, datas, Exportar CSV e Imprimir/Salvar PDF) nunca
+    // recebiam o clique. O sintoma era "clico e não acontece nada".
+    if (!activeContainer) return;
+
     // A coluna "Particular" só existe no quadro de Planejamento. Nos outros,
     // ela é escondida por inteiro (cabeçalho + células) pra não sobrar uma
     // coluna vazia na planilha.
