@@ -2415,6 +2415,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Botão "Tarefas Recorrentes" — só no quadro de Planejamento, e lá
         // aparece pra todo mundo. Roda depois do loadState() porque precisa de
         // state.cards/state.people pra montar a lista e pra decidir o reinício.
+        // Retoma o foco de antes, se a pessoa ainda existir. Vem antes do
+        // primeiro renderBoard pra o quadro já nascer no modo certo.
+        carregarFocoSalvo();
+
         setupTarefasRecorrentes();
 
         // Comentários particulares (sino do cabeçalho + modais). Também só no
@@ -6944,6 +6948,114 @@ function populateAssigneeFilter() {
     if (sorted.includes(currentValue)) select.value = currentValue;
 }
 
+// ==========================================
+// MODO FOCO — UMA PESSOA, RAIAS COMO COLUNAS
+// ==========================================
+// No quadro normal cada COLUNA é uma pessoa, e as raias (Fazendo, A Fazer…)
+// ficam empilhadas dentro dela. Isso é bom pra ver a equipe inteira, mas
+// ruim pra trabalhar: mover uma tarefa de raia é arrastar na vertical, dentro
+// de um espaço apertado, com as outras raias amassadas.
+//
+// No modo foco o quadro gira: escolhida UMA pessoa, as raias DELA viram as
+// colunas, lado a lado, do jeito que um kanban costuma ser. Arrastar entre
+// "A Fazer" e "Fazendo" passa a ser um gesto horizontal, com a coluna inteira
+// de altura disponível.
+//
+// É só um jeito de OLHAR: não muda nada nos dados. Por isso mora numa
+// variável da tela e no localStorage (pra sobreviver a um F5 sem virar
+// configuração compartilhada do quadro).
+
+const FOCO_STORAGE_KEY = 'mse_foco_pessoa';
+
+// Quem está em foco agora (id da pessoa), ou null pro quadro normal.
+let focoNaPessoa = null;
+
+// As raias que viram colunas no modo foco, na ordem da esquerda pra direita.
+const FOCO_RAIAS = [
+    { key: 'todo', label: 'Fazendo' },
+    { key: 'afazer', label: 'A Fazer' },
+    { key: 'testing', label: 'Em Teste' },
+    { key: 'paused', label: 'Pausado' },
+    { key: 'done', label: 'Concluída' }
+];
+
+function carregarFocoSalvo() {
+    try {
+        const salvo = localStorage.getItem(`${FOCO_STORAGE_KEY}_${CURRENT_DEPARTMENT}`);
+        // Só restaura se a pessoa ainda existir: coluna excluída deixaria o
+        // quadro preso num foco vazio, sem nada explicando o porquê.
+        if (salvo && (state.people || []).some(p => p.id === salvo && !p.isDone)) {
+            focoNaPessoa = salvo;
+        }
+    } catch (e) { /* sem localStorage: começa no quadro normal */ }
+}
+
+function entrarNoModoFoco(personId) {
+    focoNaPessoa = personId;
+    try { localStorage.setItem(`${FOCO_STORAGE_KEY}_${CURRENT_DEPARTMENT}`, personId); } catch (e) { /* segue sem lembrar */ }
+    renderBoard();
+    // Volta o quadro pro começo: entrando em foco, a rolagem horizontal de
+    // antes não corresponde a nada na tela nova.
+    const grid = document.getElementById('peopleGrid');
+    if (grid) grid.scrollLeft = 0;
+}
+
+function sairDoModoFoco() {
+    focoNaPessoa = null;
+    try { localStorage.removeItem(`${FOCO_STORAGE_KEY}_${CURRENT_DEPARTMENT}`); } catch (e) { /* nada a limpar */ }
+    renderBoard();
+}
+
+// Faixa no topo do quadro dizendo de quem é o foco, com a saída.
+function renderBarraDeFoco() {
+    const barra = document.getElementById('focoBar');
+    if (!barra) return;
+
+    if (!focoNaPessoa) {
+        barra.style.display = 'none';
+        barra.innerHTML = '';
+        return;
+    }
+
+    const pessoa = (state.people || []).find(p => p.id === focoNaPessoa);
+    barra.style.display = 'flex';
+    barra.innerHTML = `
+        <button type="button" class="foco-voltar" id="focoVoltarBtn">
+            <i class="fa-solid fa-arrow-left"></i> Voltar ao quadro
+        </button>
+        <span class="foco-titulo">
+            <i class="fa-solid fa-crosshairs"></i>
+            Focado em <strong>${escapeHtml(pessoa ? pessoa.name : 'pessoa')}</strong>
+        </span>
+        <span class="foco-dica">as raias viraram colunas — arraste de lado pra mudar de status</span>
+    `;
+    document.getElementById('focoVoltarBtn').addEventListener('click', sairDoModoFoco);
+}
+
+// Monta uma coluna de RAIA (modo foco). Reaproveita os mesmos ids que o
+// quadro normal usa (cards_<pessoa>__<raia>), então arrastar, soltar e
+// contar continuam funcionando sem nenhuma adaptação.
+function buildColunaDeRaia(person, lane) {
+    const col = document.createElement('div');
+    col.className = `column column-foco column-foco-${lane.key}`;
+    col.id = `fococol_${person.id}__${lane.key}`;
+
+    col.innerHTML = `
+        <div class="column-header">
+            <div class="column-person-header">
+                <span class="foco-ponto foco-ponto-${lane.key}"></span>
+                <h3>${lane.label}</h3>
+            </div>
+            <div class="column-header-actions">
+                <span class="card-count" id="count_${person.id}__${lane.key}">0</span>
+            </div>
+        </div>
+        <div class="cards-container lane-container" id="cards_${person.id}__${lane.key}"
+             ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+    `;
+    return col;
+}
+
 function renderBoard() {
     populateAssigneeFilter();
     const grid = document.getElementById('peopleGrid');
@@ -6966,6 +7078,34 @@ function renderBoard() {
 
     grid.innerHTML = '';
     const filters = getFilters();
+
+    renderBarraDeFoco();
+    grid.classList.toggle('is-foco', !!focoNaPessoa);
+
+    // ---- MODO FOCO: as raias de UMA pessoa viram as colunas ----
+    if (focoNaPessoa) {
+        const pessoa = state.people.find(p => p.id === focoNaPessoa);
+        if (!pessoa) {
+            // A coluna foi excluída enquanto o foco estava ativo
+            sairDoModoFoco();
+            return;
+        }
+
+        FOCO_RAIAS.forEach(lane => {
+            grid.appendChild(buildColunaDeRaia(pessoa, lane));
+            const container = document.getElementById(`cards_${pessoa.id}__${lane.key}`);
+            if (!container) return;
+            sortCards(state.cards.filter(c =>
+                c.personId === pessoa.id && !c.archived &&
+                (c.status || 'todo') === lane.key &&
+                cardMatchesFilters(c, filters)
+            )).forEach(card => container.appendChild(buildPostItElement(card)));
+        });
+
+        updateCardCounts();
+        updateArchivedCount();
+        return;
+    }
 
     // Colunas normais primeiro, abas de "Concluído" por último
     const orderedPeople = [
@@ -7283,6 +7423,14 @@ function buildColumn(person) {
         avatarHtml = `<span class="column-avatar-fallback" onclick="openPersonModalForEdit('${personId}')">${getInitials(person.name)}</span>`;
     }
 
+    // Botão de focar — só nas colunas de pessoa. Aba de "Concluído" não tem
+    // raias, então não há o que abrir lado a lado.
+    const focoBtn = isDone ? '' :
+        `<button class="column-foco-btn" title="Focar em ${escapeHtml(person.name)} — abre as raias dela como colunas"
+                 onclick="event.stopPropagation(); entrarNoModoFoco('${personId}')">
+            <i class="fa-solid fa-crosshairs"></i>
+        </button>`;
+
     const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna"><i class="fa-solid fa-grip-vertical"></i></span>`;
     const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
@@ -7315,6 +7463,7 @@ function buildColumn(person) {
         <div class="column-header">
             ${headerClickable}
             <div class="column-header-actions">
+                ${focoBtn}
                 <span class="card-count" id="count_${personId}">0</span>
                 ${deleteBtn}
             </div>
