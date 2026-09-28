@@ -7428,7 +7428,7 @@ function buildColumn(person) {
     const focoBtn = isDone ? '' :
         `<button class="column-foco-btn" title="Focar em ${escapeHtml(person.name)} — abre as raias dela como colunas"
                  onclick="event.stopPropagation(); entrarNoModoFoco('${personId}')">
-            <i class="fa-solid fa-crosshairs"></i>
+            <i class="fa-solid fa-crosshairs"></i><span class="column-foco-btn-texto">Focar</span>
         </button>`;
 
     const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna"><i class="fa-solid fa-grip-vertical"></i></span>`;

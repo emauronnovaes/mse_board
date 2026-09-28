@@ -5688,29 +5688,38 @@ body.dashboard-only-mode .dashboard-modal-content {
    MODO FOCO — raias de uma pessoa como colunas
    ========================================== */
 
-/* Botão no cabeçalho de cada coluna de pessoa. Discreto até o mouse chegar:
-   é atalho de arrumação, não pode competir com o nome nem com a lixeira. */
+/* Botão no cabeçalho de cada coluna de pessoa.
+   Nasceu quase invisível (45% de opacidade, só nítido no hover) e o
+   resultado foi previsível: ninguém achou. Funcionalidade nova precisa se
+   anunciar, então agora tem contorno, fundo e a palavra "Focar" — some a
+   palavra em coluna estreita, mas o ícone fica. */
 .column-foco-btn {
-    background: none;
-    border: none;
-    padding: 0.2rem 0.3rem;
-    /* Largura própria: o ícone vem do Font Awesome por CDN e, se ele não
-       carregar, um botão vazio teria zero de largura e ninguém clicaria. */
-    min-width: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.22rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background-color: var(--bg);
     color: var(--text-muted);
-    font-size: 0.82rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
     line-height: 1;
     cursor: pointer;
-    border-radius: var(--radius-s);
-    opacity: 0.45;
-    transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.column:hover .column-foco-btn { opacity: 1; }
-
 .column-foco-btn:hover {
-    color: var(--accent);
-    background-color: var(--line-2);
+    color: #fff;
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Em coluna estreita sobra só o ícone, pra não espremer o nome da pessoa */
+@media (max-width: 1100px) {
+    .column-foco-btn .column-foco-btn-texto { display: none; }
 }
 
 /* --- Faixa do modo foco --- */
