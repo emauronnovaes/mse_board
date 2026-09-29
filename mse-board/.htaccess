@@ -1,0 +1,31 @@
+# MSE Board — controle de cache dos arquivos da interface
+#
+# Por que existe: o projeto não tem etapa de build, então script.js, style.css
+# e as páginas mantêm sempre o mesmo nome. O servidor mandava só ETag e
+# Last-Modified, sem Cache-Control — e, sem instrução explícita, o navegador
+# decide sozinho por quanto tempo guardar. Na prática isso vinha servindo
+# versões antigas depois de cada deploy: funcionalidade nova publicada e o
+# usuário continuava com o arquivo velho, vendo tela em branco ou botão que
+# não faz nada.
+#
+# "no-cache" NÃO desliga o cache: o navegador continua guardando o arquivo,
+# mas é obrigado a perguntar ao servidor se mudou antes de usar. Quando não
+# mudou, a resposta é um 304 vazio — rápido e sem baixar de novo. O que
+# desaparece é só o "usar sem perguntar", que é o que causava o problema.
+#
+# Uploads e imagens ficam de fora: eles têm nome único e não mudam de
+# conteúdo, então podem ser guardados à vontade.
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|html)$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
+# Alguns servidores definem um prazo de validade por extensão, que passaria
+# por cima do acima. Zera só para estes tipos.
+<IfModule mod_expires.c>
+    <FilesMatch "\.(js|css|html)$">
+        ExpiresActive Off
+    </FilesMatch>
+</IfModule>
