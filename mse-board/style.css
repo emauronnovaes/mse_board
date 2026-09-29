@@ -3312,7 +3312,6 @@ body.observer-mode .cards-container.drag-over {
     body.printing-report .board-container,
     body.printing-report .close-btn,
     body.printing-report #exportReportCsvBtn,
-    body.printing-report #printReportBtn,
     body.printing-report .corner-options {
         display: none !important;
     }

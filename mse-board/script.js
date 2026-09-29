@@ -743,25 +743,6 @@ function montarCorpoDoRelatorio() {
 </body></html>`;
 }
 
-// Leva pra página do relatório, preservando o departamento.
-//
-// Antes isto abria uma janela em branco e escrevia o documento nela com
-// document.write. Funcionava, mas era um beco: bloqueável por bloqueador de
-// pop-up, sem endereço (about:blank) — não dava pra recarregar, guardar nos
-// favoritos nem mandar o link pra alguém. Agora é uma página como as outras.
-function gerarRelatorioEmPdf() {
-    const destino = CURRENT_DEPARTMENT === 'programacao'
-        ? 'relatorio.html'
-        : `relatorio.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
-
-    // Aba nova pra não tirar a pessoa de onde ela estava. Como parte de um
-    // clique de verdade e tem endereço real, não é o tipo de pop-up que os
-    // navegadores bloqueiam — mas, se bloquearem, vai na mesma aba em vez de
-    // simplesmente não acontecer nada.
-    const aba = window.open(destino, '_blank');
-    if (!aba) window.location.href = destino;
-}
-
 // Desenha o relatório dentro da própria página (relatorio.html).
 function renderPaginaDoRelatorio() {
     const alvo = document.getElementById('relatorioConteudo');
@@ -1487,7 +1468,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderDeliveryReport();
         });
         bindIfExists('exportReportCsvBtn', 'click', exportDeliveryReportCsv);
-        bindIfExists('printReportBtn', 'click', gerarRelatorioEmPdf);
 
         // Filtros da tabela "Tarefas por Responsável" (buscar, responsável,
         // status, limpar filtros) — na versão dentro do board isso já era
@@ -2264,7 +2244,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         document.getElementById('exportReportCsvBtn').addEventListener('click', exportDeliveryReportCsv);
-        document.getElementById('printReportBtn').addEventListener('click', gerarRelatorioEmPdf);
 
         // Alertas de Vencimento
         document.getElementById('closeDueAlertsModalBtn').addEventListener('click', () => {
