@@ -45,7 +45,7 @@
     /* Barra de ações da página (some no papel) */
     .rel-acoes {
         display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
-        max-width: 980px; margin: 0 auto 1rem;
+        max-width: 1280px; margin: 0 auto 1rem;
     }
     .rel-acoes .btn-primary, .rel-acoes .btn-secondary { padding: 0.55rem 1rem; }
     .rel-acoes-dica { font-size: 0.76rem; color: var(--text-muted); margin-left: auto; }
@@ -130,12 +130,12 @@
   tr { break-inside: avoid; }
 
   .rel-fonte { margin-top: 16px; font-size: 11px; color: #98a1b0; text-align: center; }
-  @media screen { .rel-doc { max-width: 980px; margin: 0 auto; } }
+  @media screen { .rel-doc { max-width: 1280px; margin: 0 auto; } }
 
     /* Filtros — só na tela */
     .rel-filtros {
         display: flex; align-items: flex-end; gap: 0.6rem; flex-wrap: wrap;
-        max-width: 980px; margin: 0 auto 0.9rem;
+        max-width: 1280px; margin: 0 auto 0.9rem;
         padding: 0.7rem 0.85rem;
         background-color: var(--card); border: 1px solid var(--border);
         border-radius: var(--radius-s);
@@ -160,12 +160,21 @@
         margin-left: 8px; opacity: 0; transition: opacity .15s ease, color .15s ease;
     }
     .rel-tabela tr:hover .rel-tirar { opacity: 1; }
+
+    /* Tirar a pessoa inteira do relatório (cabeçalho do bloco dela) */
+    .rel-tirar-pessoa {
+        margin-left: 10px; padding: 2px 8px; font-size: 12px; font-weight: 600;
+        font-family: inherit; color: #98a1b0; background: #fff;
+        border: 1px solid #e4e7ec; border-radius: 999px; cursor: pointer;
+        vertical-align: middle; transition: color .15s ease, border-color .15s ease;
+    }
+    .rel-tirar-pessoa:hover { color: #d23b3b; border-color: #d23b3b; }
     .rel-tirar:hover { color: #d23b3b; }
 
     /* Faixa do que foi tirado — o caminho de volta */
     .rel-fora-bar {
         display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
-        max-width: 980px; margin: 0 auto 0.9rem;
+        max-width: 1280px; margin: 0 auto 0.9rem;
         padding: 0.55rem 0.75rem;
         border: 1px solid var(--gold); border-left: 3px solid var(--gold);
         border-radius: var(--radius-s); background-color: rgba(217,145,26,.07);
@@ -184,7 +193,7 @@
     /* ---- Impressão: fica só o relatório ---- */
     @media print {
         body { background: #fff; }
-        .standalone-topbar, .rel-acoes, .rel-fora-bar, .rel-tirar, .rel-filtros { display: none !important; }
+        .standalone-topbar, .rel-acoes, .rel-fora-bar, .rel-tirar, .rel-tirar-pessoa, .rel-filtros { display: none !important; }
         .standalone-page-wrap { padding: 0; }
         .rel-doc { border: none; border-radius: 0; padding: 0; max-width: none; }
     }
@@ -281,6 +290,7 @@
             <button type="button" id="relLimparFiltros" class="btn-secondary">Limpar filtros</button>
         </div>
 
+        <div id="relPessoasForaBar" class="rel-fora-bar" style="display:none;"></div>
         <div id="relForaBar" class="rel-fora-bar" style="display:none;"></div>
 
         <div class="rel-doc" id="relatorioConteudo"></div>

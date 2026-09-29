@@ -637,7 +637,7 @@ function relLinha(card, hoje, comResponsavel) {
             <td class="rel-avanco">
                 <span class="rel-barra"><span style="width:${pct}%"></span></span>
                 <span class="rel-pct">${pct}%</span>
-                <button type="button" class="rel-tirar" data-tirar="${relEscapa(card.id)}"
+                <button type="button" class="rel-tirar rel-so-tela" data-tirar="${relEscapa(card.id)}"
                         title="Tirar esta atividade do relatório">&times;</button>
             </td>
         </tr>
@@ -789,7 +789,12 @@ function montarCorpoDoRelatorio() {
 
             return `
                 <section class="rel-pessoa">
-                    <h3>${relEscapa(p.nome)} <small>${p.cards.length} tarefa(s) — ${resumo}</small></h3>
+                    <h3>${relEscapa(p.nome)} <small>${p.cards.length} tarefa(s) — ${resumo}</small>
+                        ${podeEsconderPessoasDaPendencia()
+                            ? `<button type="button" class="rel-tirar-pessoa rel-so-tela" data-tirar-pessoa="${relEscapa(p.id)}"
+                                       title="Tirar ${relEscapa(p.nome)} do relatório">× tirar pessoa</button>`
+                            : ''}
+                    </h3>
                     <table class="rel-tabela">
                         <thead><tr><th>Atividade</th><th>Início</th><th>Prazo</th><th>Avanço</th></tr></thead>
                         <tbody>${linhas}</tbody>
@@ -843,6 +848,14 @@ function renderPaginaDoRelatorio() {
         btn.addEventListener('click', () => tirarAtividadeDoRelatorio(btn.dataset.tirar));
     });
 
+    // Tirar a pessoa usa a MESMA lista das outras telas (pessoas escondidas):
+    // quem sai daqui sai também do Dashboard, Estatísticas e Pendências.
+    alvo.querySelectorAll('[data-tirar-pessoa]').forEach(btn => {
+        btn.addEventListener('click', () => esconderPessoaDeTodasAsTelas(btn.dataset.tirarPessoa));
+    });
+
+    renderFaixaDePessoasForaDoRelatorio();
+
     renderFaixaDeAtividadesFora();
     renderSeletorDePessoasDoRelatorio();
 }
@@ -886,6 +899,29 @@ function ligarFiltrosDoRelatorio() {
             aplicar();
         });
     }
+}
+
+// Faixa com as pessoas tiradas, pra poder trazer de volta.
+function renderFaixaDePessoasForaDoRelatorio() {
+    const box = document.getElementById('relPessoasForaBar');
+    if (!box) return;
+    if (!podeEsconderPessoasDaPendencia() || pendenciasPessoasOcultas.size === 0) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+    box.style.display = 'flex';
+    box.innerHTML = `
+        <span class="rel-fora-label">${pendenciasPessoasOcultas.size} pessoa(s) fora do relatório:</span>
+        ${[...pendenciasPessoasOcultas].map(id => `
+            <button type="button" class="rel-fora-chip" data-devolver-pessoa="${escapeHtml(id)}" title="Trazer de volta">
+                <i class="fa-solid fa-user-plus"></i>${escapeHtml(nomeDoResponsavel(id))}
+            </button>
+        `).join('')}
+    `;
+    box.querySelectorAll('[data-devolver-pessoa]').forEach(btn => {
+        btn.addEventListener('click', () => mostrarPessoaDeTodasAsTelas(btn.dataset.devolverPessoa));
+    });
 }
 
 // Faixa com o que foi tirado, pra poder devolver. Sem ela, tirar é um caminho
@@ -947,7 +983,12 @@ async function baixarRelatorioEmPdf() {
             filename: `Backlog_${deptLabel.replace(/\s+/g, '_')}_${hoje}.pdf`,
             image: { type: 'jpeg', quality: 0.96 },
             // escala 2 pra o texto não sair serrilhado no arquivo
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            html2canvas: {
+                scale: 2, useCORS: true, backgroundColor: '#ffffff',
+                // O html2pdf fotografa a página, não usa o CSS de impressão:
+                // os botões de tirar sairiam no arquivo se não fossem pulados.
+                ignoreElements: el => el.classList && el.classList.contains('rel-so-tela')
+            },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
             // Não corta um responsável nem uma linha no meio da quebra
             pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.rel-pessoa'] }
