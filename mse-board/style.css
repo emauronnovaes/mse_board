@@ -5813,3 +5813,41 @@ body.dashboard-only-mode .dashboard-modal-content {
 .column-foco-testing { --foco-cor: #7c3aed; }
 .column-foco-paused { --foco-cor: var(--gold); }
 .column-foco-done { --foco-cor: var(--green); }
+
+/* ==========================================
+   ESCONDER PESSOA DAS TELAS DE DASHBOARD
+   ========================================== */
+
+/* Botão no cabeçalho de cada pessoa na tabela do Dashboard */
+.dash-ocultar-pessoa {
+    background: none;
+    border: none;
+    padding: 0.1rem 0.35rem;
+    min-width: 24px;
+    margin-left: 0.5rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.78rem;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-s);
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.dash-ocultar-pessoa:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Faixa de quem foi escondido — o caminho de volta */
+.dash-ocultos {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.7rem;
+}
+
+.dash-ocultos-label {
+    font-size: 0.72rem;
+    color: var(--dsg-mut, var(--text-muted));
+}

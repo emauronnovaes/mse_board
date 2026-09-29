@@ -566,6 +566,8 @@ function getAtividadesDoRelatorio() {
         if ((card.status || 'todo') === 'done') return false;
         const pessoa = (state.people || []).find(p => p.id === card.personId);
         if (pessoa && pessoa.isDone) return false;
+        // Quem foi escondido nas outras telas também fica fora do relatório
+        if (pessoaEstaOculta(card.personId)) return false;
         return true;
     });
 }
@@ -636,7 +638,7 @@ function relLinha(card, hoje, comResponsavel) {
     `;
 }
 
-function montarHtmlDoRelatorio() {
+function montarCorpoDoRelatorio() {
     const hoje = relatorioHojeISO();
     const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
     const cards = getAtividadesDoRelatorio();
@@ -709,84 +711,11 @@ function montarHtmlDoRelatorio() {
             `;
         }).join('');
 
-    return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8">
-<title>MSE · ${relEscapa(deptLabel)} — Backlog e Entregas</title>
-<style>
-  @page { size: A4 portrait; margin: 12mm 10mm; }
-  * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
-    color: #192231; margin: 0; font-size: 10px; line-height: 1.35;
-  }
-  .rel-topo {
-    background: #16243c; color: #fff; padding: 14px 16px; border-radius: 8px;
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
-  }
-  .rel-topo h1 { margin: 0; font-size: 17px; font-weight: 700; }
-  .rel-topo h1 b { color: #ff4d4d; }
-  .rel-topo p { margin: 3px 0 0; font-size: 10px; color: rgba(255,255,255,.72); }
-  .rel-posicao { text-align: right; font-size: 9px; color: rgba(255,255,255,.72); white-space: nowrap; }
-  .rel-posicao strong { display: block; font-size: 13px; color: #fff; }
-
-  .rel-kpis { display: flex; gap: 7px; margin: 12px 0 7px; }
-  .rel-kpi { flex: 1; border: 1px solid #e4e7ec; border-radius: 6px; padding: 7px 9px; }
-  .rel-kpi span { display: block; font-size: 7.5px; text-transform: uppercase; letter-spacing: .07em; color: #98a1b0; }
-  .rel-kpi b { font-size: 17px; font-weight: 700; }
-  .kpi-todo b { color: #2563eb; } .kpi-testing b { color: #7c3aed; }
-  .kpi-paused b { color: #db6a1e; } .kpi-afazer b { color: #4d5868; }
-  .kpi-atrasada b { color: #d23b3b; }
-
-  .rel-avisos { font-size: 9px; color: #4d5868; margin: 0 0 14px; }
-
-  h2 { font-size: 12px; margin: 16px 0 7px; }
-  .rel-pessoa h3 { font-size: 11px; margin: 0 0 5px; }
-  .rel-pessoa h3 small { font-weight: 400; color: #98a1b0; font-size: 8.5px; }
-
-  .rel-tabela { width: 100%; border-collapse: collapse; }
-  .rel-tabela th {
-    text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: .06em;
-    color: #98a1b0; border-bottom: 1px solid #192231; padding: 4px 5px; font-weight: 600;
-  }
-  .rel-tabela td { padding: 3.5px 5px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
-  .rel-resp { font-weight: 700; width: 17%; }
-  .rel-fila { font-weight: 400; font-style: italic; color: #4d5868; }
-  .rel-ativ { width: 40%; }
-  .rel-data { width: 13%; color: #4d5868; white-space: nowrap; }
-  .rel-avanco { width: 17%; white-space: nowrap; }
-
-  .rel-grupo td { background: #f4f6f9; padding: 5px; border-bottom: 1px solid #e4e7ec; }
-  .rel-subgrupo td { padding: 5px 5px 2px; border: none; }
-  .rel-grupo-nome {
-    font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-    padding: 1.5px 5px; border-radius: 3px;
-  }
-  .st-todo { background: #e4edfd; color: #1d4ed8; }
-  .st-testing { background: #ece5fb; color: #6d28d9; }
-  .st-paused { background: #fbeade; color: #b35513; }
-  .st-afazer { background: #eef0f3; color: #4d5868; }
-  .rel-grupo-qtd { font-size: 8px; color: #4d5868; margin-left: 6px; }
-
-  .rel-sit { font-size: 7px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
-  .sit-atrasada { background: #fae3e3; color: #a52222; }
-  .sit-hoje { background: #fbeade; color: #b35513; }
-  .sit-baixar { background: #e2f1e8; color: #14663a; }
-
-  .rel-barra {
-    display: inline-block; width: 52px; height: 4px; border-radius: 2px;
-    background: #eef0f3; overflow: hidden; vertical-align: middle; margin-right: 5px;
-  }
-  .rel-barra span { display: block; height: 100%; background: #2563eb; border-radius: 2px; }
-  .rel-pct { font-size: 8.5px; color: #4d5868; }
-
-  /* Um responsável não pode ser partido entre duas páginas no meio */
-  .rel-pessoa { break-inside: avoid; margin-bottom: 11px; }
-  thead { display: table-header-group; }
-  tr { break-inside: avoid; }
-
-  .rel-fonte { margin-top: 16px; font-size: 8px; color: #98a1b0; text-align: center; }
-  @media screen { body { max-width: 900px; margin: 20px auto; padding: 0 16px; } }
-</style></head><body>
+    // Devolve só o MIOLO do relatório. O estilo e a moldura (cabeçalho de
+    // navegação, botão de imprimir) vivem em relatorio.html, que é uma página
+    // de verdade como as outras — antes isto era um documento inteiro escrito
+    // numa janela em branco criada na hora.
+    return `
 
   <div class="rel-topo">
     <div>
@@ -814,27 +743,33 @@ function montarHtmlDoRelatorio() {
 </body></html>`;
 }
 
+// Leva pra página do relatório, preservando o departamento.
+//
+// Antes isto abria uma janela em branco e escrevia o documento nela com
+// document.write. Funcionava, mas era um beco: bloqueável por bloqueador de
+// pop-up, sem endereço (about:blank) — não dava pra recarregar, guardar nos
+// favoritos nem mandar o link pra alguém. Agora é uma página como as outras.
 function gerarRelatorioEmPdf() {
-    const janela = window.open('', '_blank');
-    if (!janela) {
-        showToast('O navegador bloqueou a janela do relatório. Libere os pop-ups deste site e tente de novo.');
-        return;
-    }
+    const destino = CURRENT_DEPARTMENT === 'programacao'
+        ? 'relatorio.html'
+        : `relatorio.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
 
-    janela.document.write(montarHtmlDoRelatorio());
-    janela.document.close();
+    // Aba nova pra não tirar a pessoa de onde ela estava. Como parte de um
+    // clique de verdade e tem endereço real, não é o tipo de pop-up que os
+    // navegadores bloqueiam — mas, se bloquearem, vai na mesma aba em vez de
+    // simplesmente não acontecer nada.
+    const aba = window.open(destino, '_blank');
+    if (!aba) window.location.href = destino;
+}
 
-    // Espera o documento assentar antes de chamar a impressão: chamando na
-    // hora, o navegador às vezes abre o diálogo com a página ainda em branco.
-    janela.onload = () => {
-        janela.focus();
-        janela.print();
-    };
-    setTimeout(() => {
-        // Rede de segurança pro caso de o onload não disparar (documento
-        // escrito por document.write às vezes já chega "carregado").
-        if (!janela.closed) { janela.focus(); janela.print(); }
-    }, 600);
+// Desenha o relatório dentro da própria página (relatorio.html).
+function renderPaginaDoRelatorio() {
+    const alvo = document.getElementById('relatorioConteudo');
+    if (!alvo) return;
+    alvo.innerHTML = montarCorpoDoRelatorio();
+
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+    document.title = `Relatório de Backlog (${deptLabel}) — MSE Board`;
 }
 
 // ==========================================
@@ -870,26 +805,38 @@ let pendenciasPersonFilter = '';
 // não no estado compartilhado — assim não há risco de alguém sumir do quadro
 // dos outros sem querer. O preço é que a lista não acompanha em outro
 // computador; se precisar disso, tem que ir pro servidor.
-const PENDENCIAS_OLHO_LIBERADO_PARA = ['matheus.batista@mse.com.br'];
+// Além do papel de Admin, esta conta também pode esconder pessoas.
+const OLHO_LIBERADO_TAMBEM_PARA = ['matheus.batista@mse.com.br'];
 
 let pendenciasPessoasOcultas = new Set();
 
 function podeEsconderPessoasDaPendencia() {
     const email = (currentUserName || '').trim().toLowerCase();
-    return PENDENCIAS_OLHO_LIBERADO_PARA.includes(email);
+    if (OLHO_LIBERADO_TAMBEM_PARA.includes(email)) return true;
+    return getMemberRole(currentUserName) === 'Admin';
 }
 
+// A lista é por pessoa E por departamento: esconder alguém em Planejamento
+// não pode sumir com ela em Programação, onde pode ser outra equipe.
 function chaveDasPessoasOcultas() {
-    return `mse_pend_ocultos_${(currentUserName || '').trim().toLowerCase()}`;
+    return `mse_pend_ocultos_${CURRENT_DEPARTMENT}_${(currentUserName || '').trim().toLowerCase()}`;
 }
 
 function carregarPessoasOcultasDaPendencia() {
     pendenciasPessoasOcultas = new Set();
     if (!podeEsconderPessoasDaPendencia()) return;
     try {
-        const salvo = JSON.parse(localStorage.getItem(chaveDasPessoasOcultas()));
+        // Lê também a chave antiga (sem departamento) pra quem já tinha
+        // escondido alguém antes desta mudança não perder a lista.
+        const antiga = JSON.parse(localStorage.getItem(`mse_pend_ocultos_${(currentUserName || '').trim().toLowerCase()}`));
+        const salvo = JSON.parse(localStorage.getItem(chaveDasPessoasOcultas())) || antiga;
         if (Array.isArray(salvo)) pendenciasPessoasOcultas = new Set(salvo);
     } catch (e) { /* nada salvo ainda, ou salvo corrompido — começa vazio */ }
+}
+
+// Vale pra qualquer uma das telas soltas: a lista de escondidos é uma só.
+function pessoaEstaOculta(personId) {
+    return pendenciasPessoasOcultas.has(personId);
 }
 
 function salvarPessoasOcultasDaPendencia() {
@@ -1390,6 +1337,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Só busca os dados e mostra o relatório — pula toda a inicialização
     // do quadro (login, drag-and-drop, sidebar, chat, etc).
     // ==========================================
+    // PÁGINA SOLTA: RELATÓRIO DE BACKLOG (pronto pra impressão)
+    if (document.body.dataset.standaloneRelatorio) {
+        await tryInheritLoginFromSso();
+        await loadState();
+
+        let viewerEmail = null;
+        try {
+            const stored = JSON.parse(localStorage.getItem('mse_user'));
+            viewerEmail = stored && stored.name;
+        } catch (e) { /* sem sessão — relatório é só leitura mesmo */ }
+        currentUserName = viewerEmail;
+
+        const viewerLabelEl = document.getElementById('standaloneViewerLabel');
+        if (viewerLabelEl) viewerLabelEl.textContent = viewerEmail || 'Visitante';
+
+        carregarPessoasOcultasDaPendencia();
+        ajustarCabecalhoDoDashboardSolto();
+        renderPaginaDoRelatorio();
+
+        const imprimir = document.getElementById('relImprimirBtn');
+        if (imprimir) imprimir.addEventListener('click', () => window.print());
+
+        const atualizar = document.getElementById('relAtualizarBtn');
+        if (atualizar) {
+            atualizar.addEventListener('click', async () => {
+                await loadState();
+                renderPaginaDoRelatorio();
+                showToast('Relatório atualizado.', 'success');
+            });
+        }
+
+        return;
+    }
+
     // PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
     // Mesmo caminho das outras páginas soltas: herda o login do Portal,
     // busca os dados e desenha só esta tela — sem quadro, sem chat.
@@ -1475,6 +1456,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // de página. Sem isso, as duas páginas soltas ficam iguais na tela
         // (dá pra achar que é o mesmo quadro) e o link de uma pra outra jogava
         // a pessoa de volta pra Programação sem avisar.
+        carregarPessoasOcultasDaPendencia();
         ajustarCabecalhoDoDashboardSolto();
 
         // Comentários particulares também funcionam na página solta do
@@ -4001,7 +3983,11 @@ function inReportDateRange(completedAt, range) {
 
 function computeDeliveryStats() {
     const range = getReportDateRange();
-    const completed = state.cards.filter(c => c.completedAt && inReportDateRange(c.completedAt, range));
+    // Pessoa escondida sai também dos números do topo: se ela some do ranking
+    // mas continua no total, as duas leituras se contradizem na mesma tela.
+    const completed = state.cards.filter(c =>
+        c.completedAt && inReportDateRange(c.completedAt, range) && !pessoaEstaOculta(c.personId)
+    );
     let onTime = 0, late = 0, noDueDate = 0;
 
     completed.forEach(c => {
@@ -4078,6 +4064,9 @@ function computeDeliveryStatsByPerson() {
     const byPerson = {};
 
     completed.forEach(c => {
+        // Pessoa escondida não entra no ranking nem nos pódios
+        if (pessoaEstaOculta(c.personId)) return;
+
         const person = state.people.find(p => p.id === c.personId);
         const personId = person ? person.id : '__sem_coluna__';
         const isLate = c.dueDate && c.completedAt > new Date(c.dueDate + 'T23:59:59').getTime();
@@ -4320,6 +4309,9 @@ function renderDeliveryReport() {
         const person = state.people.find(p => p.id === card.personId);
         const personId = person ? person.id : '__sem_coluna__';
 
+        // Pessoas escondidas por quem está olhando somem de todas as telas
+        if (pessoaEstaOculta(card.personId)) return;
+
         // Esta tabela mostra só o que ainda está em andamento: A Fazer,
         // Fazendo, Em Teste e Pausado. Tarefa concluída sai daqui.
         //
@@ -4384,9 +4376,22 @@ function renderDeliveryReport() {
             return (a.title || '').localeCompare(b.title || '', 'pt-BR');
         });
 
+        // Botão de tirar a pessoa da visão — mesma regra e mesma lista das
+        // outras telas. Só aparece pra Admin e pra conta liberada.
+        const olho = (podeEsconderPessoasDaPendencia() && personId !== '__sem_coluna__')
+            ? `<button type="button" class="dash-ocultar-pessoa" data-ocultar-pessoa="${escapeHtml(personId)}"
+                       title="Tirar ${escapeHtml(group.displayName)} da sua visão (as tarefas continuam no quadro)">
+                   <i class="fa-solid fa-eye-slash"></i>
+               </button>`
+            : '';
+
         const personHeaderRow = `
             <tr class="dash-person-group-row">
-                <td colspan="${totalColunas}">${escapeHtml(group.displayName)} <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span></td>
+                <td colspan="${totalColunas}">
+                    ${escapeHtml(group.displayName)}
+                    <span class="dash-person-group-count">${cards.length} tarefa${cards.length > 1 ? 's' : ''}</span>
+                    ${olho}
+                </td>
             </tr>
         `;
 
@@ -4435,6 +4440,65 @@ function renderDeliveryReport() {
 
         return personHeaderRow + taskRows;
     }).join('');
+
+    activeContainer.querySelectorAll('[data-ocultar-pessoa]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            esconderPessoaDeTodasAsTelas(btn.dataset.ocultarPessoa);
+        });
+    });
+
+    renderListaDePessoasOcultas();
+}
+
+// Faixa com quem foi escondido, pra poder trazer de volta. Sem ela, esconder
+// é um caminho sem volta: a pessoa some e não há de onde recuperá-la.
+function renderListaDePessoasOcultas() {
+    const box = document.getElementById('dashPessoasOcultas');
+    if (!box) return;
+
+    if (!podeEsconderPessoasDaPendencia() || pendenciasPessoasOcultas.size === 0) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    box.style.display = 'flex';
+    box.innerHTML = `
+        <span class="dash-ocultos-label">Fora da sua visão (só sua):</span>
+        ${[...pendenciasPessoasOcultas].map(id => `
+            <button type="button" class="pend-oculto-chip" data-mostrar-pessoa="${escapeHtml(id)}" title="Trazer de volta">
+                <i class="fa-solid fa-eye"></i>${escapeHtml(nomeDaPessoaDaPendencia(id))}
+            </button>
+        `).join('')}
+    `;
+    box.querySelectorAll('[data-mostrar-pessoa]').forEach(btn => {
+        btn.addEventListener('click', () => mostrarPessoaDeTodasAsTelas(btn.dataset.mostrarPessoa));
+    });
+}
+
+// Esconder/mostrar valendo em qualquer uma das telas soltas: a lista é uma
+// só, então a tela certa é redesenhada conforme o que existir na página.
+function esconderPessoaDeTodasAsTelas(personId) {
+    pendenciasPessoasOcultas.add(personId);
+    if (typeof pendenciasPersonFilter !== 'undefined' && pendenciasPersonFilter === personId) {
+        pendenciasPersonFilter = '';
+    }
+    salvarPessoasOcultasDaPendencia();
+    redesenharTelaAtual();
+    showToast(`${nomeDaPessoaDaPendencia(personId)} saiu da sua visão. As tarefas continuam no quadro.`, 'success');
+}
+
+function mostrarPessoaDeTodasAsTelas(personId) {
+    pendenciasPessoasOcultas.delete(personId);
+    salvarPessoasOcultasDaPendencia();
+    redesenharTelaAtual();
+}
+
+function redesenharTelaAtual() {
+    if (document.getElementById('pendBoard')) renderPendencias();
+    if (document.getElementById('relatorioConteudo')) renderPaginaDoRelatorio();
+    if (document.getElementById('reportByPerson')) renderDeliveryReport();
 }
 
 // Célula "Particular" da tabela do Dashboard.
