@@ -62,35 +62,35 @@
   * { box-sizing: border-box; }
   .rel-doc {
     font-family: -apple-system, "Segoe UI", Arial, sans-serif;
-    color: #192231; margin: 0; font-size: 10px; line-height: 1.35;
+    color: #192231; margin: 0; font-size: 14px; line-height: 1.35;
   }
   .rel-topo {
     background: #16243c; color: #fff; padding: 14px 16px; border-radius: 8px;
     display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
   }
-  .rel-topo h1 { margin: 0; font-size: 17px; font-weight: 700; }
+  .rel-topo h1 { margin: 0; font-size: 24px; font-weight: 700; }
   .rel-topo h1 b { color: #ff4d4d; }
-  .rel-topo p { margin: 3px 0 0; font-size: 10px; color: rgba(255,255,255,.72); }
-  .rel-posicao { text-align: right; font-size: 9px; color: rgba(255,255,255,.72); white-space: nowrap; }
-  .rel-posicao strong { display: block; font-size: 13px; color: #fff; }
+  .rel-topo p { margin: 3px 0 0; font-size: 14px; color: rgba(255,255,255,.72); }
+  .rel-posicao { text-align: right; font-size: 12.5px; color: rgba(255,255,255,.72); white-space: nowrap; }
+  .rel-posicao strong { display: block; font-size: 18px; color: #fff; }
 
   .rel-kpis { display: flex; gap: 7px; margin: 12px 0 7px; }
   .rel-kpi { flex: 1; border: 1px solid #e4e7ec; border-radius: 6px; padding: 7px 9px; }
-  .rel-kpi span { display: block; font-size: 7.5px; text-transform: uppercase; letter-spacing: .07em; color: #98a1b0; }
-  .rel-kpi b { font-size: 17px; font-weight: 700; }
+  .rel-kpi span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: #98a1b0; }
+  .rel-kpi b { font-size: 24px; font-weight: 700; }
   .kpi-todo b { color: #2563eb; } .kpi-testing b { color: #7c3aed; }
   .kpi-paused b { color: #db6a1e; } .kpi-afazer b { color: #4d5868; }
   .kpi-atrasada b { color: #d23b3b; }
 
-  .rel-avisos { font-size: 9px; color: #4d5868; margin: 0 0 14px; }
+  .rel-avisos { font-size: 12.5px; color: #4d5868; margin: 0 0 14px; }
 
-  h2 { font-size: 12px; margin: 16px 0 7px; }
-  .rel-pessoa h3 { font-size: 11px; margin: 0 0 5px; }
-  .rel-pessoa h3 small { font-weight: 400; color: #98a1b0; font-size: 8.5px; }
+  h2 { font-size: 17px; margin: 16px 0 7px; }
+  .rel-pessoa h3 { font-size: 15.5px; margin: 0 0 5px; }
+  .rel-pessoa h3 small { font-weight: 400; color: #98a1b0; font-size: 12px; }
 
   .rel-tabela { width: 100%; border-collapse: collapse; }
   .rel-tabela th {
-    text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: .06em;
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
     color: #98a1b0; border-bottom: 1px solid #192231; padding: 4px 5px; font-weight: 600;
   }
   .rel-tabela td { padding: 3.5px 5px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
@@ -103,39 +103,88 @@
   .rel-grupo td { background: #f4f6f9; padding: 5px; border-bottom: 1px solid #e4e7ec; }
   .rel-subgrupo td { padding: 5px 5px 2px; border: none; }
   .rel-grupo-nome {
-    font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
     padding: 1.5px 5px; border-radius: 3px;
   }
   .st-todo { background: #e4edfd; color: #1d4ed8; }
   .st-testing { background: #ece5fb; color: #6d28d9; }
   .st-paused { background: #fbeade; color: #b35513; }
   .st-afazer { background: #eef0f3; color: #4d5868; }
-  .rel-grupo-qtd { font-size: 8px; color: #4d5868; margin-left: 6px; }
+  .rel-grupo-qtd { font-size: 11px; color: #4d5868; margin-left: 6px; }
 
-  .rel-sit { font-size: 7px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+  .rel-sit { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
   .sit-atrasada { background: #fae3e3; color: #a52222; }
   .sit-hoje { background: #fbeade; color: #b35513; }
   .sit-baixar { background: #e2f1e8; color: #14663a; }
 
   .rel-barra {
-    display: inline-block; width: 52px; height: 4px; border-radius: 2px;
+    display: inline-block; width: 74px; height: 6px; border-radius: 2px;
     background: #eef0f3; overflow: hidden; vertical-align: middle; margin-right: 5px;
   }
   .rel-barra span { display: block; height: 100%; background: #2563eb; border-radius: 2px; }
-  .rel-pct { font-size: 8.5px; color: #4d5868; }
+  .rel-pct { font-size: 12px; color: #4d5868; }
 
   /* Um responsável não pode ser partido entre duas páginas no meio */
   .rel-pessoa { break-inside: avoid; margin-bottom: 11px; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; }
 
-  .rel-fonte { margin-top: 16px; font-size: 8px; color: #98a1b0; text-align: center; }
+  .rel-fonte { margin-top: 16px; font-size: 11px; color: #98a1b0; text-align: center; }
   @media screen { .rel-doc { max-width: 980px; margin: 0 auto; } }
+
+    /* Filtros — só na tela */
+    .rel-filtros {
+        display: flex; align-items: flex-end; gap: 0.6rem; flex-wrap: wrap;
+        max-width: 980px; margin: 0 auto 0.9rem;
+        padding: 0.7rem 0.85rem;
+        background-color: var(--card); border: 1px solid var(--border);
+        border-radius: var(--radius-s);
+    }
+    .rel-filtro-campo { display: flex; flex-direction: column; gap: 0.2rem; }
+    .rel-filtro-busca { flex: 1; min-width: 200px; }
+    .rel-filtro-campo span {
+        font-size: 0.64rem; font-family: var(--font-mono); text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--text-muted);
+    }
+    .rel-filtro-campo input, .rel-filtro-campo select {
+        padding: 0.42rem 0.55rem; border-radius: var(--radius-s);
+        border: 1px solid var(--border); background-color: var(--card);
+        color: var(--text-primary); font-size: 0.82rem; font-family: inherit;
+    }
+    .rel-filtros .btn-secondary { padding: 0.45rem 0.8rem; }
+
+    /* Botão de tirar a atividade — só na tela, nunca no arquivo */
+    .rel-tirar {
+        background: none; border: none; cursor: pointer;
+        color: #c3c8d0; font-size: 15px; line-height: 1; padding: 0 2px;
+        margin-left: 8px; opacity: 0; transition: opacity .15s ease, color .15s ease;
+    }
+    .rel-tabela tr:hover .rel-tirar { opacity: 1; }
+    .rel-tirar:hover { color: #d23b3b; }
+
+    /* Faixa do que foi tirado — o caminho de volta */
+    .rel-fora-bar {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+        max-width: 980px; margin: 0 auto 0.9rem;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid var(--gold); border-left: 3px solid var(--gold);
+        border-radius: var(--radius-s); background-color: rgba(217,145,26,.07);
+    }
+    .rel-fora-label { font-size: 0.76rem; color: var(--text-primary); font-weight: 600; }
+    .rel-fora-chip, .rel-fora-todas {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.2rem 0.55rem; font-size: 0.73rem; font-weight: 600; font-family: inherit;
+        color: var(--text-muted); background-color: var(--card);
+        border: 1px solid var(--border); border-radius: 999px; cursor: pointer;
+        max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .rel-fora-chip:hover { color: var(--accent); border-color: var(--accent); }
+    .rel-fora-todas { margin-left: auto; color: var(--gold-hover); border-color: var(--gold); }
 
     /* ---- Impressão: fica só o relatório ---- */
     @media print {
         body { background: #fff; }
-        .standalone-topbar, .rel-acoes { display: none !important; }
+        .standalone-topbar, .rel-acoes, .rel-fora-bar, .rel-tirar, .rel-filtros { display: none !important; }
         .standalone-page-wrap { padding: 0; }
         .rel-doc { border: none; border-radius: 0; padding: 0; max-width: none; }
     }
@@ -191,14 +240,48 @@
     <div class="standalone-page-wrap">
 
         <div class="rel-acoes">
-            <button type="button" id="relImprimirBtn" class="btn-primary">
-                <i class="fa-solid fa-print"></i> Imprimir / Salvar PDF
+            <button type="button" id="relBaixarBtn" class="btn-primary">
+                <i class="fa-solid fa-download"></i> Baixar PDF
             </button>
             <button type="button" id="relAtualizarBtn" class="btn-secondary">
                 <i class="fa-solid fa-rotate"></i> Atualizar
             </button>
-            <span class="rel-acoes-dica">na janela de impressão, escolha "Salvar como PDF" no destino</span>
+            <span class="rel-acoes-dica">clique no × de uma atividade para tirá-la deste relatório</span>
         </div>
+
+        <div class="rel-filtros">
+            <label class="rel-filtro-campo rel-filtro-busca">
+                <span>Buscar</span>
+                <input type="text" id="relBusca" placeholder="Atividade ou responsável...">
+            </label>
+            <label class="rel-filtro-campo">
+                <span>Responsável</span>
+                <select id="relFiltroPessoa"><option value="">Todos</option></select>
+            </label>
+            <label class="rel-filtro-campo">
+                <span>Status</span>
+                <select id="relFiltroStatus">
+                    <option value="">Todos</option>
+                    <option value="todo">Fazendo</option>
+                    <option value="afazer">A Fazer</option>
+                    <option value="testing">Em Teste</option>
+                    <option value="paused">Pausado</option>
+                </select>
+            </label>
+            <label class="rel-filtro-campo">
+                <span>Prazo</span>
+                <select id="relFiltroPrazo">
+                    <option value="">Todos</option>
+                    <option value="atrasada">Só atrasadas</option>
+                    <option value="hoje">Vencem hoje</option>
+                    <option value="comprazo">Com prazo</option>
+                    <option value="semprazo">Sem prazo</option>
+                </select>
+            </label>
+            <button type="button" id="relLimparFiltros" class="btn-secondary">Limpar filtros</button>
+        </div>
+
+        <div id="relForaBar" class="rel-fora-bar" style="display:none;"></div>
 
         <div class="rel-doc" id="relatorioConteudo"></div>
 
@@ -206,6 +289,9 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Monta o arquivo PDF no próprio navegador, sem passar pela janela de
+         impressão. Vem de CDN como as outras dependências da página. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="config.js.php"></script>
     <script src="script.js"></script>
 </body>

@@ -568,6 +568,10 @@ function getAtividadesDoRelatorio() {
         if (pessoa && pessoa.isDone) return false;
         // Quem foi escondido nas outras telas também fica fora do relatório
         if (pessoaEstaOculta(card.personId)) return false;
+        // Atividades tiradas à mão deste relatório
+        if (relatorioAtividadesFora.has(card.id)) return false;
+        // Filtros escolhidos na tela
+        if (!passaNosFiltrosDoRelatorio(card, relatorioHojeISO())) return false;
         return true;
     });
 }
@@ -633,9 +637,92 @@ function relLinha(card, hoje, comResponsavel) {
             <td class="rel-avanco">
                 <span class="rel-barra"><span style="width:${pct}%"></span></span>
                 <span class="rel-pct">${pct}%</span>
+                <button type="button" class="rel-tirar" data-tirar="${relEscapa(card.id)}"
+                        title="Tirar esta atividade do relatório">&times;</button>
             </td>
         </tr>
     `;
+}
+
+    // ---------- Filtros do relatório ----------
+// Ficam só na tela: o documento gerado sai com o que estiver filtrado, que é
+// justamente a graça — dá pra emitir "só o que está atrasado" ou "só as
+// tarefas do Alexandre" sem mexer em nada do quadro.
+let relFiltro = { busca: '', pessoa: '', status: '', prazo: '' };
+
+function lerFiltrosDoRelatorio() {
+    const v = id => (document.getElementById(id) || {}).value || '';
+    relFiltro = {
+        busca: v('relBusca').trim().toLowerCase(),
+        pessoa: v('relFiltroPessoa'),
+        status: v('relFiltroStatus'),
+        prazo: v('relFiltroPrazo')
+    };
+}
+
+// A atividade passa pelos filtros escolhidos?
+function passaNosFiltrosDoRelatorio(card, hoje) {
+    if (relFiltro.pessoa && card.personId !== relFiltro.pessoa) return false;
+    if (relFiltro.status && (card.status || 'todo') !== relFiltro.status) return false;
+
+    if (relFiltro.prazo === 'semprazo' && card.dueDate) return false;
+    if (relFiltro.prazo === 'comprazo' && !card.dueDate) return false;
+    if (relFiltro.prazo === 'hoje' && card.dueDate !== hoje) return false;
+    if (relFiltro.prazo === 'atrasada') {
+        const atrasada = card.dueDate && card.dueDate < hoje && getProgress(card).percent < 100;
+        if (!atrasada) return false;
+    }
+
+    if (relFiltro.busca) {
+        const alvo = `${card.title || ''} ${nomeDoResponsavel(card.personId)}`.toLowerCase();
+        if (!alvo.includes(relFiltro.busca)) return false;
+    }
+    return true;
+}
+
+// ---------- Atividades tiradas do relatório ----------
+// Mesma ideia das pessoas escondidas: é escolha de quem está montando o
+// relatório, não mudança no quadro. A tarefa continua lá pra todo mundo; ela
+// só não entra NESTE documento. Por isso mora no navegador de quem tirou, por
+// departamento.
+let relatorioAtividadesFora = new Set();
+
+function chaveDasAtividadesFora() {
+    return `mse_rel_fora_${CURRENT_DEPARTMENT}_${(currentUserName || '').trim().toLowerCase()}`;
+}
+
+function carregarAtividadesForaDoRelatorio() {
+    relatorioAtividadesFora = new Set();
+    try {
+        const salvo = JSON.parse(localStorage.getItem(chaveDasAtividadesFora()));
+        if (Array.isArray(salvo)) relatorioAtividadesFora = new Set(salvo);
+    } catch (e) { /* nada salvo ainda — começa vazio */ }
+}
+
+function salvarAtividadesForaDoRelatorio() {
+    try {
+        localStorage.setItem(chaveDasAtividadesFora(), JSON.stringify([...relatorioAtividadesFora]));
+    } catch (e) {
+        showToast('Não consegui guardar essa escolha no navegador.', 'error');
+    }
+}
+
+function tirarAtividadeDoRelatorio(cardId) {
+    relatorioAtividadesFora.add(cardId);
+    salvarAtividadesForaDoRelatorio();
+    renderPaginaDoRelatorio();
+}
+
+function devolverAtividadeAoRelatorio(cardId) {
+    relatorioAtividadesFora.delete(cardId);
+    salvarAtividadesForaDoRelatorio();
+    renderPaginaDoRelatorio();
+}
+
+function limparAtividadesForaDoRelatorio() {
+    relatorioAtividadesFora.clear();
+    salvarAtividadesForaDoRelatorio();
+    renderPaginaDoRelatorio();
 }
 
 function montarCorpoDoRelatorio() {
@@ -711,7 +798,7 @@ function montarCorpoDoRelatorio() {
             `;
         }).join('');
 
-    // Devolve só o MIOLO do relatório. O estilo e a moldura (cabeçalho de
+// Devolve só o MIOLO do relatório. O estilo e a moldura (cabeçalho de
     // navegação, botão de imprimir) vivem em relatorio.html, que é uma página
     // de verdade como as outras — antes isto era um documento inteiro escrito
     // numa janela em branco criada na hora.
@@ -751,6 +838,126 @@ function renderPaginaDoRelatorio() {
 
     const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
     document.title = `Relatório de Backlog (${deptLabel}) — MSE Board`;
+
+    alvo.querySelectorAll('[data-tirar]').forEach(btn => {
+        btn.addEventListener('click', () => tirarAtividadeDoRelatorio(btn.dataset.tirar));
+    });
+
+    renderFaixaDeAtividadesFora();
+    renderSeletorDePessoasDoRelatorio();
+}
+
+// Lista de responsáveis do seletor. Monta a partir de TODAS as atividades em
+// aberto, não das filtradas — senão escolher alguém esvaziaria a própria
+// lista e não haveria como trocar de pessoa depois.
+function renderSeletorDePessoasDoRelatorio() {
+    const sel = document.getElementById('relFiltroPessoa');
+    if (!sel) return;
+
+    const guardado = relFiltro.pessoa;
+    const ids = [...new Set((state.cards || [])
+        .filter(c => !c.archived && (c.status || 'todo') !== 'done' && !pessoaEstaOculta(c.personId))
+        .map(c => c.personId))];
+
+    const pessoas = ids
+        .map(id => ({ id, nome: nomeDoResponsavel(id) }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    sel.innerHTML = '<option value="">Todos</option>' +
+        pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === guardado ? 'selected' : ''}>${escapeHtml(p.nome)}</option>`).join('');
+}
+
+function ligarFiltrosDoRelatorio() {
+    const aplicar = () => { lerFiltrosDoRelatorio(); renderPaginaDoRelatorio(); };
+
+    ['relBusca', 'relFiltroPessoa', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', aplicar);
+    });
+
+    const limpar = document.getElementById('relLimparFiltros');
+    if (limpar) {
+        limpar.addEventListener('click', () => {
+            ['relBusca', 'relFiltroPessoa', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            aplicar();
+        });
+    }
+}
+
+// Faixa com o que foi tirado, pra poder devolver. Sem ela, tirar é um caminho
+// sem volta: a linha some e não há de onde recuperá-la.
+function renderFaixaDeAtividadesFora() {
+    const box = document.getElementById('relForaBar');
+    if (!box) return;
+
+    if (relatorioAtividadesFora.size === 0) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    const nomeDaAtividade = id => {
+        const c = (state.cards || []).find(x => x.id === id);
+        return c ? c.title : '(tarefa removida do quadro)';
+    };
+
+    box.style.display = 'flex';
+    box.innerHTML = `
+        <span class="rel-fora-label">${relatorioAtividadesFora.size} atividade(s) fora deste relatório:</span>
+        ${[...relatorioAtividadesFora].map(id => `
+            <button type="button" class="rel-fora-chip" data-devolver="${escapeHtml(id)}" title="Colocar de volta">
+                <i class="fa-solid fa-rotate-left"></i>${escapeHtml(nomeDaAtividade(id))}
+            </button>
+        `).join('')}
+        <button type="button" class="rel-fora-todas" id="relDevolverTodasBtn">Devolver todas</button>
+    `;
+
+    box.querySelectorAll('[data-devolver]').forEach(btn => {
+        btn.addEventListener('click', () => devolverAtividadeAoRelatorio(btn.dataset.devolver));
+    });
+    const todas = document.getElementById('relDevolverTodasBtn');
+    if (todas) todas.addEventListener('click', limparAtividadesForaDoRelatorio);
+}
+
+// Gera o arquivo PDF e baixa, sem passar pela janela de impressão.
+async function baixarRelatorioEmPdf() {
+    const doc = document.getElementById('relatorioConteudo');
+    const btn = document.getElementById('relBaixarBtn');
+    if (!doc || typeof html2pdf === 'undefined') {
+        // Biblioteca não carregou (CDN fora do ar, rede bloqueada): em vez de
+        // não fazer nada, cai na impressão, de onde dá pra salvar em PDF.
+        showToast('Não consegui montar o arquivo; abrindo a impressão pra salvar em PDF.');
+        window.print();
+        return;
+    }
+
+    const rotulo = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...'; }
+
+    const deptLabel = DEPARTMENT_LABELS[CURRENT_DEPARTMENT] || DEPARTMENT_LABELS.programacao;
+    const hoje = relatorioHojeISO();
+
+    try {
+        await html2pdf().set({
+            margin: [8, 8, 10, 8],
+            filename: `Backlog_${deptLabel.replace(/\s+/g, '_')}_${hoje}.pdf`,
+            image: { type: 'jpeg', quality: 0.96 },
+            // escala 2 pra o texto não sair serrilhado no arquivo
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            // Não corta um responsável nem uma linha no meio da quebra
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.rel-pessoa'] }
+        }).from(doc).save();
+    } catch (e) {
+        console.error('Falha ao gerar o PDF:', e);
+        showToast('Não consegui gerar o arquivo. Tente de novo ou use Ctrl+P pra salvar em PDF.', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+    }
 }
 
 // ==========================================
@@ -1334,11 +1541,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (viewerLabelEl) viewerLabelEl.textContent = viewerEmail || 'Visitante';
 
         carregarPessoasOcultasDaPendencia();
+        carregarAtividadesForaDoRelatorio();
         ajustarCabecalhoDoDashboardSolto();
         renderPaginaDoRelatorio();
 
-        const imprimir = document.getElementById('relImprimirBtn');
-        if (imprimir) imprimir.addEventListener('click', () => window.print());
+        ligarFiltrosDoRelatorio();
+
+        const baixar = document.getElementById('relBaixarBtn');
+        if (baixar) baixar.addEventListener('click', baixarRelatorioEmPdf);
 
         const atualizar = document.getElementById('relAtualizarBtn');
         if (atualizar) {
