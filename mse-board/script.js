@@ -1109,7 +1109,33 @@ function podeEditarPendencias() {
 // Usa o campo hiddenFromDashboard, que já é gravado no banco: vale pra todo
 // mundo, não só pra quem desligou.
 function entraNosDashboards(card) {
-    return !card.hiddenFromDashboard;
+    if (card.hiddenFromDashboard) return false;
+    // Chave da COLUNA: pessoa desligada tira todas as tarefas dela de uma vez.
+    return !(state.dashboardForaPessoas || []).includes(card.personId);
+}
+
+function pessoaApareceNosDashboards(personId) {
+    return !(state.dashboardForaPessoas || []).includes(personId);
+}
+
+// Liga/desliga uma coluna inteira. Fica no board_state (não numa coluna nova
+// da tabela people), então não precisa de migração de banco e vale pra todo
+// mundo que abrir os dashboards.
+function alternarPessoaNosDashboards(personId, aparece) {
+    if (isObserver) return;
+    const lista = new Set(state.dashboardForaPessoas || []);
+    if (aparece) lista.delete(personId); else lista.add(personId);
+    state.dashboardForaPessoas = [...lista];
+
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    const nome = pessoa ? pessoa.name : 'Coluna';
+    const qtd = (state.cards || []).filter(c => c.personId === personId && !c.archived && (c.status || 'todo') !== 'done').length;
+    logAudit(`${aparece ? 'Colocou' : 'Tirou'} a coluna "${nome}" ${aparece ? 'nos' : 'dos'} dashboards`);
+    saveState();
+    showToast(aparece
+        ? `${escapeHtml(nome)} volta a aparecer nos dashboards.`
+        : `${escapeHtml(nome)} saiu dos dashboards e dos contadores (${qtd} em aberto).`, 'success');
+    renderBoard();
 }
 
 function getPendencias() {
@@ -3201,6 +3227,9 @@ async function refreshBoardFromServer() {
         if (freshBlob && Array.isArray(freshBlob.mentions)) {
             checkForNewMentions(freshBlob.mentions);
             state.mentions = freshBlob.mentions;
+        }
+        if (freshBlob && Array.isArray(freshBlob.dashboardForaPessoas)) {
+            state.dashboardForaPessoas = freshBlob.dashboardForaPessoas;
         }
         if (freshBlob && Array.isArray(freshBlob.privateComments)) {
             checkForNewPrivateComments(freshBlob.privateComments);
@@ -7746,6 +7775,16 @@ function buildColumn(person) {
             <i class="fa-solid fa-crosshairs"></i><span class="column-foco-btn-texto">Focar</span>
         </button>`;
 
+    const noDash = !isDone && pessoaApareceNosDashboards(personId);
+    const dashChave = isDone ? '' : `
+        <label class="column-dash-toggle${noDash ? ' is-on' : ''}" onclick="event.stopPropagation();"
+               title="${noDash ? 'Aparece nos dashboards — clique pra tirar' : 'Fora dos dashboards — clique pra voltar'}">
+            <input type="checkbox" ${noDash ? 'checked' : ''} ${isObserver ? 'disabled' : ''}
+                   onchange="alternarPessoaNosDashboards('${personId}', this.checked)">
+            <span class="postit-dash-switch"></span>
+            <span class="postit-dash-label">Dashboard</span>
+        </label>`;
+
     const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna"><i class="fa-solid fa-grip-vertical"></i></span>`;
     const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
@@ -7778,6 +7817,7 @@ function buildColumn(person) {
         <div class="column-header">
             ${headerClickable}
             <div class="column-header-actions">
+                ${dashChave}
                 ${focoBtn}
                 <span class="card-count" id="count_${personId}">0</span>
                 ${deleteBtn}
@@ -8002,16 +8042,6 @@ function buildPostItElement(card) {
         ? `<div class="postit-labels">${cardLabels.map(l => `<span class="label-swatch-dot" style="background:${l.color}" title="${escapeHtml(l.name)}"></span>`).join('')}</div>`
         : '';
 
-    // Chave liga/desliga "aparece nos dashboards". Observador só vê o estado.
-    const noDash = entraNosDashboards(card);
-    const dashToggleHtml = `
-        <label class="postit-dash-toggle${noDash ? ' is-on' : ''}" onclick="event.stopPropagation();"
-               title="${noDash ? 'Aparece nos dashboards — clique pra tirar' : 'Fora dos dashboards — clique pra voltar'}">
-            <input type="checkbox" data-dash-card="${card.id}" ${noDash ? 'checked' : ''} ${isObserver ? 'disabled' : ''}>
-            <span class="postit-dash-switch"></span>
-            <span class="postit-dash-label">Dashboard</span>
-        </label>`;
-
     const sticker = getStickerById(card.stickerId);
     const stickerHtml = sticker ? `<span class="postit-sticker-stamp" title="${escapeHtml(sticker.label)}"><i class="fa-solid ${sticker.icon}"></i></span>` : '';
     const coverHtml = card.coverImage ? `<img src="${card.coverImage}" class="postit-cover" alt="Capa">` : '';
@@ -8043,37 +8073,13 @@ function buildPostItElement(card) {
         ${datesHtml}
         <div class="postit-compact-meta">
             <span class="tag tag-priority-${card.priority}">${priorityLabel}</span>
-            ${dashToggleHtml}
             <span class="postit-compact-percent">${percentLabel}</span>
         </div>
     `;
 
-    if (!noDash) el.classList.add('postit-fora-dash');
-
-    const chaveDash = el.querySelector('input[data-dash-card]');
-    if (chaveDash) {
-        chaveDash.addEventListener('click', (e) => e.stopPropagation());
-        chaveDash.addEventListener('change', (e) => {
-            e.stopPropagation();
-            alternarTarefaNosDashboards(card.id, chaveDash.checked);
-        });
-    }
-
     el.addEventListener('click', () => openViewModal(card.id));
 
     return el;
-}
-
-function alternarTarefaNosDashboards(cardId, aparece) {
-    const card = (state.cards || []).find(c => c.id === cardId);
-    if (!card || isObserver) return;
-    card.hiddenFromDashboard = !aparece;
-    persistCard(card);
-    logAudit(`${aparece ? 'Colocou' : 'Tirou'} "${card.title}" ${aparece ? 'nos' : 'dos'} dashboards`);
-    showToast(aparece
-        ? `"${escapeHtml(card.title)}" volta a aparecer nos dashboards.`
-        : `"${escapeHtml(card.title)}" saiu dos dashboards e dos contadores.`, 'success');
-    renderBoard();
 }
 
 function handleToggleStar(cardId) {
