@@ -563,6 +563,7 @@ function relatorioHojeISO() {
 function getAtividadesDoRelatorio() {
     return (state.cards || []).filter(card => {
         if (card.archived) return false;
+        if (!entraNosDashboards(card)) return false;
         if ((card.status || 'todo') === 'done') return false;
         const pessoa = (state.people || []).find(p => p.id === card.personId);
         if (pessoa && pessoa.isDone) return false;
@@ -1101,9 +1102,46 @@ function podeEditarPendencias() {
 
 // Post-its que contam como pendência: em aberto, não arquivados e de uma
 // coluna de pessoa de verdade.
+// Chave "Aparece nos dashboards" de cada tarefa. Desligada, a tarefa some de
+// TODAS as telas de acompanhamento (Pendências, Dashboard, Estatísticas e
+// Relatório) e deixa de contar nos números delas — tirar 20 atividades tem
+// que baixar 20 do "Pendente". No quadro ela continua normal.
+// Usa o campo hiddenFromDashboard, que já é gravado no banco: vale pra todo
+// mundo, não só pra quem desligou.
+function entraNosDashboards(card) {
+    if (card.hiddenFromDashboard) return false;
+    // Chave da COLUNA: pessoa desligada tira todas as tarefas dela de uma vez.
+    return !(state.dashboardForaPessoas || []).includes(card.personId);
+}
+
+function pessoaApareceNosDashboards(personId) {
+    return !(state.dashboardForaPessoas || []).includes(personId);
+}
+
+// Liga/desliga uma coluna inteira. Fica no board_state (não numa coluna nova
+// da tabela people), então não precisa de migração de banco e vale pra todo
+// mundo que abrir os dashboards.
+function alternarPessoaNosDashboards(personId, aparece) {
+    if (isObserver) return;
+    const lista = new Set(state.dashboardForaPessoas || []);
+    if (aparece) lista.delete(personId); else lista.add(personId);
+    state.dashboardForaPessoas = [...lista];
+
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    const nome = pessoa ? pessoa.name : 'Coluna';
+    const qtd = (state.cards || []).filter(c => c.personId === personId && !c.archived && (c.status || 'todo') !== 'done').length;
+    logAudit(`${aparece ? 'Colocou' : 'Tirou'} a coluna "${nome}" ${aparece ? 'nos' : 'dos'} dashboards`);
+    saveState();
+    showToast(aparece
+        ? `${escapeHtml(nome)} volta a aparecer nos dashboards.`
+        : `${escapeHtml(nome)} saiu dos dashboards e dos contadores (${qtd} em aberto).`, 'success');
+    renderBoard();
+}
+
 function getPendencias() {
     return (state.cards || []).filter(card => {
         if (card.archived) return false;
+        if (!entraNosDashboards(card)) return false;
         // Concluída some dos dois jeitos possíveis: pela raia e pela aba
         if ((card.status || 'todo') === 'done') return false;
         const pessoa = (state.people || []).find(p => p.id === card.personId);
@@ -3190,6 +3228,9 @@ async function refreshBoardFromServer() {
             checkForNewMentions(freshBlob.mentions);
             state.mentions = freshBlob.mentions;
         }
+        if (freshBlob && Array.isArray(freshBlob.dashboardForaPessoas)) {
+            state.dashboardForaPessoas = freshBlob.dashboardForaPessoas;
+        }
         if (freshBlob && Array.isArray(freshBlob.privateComments)) {
             checkForNewPrivateComments(freshBlob.privateComments);
             state.privateComments = freshBlob.privateComments;
@@ -4216,7 +4257,7 @@ function computeDeliveryStats() {
     // Pessoa escondida sai também dos números do topo: se ela some do ranking
     // mas continua no total, as duas leituras se contradizem na mesma tela.
     const completed = state.cards.filter(c =>
-        c.completedAt && inReportDateRange(c.completedAt, range) && !pessoaEstaOculta(c.personId)
+        c.completedAt && inReportDateRange(c.completedAt, range) && !pessoaEstaOculta(c.personId) && entraNosDashboards(c)
     );
     let onTime = 0, late = 0, noDueDate = 0;
 
@@ -4238,7 +4279,7 @@ function computeDeliveryStats() {
 }
 
 function groupCompletionsByPeriod(period) {
-    const completed = state.cards.filter(c => c.completedAt);
+    const completed = state.cards.filter(c => c.completedAt && entraNosDashboards(c) && !pessoaEstaOculta(c.personId));
     const buckets = [];
     const now = new Date();
 
@@ -4296,6 +4337,7 @@ function computeDeliveryStatsByPerson() {
     completed.forEach(c => {
         // Pessoa escondida não entra no ranking nem nos pódios
         if (pessoaEstaOculta(c.personId)) return;
+        if (!entraNosDashboards(c)) return;
 
         const person = state.people.find(p => p.id === c.personId);
         const personId = person ? person.id : '__sem_coluna__';
@@ -7733,6 +7775,16 @@ function buildColumn(person) {
             <i class="fa-solid fa-crosshairs"></i><span class="column-foco-btn-texto">Focar</span>
         </button>`;
 
+    const noDash = !isDone && pessoaApareceNosDashboards(personId);
+    const dashChave = isDone ? '' : `
+        <label class="column-dash-toggle${noDash ? ' is-on' : ''}" onclick="event.stopPropagation();"
+               title="${noDash ? 'Aparece nos dashboards — clique pra tirar' : 'Fora dos dashboards — clique pra voltar'}">
+            <input type="checkbox" ${noDash ? 'checked' : ''} ${isObserver ? 'disabled' : ''}
+                   onchange="alternarPessoaNosDashboards('${personId}', this.checked)">
+            <span class="postit-dash-switch"></span>
+            <span class="postit-dash-label">Dashboard</span>
+        </label>`;
+
     const dragHandle = `<span class="column-drag-handle" title="Arraste aqui pra reordenar a coluna"><i class="fa-solid fa-grip-vertical"></i></span>`;
     const headerClickable = `<div class="column-person-header">${dragHandle}${avatarHtml}<h3 class="inline-editable" ondblclick="startInlineEditColumnName(event, '${personId}')">${escapeHtml(person.name)}</h3></div>`;
 
@@ -7765,6 +7817,7 @@ function buildColumn(person) {
         <div class="column-header">
             ${headerClickable}
             <div class="column-header-actions">
+                ${dashChave}
                 ${focoBtn}
                 <span class="card-count" id="count_${personId}">0</span>
                 ${deleteBtn}
