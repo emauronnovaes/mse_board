@@ -563,6 +563,7 @@ function relatorioHojeISO() {
 function getAtividadesDoRelatorio() {
     return (state.cards || []).filter(card => {
         if (card.archived) return false;
+        if (!entraNosDashboards(card)) return false;
         if ((card.status || 'todo') === 'done') return false;
         const pessoa = (state.people || []).find(p => p.id === card.personId);
         if (pessoa && pessoa.isDone) return false;
@@ -1101,9 +1102,20 @@ function podeEditarPendencias() {
 
 // Post-its que contam como pendência: em aberto, não arquivados e de uma
 // coluna de pessoa de verdade.
+// Chave "Aparece nos dashboards" de cada tarefa. Desligada, a tarefa some de
+// TODAS as telas de acompanhamento (Pendências, Dashboard, Estatísticas e
+// Relatório) e deixa de contar nos números delas — tirar 20 atividades tem
+// que baixar 20 do "Pendente". No quadro ela continua normal.
+// Usa o campo hiddenFromDashboard, que já é gravado no banco: vale pra todo
+// mundo, não só pra quem desligou.
+function entraNosDashboards(card) {
+    return !card.hiddenFromDashboard;
+}
+
 function getPendencias() {
     return (state.cards || []).filter(card => {
         if (card.archived) return false;
+        if (!entraNosDashboards(card)) return false;
         // Concluída some dos dois jeitos possíveis: pela raia e pela aba
         if ((card.status || 'todo') === 'done') return false;
         const pessoa = (state.people || []).find(p => p.id === card.personId);
@@ -4216,7 +4228,7 @@ function computeDeliveryStats() {
     // Pessoa escondida sai também dos números do topo: se ela some do ranking
     // mas continua no total, as duas leituras se contradizem na mesma tela.
     const completed = state.cards.filter(c =>
-        c.completedAt && inReportDateRange(c.completedAt, range) && !pessoaEstaOculta(c.personId)
+        c.completedAt && inReportDateRange(c.completedAt, range) && !pessoaEstaOculta(c.personId) && entraNosDashboards(c)
     );
     let onTime = 0, late = 0, noDueDate = 0;
 
@@ -4238,7 +4250,7 @@ function computeDeliveryStats() {
 }
 
 function groupCompletionsByPeriod(period) {
-    const completed = state.cards.filter(c => c.completedAt);
+    const completed = state.cards.filter(c => c.completedAt && entraNosDashboards(c) && !pessoaEstaOculta(c.personId));
     const buckets = [];
     const now = new Date();
 
@@ -4296,6 +4308,7 @@ function computeDeliveryStatsByPerson() {
     completed.forEach(c => {
         // Pessoa escondida não entra no ranking nem nos pódios
         if (pessoaEstaOculta(c.personId)) return;
+        if (!entraNosDashboards(c)) return;
 
         const person = state.people.find(p => p.id === c.personId);
         const personId = person ? person.id : '__sem_coluna__';
@@ -7989,6 +8002,16 @@ function buildPostItElement(card) {
         ? `<div class="postit-labels">${cardLabels.map(l => `<span class="label-swatch-dot" style="background:${l.color}" title="${escapeHtml(l.name)}"></span>`).join('')}</div>`
         : '';
 
+    // Chave liga/desliga "aparece nos dashboards". Observador só vê o estado.
+    const noDash = entraNosDashboards(card);
+    const dashToggleHtml = `
+        <label class="postit-dash-toggle${noDash ? ' is-on' : ''}" onclick="event.stopPropagation();"
+               title="${noDash ? 'Aparece nos dashboards — clique pra tirar' : 'Fora dos dashboards — clique pra voltar'}">
+            <input type="checkbox" data-dash-card="${card.id}" ${noDash ? 'checked' : ''} ${isObserver ? 'disabled' : ''}>
+            <span class="postit-dash-switch"></span>
+            <span class="postit-dash-label">Dashboard</span>
+        </label>`;
+
     const sticker = getStickerById(card.stickerId);
     const stickerHtml = sticker ? `<span class="postit-sticker-stamp" title="${escapeHtml(sticker.label)}"><i class="fa-solid ${sticker.icon}"></i></span>` : '';
     const coverHtml = card.coverImage ? `<img src="${card.coverImage}" class="postit-cover" alt="Capa">` : '';
@@ -8020,13 +8043,37 @@ function buildPostItElement(card) {
         ${datesHtml}
         <div class="postit-compact-meta">
             <span class="tag tag-priority-${card.priority}">${priorityLabel}</span>
+            ${dashToggleHtml}
             <span class="postit-compact-percent">${percentLabel}</span>
         </div>
     `;
 
+    if (!noDash) el.classList.add('postit-fora-dash');
+
+    const chaveDash = el.querySelector('input[data-dash-card]');
+    if (chaveDash) {
+        chaveDash.addEventListener('click', (e) => e.stopPropagation());
+        chaveDash.addEventListener('change', (e) => {
+            e.stopPropagation();
+            alternarTarefaNosDashboards(card.id, chaveDash.checked);
+        });
+    }
+
     el.addEventListener('click', () => openViewModal(card.id));
 
     return el;
+}
+
+function alternarTarefaNosDashboards(cardId, aparece) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+    card.hiddenFromDashboard = !aparece;
+    persistCard(card);
+    logAudit(`${aparece ? 'Colocou' : 'Tirou'} "${card.title}" ${aparece ? 'nos' : 'dos'} dashboards`);
+    showToast(aparece
+        ? `"${escapeHtml(card.title)}" volta a aparecer nos dashboards.`
+        : `"${escapeHtml(card.title)}" saiu dos dashboards e dos contadores.`, 'success');
+    renderBoard();
 }
 
 function handleToggleStar(cardId) {
