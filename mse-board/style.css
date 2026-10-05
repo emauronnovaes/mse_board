@@ -6087,3 +6087,36 @@ body.dashboard-only-mode .dashboard-modal-content {
     align-items: center;
     gap: 0.3rem;
 }
+
+
+/* ==========================================
+   POSIÇÃO NUMERADA DENTRO DA RAIA
+   ========================================== */
+.postit-title-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.postit-posicao {
+    flex-shrink: 0;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.35rem;
+    text-align: center;
+}
+
+/* O seletor de posição é curto (só um número): não precisa da largura dos outros */
+.view-move-field.view-move-field-pos {
+    flex: 0 0 auto;
+    min-width: 90px;
+}
