@@ -66,6 +66,9 @@ async function fetchBoardStateFromServer() {
 }
 
 async function saveBoardStateToServer(obj) {
+    // Ver carregamentoIncompleto: o blob em memória pode estar incompleto,
+    // e gravar substituiria o do servidor inteiro. Não é erro — só espera.
+    if (carregamentoIncompleto) return true;
     try {
         // Não manda pessoas/post-its no blob — eles agora moram nas tabelas próprias
         const { people, cards, ...rest } = obj;
@@ -3293,27 +3296,67 @@ function checkForNewChatMessages(freshMessages) {
     if (chatPanelOpen) renderChatMessages();
 }
 
-async function loadState() {
-    let parsed = await fetchBoardStateFromServer();
+// Quadro carregado só em parte (servidor fora do ar ou no meio de uma
+// atualização). Enquanto estiver true, o board_state NÃO é gravado no
+// servidor: o save_state.php substitui o blob inteiro, e gravar um estado
+// incompleto apagava etiquetas, modelos, campos, chat, lixeira e auditoria.
+let carregamentoIncompleto = false;
 
-    if (parsed === null) {
-        // Servidor fora do ar — usa a última cópia local salva, se existir
-        showToast('Não foi possível conectar ao servidor MySQL. Usando a última cópia salva neste navegador.');
-        const saved = localStorage.getItem(STORAGE_KEY);
-        parsed = saved ? JSON.parse(saved) : null;
-    } else {
-        // Pessoas e post-its agora moram em tabelas próprias, não no blob
-        const [peopleFromServer, cardsFromServer] = await Promise.all([
-            fetchPeopleFromServer(),
-            fetchCardsFromServer()
-        ]);
+// Busca blob + pessoas + post-its. Devolve null se QUALQUER parte falhar —
+// meio quadro não serve (era isso que fazia o quadro "recomeçar do zero").
+async function carregarQuadroDoServidor() {
+    const blob = await fetchBoardStateFromServer();
+    if (blob === null) return null;
+    // Pessoas e post-its moram em tabelas próprias, não no blob
+    const [peopleFromServer, cardsFromServer] = await Promise.all([
+        fetchPeopleFromServer(),
+        fetchCardsFromServer()
+    ]);
+    if (!Array.isArray(peopleFromServer) || !Array.isArray(cardsFromServer)) return null;
+    const quadro = (blob && typeof blob === 'object' && !Array.isArray(blob)) ? blob : {};
+    quadro.people = peopleFromServer;
+    quadro.cards = cardsFromServer;
+    return quadro;
+}
 
-        if (peopleFromServer !== null && cardsFromServer !== null) {
-            parsed.people = peopleFromServer;
-            parsed.cards = cardsFromServer;
-        } else {
-            showToast('Não foi possível buscar pessoas/tarefas das tabelas novas. Rode a migração em mse-backend/migrate.html.');
+// Com o carregamento incompleto, tenta de novo a cada 10s e recarrega a
+// página quando o servidor responder por inteiro — assim ninguém fica
+// trabalhando em cima de uma cópia velha.
+let aguardandoServidor = false;
+function aguardarServidorERecarregar() {
+    if (aguardandoServidor) return;
+    aguardandoServidor = true;
+    const tentar = async () => {
+        const quadro = await carregarQuadroDoServidor();
+        if (quadro && pendingCardSaves.size === 0) {
+            location.reload();
+            return;
         }
+        setTimeout(tentar, 10000);
+    };
+    setTimeout(tentar, 10000);
+}
+
+async function loadState() {
+    // Durante uma atualização do site os arquivos PHP são trocados e algum
+    // endpoint pode falhar por alguns segundos — por isso tenta 3 vezes
+    // antes de desistir.
+    let parsed = null;
+    for (let tentativa = 1; tentativa <= 3 && !parsed; tentativa++) {
+        parsed = await carregarQuadroDoServidor();
+        if (!parsed && tentativa < 3) await new Promise(r => setTimeout(r, 1500 * tentativa));
+    }
+
+    carregamentoIncompleto = !parsed;
+    if (carregamentoIncompleto) {
+        // Mostra a última cópia DESTE quadro salva neste navegador (ou um
+        // quadro vazio). Nunca cria dados de exemplo e nunca grava o
+        // board_state por cima do que está no servidor.
+        let local = null;
+        try { local = JSON.parse(localStorage.getItem(`${STORAGE_KEY}_${CURRENT_DEPARTMENT}`) || 'null'); } catch (e) { local = null; }
+        parsed = (local && Array.isArray(local.people) && Array.isArray(local.cards)) ? local : { people: [], cards: [] };
+        showToast('Não foi possível carregar o quadro do servidor. Mostrando a última cópia deste navegador — a página recarrega sozinha quando o servidor voltar.');
+        aguardarServidorERecarregar();
     }
 
     if (parsed && Array.isArray(parsed.people) && Array.isArray(parsed.cards)) {
@@ -3350,54 +3393,13 @@ async function loadState() {
 
         isObserver = getMemberRole(currentUserName) === 'Observador';
         saveState();
-        return;
     }
-
-    // Sem quadro ainda — pode já existir um blob parcial (membros/pendências) criado pelo login
-    state = parsed || {};
-    state.members = state.members || {};
-    state.pendingApprovals = state.pendingApprovals || [];
-    state.customAvatars = state.customAvatars || {};
-    state.userPasswords = state.userPasswords || {};
-    state.passwordResetRequests = state.passwordResetRequests || [];
-    state.customFields = [];
-    state.settings = { autoMoveOnComplete: false };
-    state.auditLog = [];
-    state.messages = [];
-    state.knownUsers = currentUserName ? [currentUserName] : [];
-    state.trash = [];
-    state.templates = [];
-    state.labels = [];
-    state.errorLog = [];
-    state.people = [];
-    state.cards = [];
-
-    const p1 = addPerson('João (Dev)');
-    const p2 = addPerson('Ana (Engenharia)');
-    addPerson('Concluído', null, true);
-    const suggestionsPerson = { id: 'suggestions', name: 'Sugestões Mia', avatarUrl: null, isDone: false };
-    state.people.push(suggestionsPerson);
-    persistPerson(suggestionsPerson);
-
-    addCard({
-        personId: p1, title: 'Revisão Estrutural',
-        lines: ['Conferir laudo da fundação', 'Validar carga de vento', 'Enviar aprovação pro CREA'],
-        color: 'blue', priority: 'alta', dueDate: '', author: 'Admin', attachments: []
-    });
-
-    addCard({
-        personId: p2, title: 'Inspeção no Hangar',
-        lines: ['Verificar pilares da fileira B', 'Analisar cobertura metálica'],
-        color: 'yellow', priority: 'media', dueDate: '', author: 'Carlos', attachments: []
-    });
-
-    isObserver = getMemberRole(currentUserName) === 'Observador';
 }
 
 function saveState() {
     // Cópia local, usada só como reserva se o servidor cair
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(`${STORAGE_KEY}_${CURRENT_DEPARTMENT}`, JSON.stringify(state));
     } catch (err) {
         console.error('Falha ao salvar a cópia local:', err);
     }
@@ -6513,6 +6515,7 @@ function toggleRecurringCard(cardId, ligado) {
 // Roda o reinício diário, se já estiver na hora e ainda não tiver rodado hoje.
 function runRecurringResetIfDue() {
     if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (carregamentoIncompleto) return; // cópia local velha — espera o servidor
     if (!state || !Array.isArray(state.cards) || !Array.isArray(state.people)) return;
     // Quem só observa não escreve no servidor — o reinício acontece assim que
     // alguém que edita abrir o quadro.
