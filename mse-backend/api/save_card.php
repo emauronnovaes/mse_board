@@ -13,6 +13,7 @@
 // ==========================================
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../card_moves_helper.php';
 
 header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -34,6 +35,8 @@ if (!$c || empty($c['id']) || empty($c['personId'])) {
 
 try {
     $pdo = getDbConnection();
+    $dept = getCurrentDepartment();
+    ensureCardMovesTable($pdo);
 
     // Descobre dinamicamente quais colunas existem de verdade na tabela `cards`
     // hoje. Assim, se o banco de produção tiver colunas diferentes das que o
@@ -81,7 +84,7 @@ try {
     // id e department sempre entram (department nunca é atualizado depois de
     // criado — um post-it não muda de departamento); os demais só se
     // existirem na tabela.
-    $fields = ['id' => $c['id'], 'department' => getCurrentDepartment()];
+    $fields = ['id' => $c['id'], 'department' => $dept];
     foreach ($candidates as $column => $value) {
         if (in_array($column, $existingColumns, true)) {
             $fields[$column] = $value;
@@ -104,11 +107,21 @@ try {
             VALUES (" . implode(', ', $placeholders) . ")
             ON DUPLICATE KEY UPDATE " . implode(', ', $updateParts);
 
+    // Mudanças de raia também chegam por aqui (ex: automação de checklist
+    // 100%, troca de status pelo modal) — então compara com a posição de
+    // antes e grava no log se mudou.
+    $pdo->beginTransaction();
+    $before = lockCardPosition($pdo, $c['id'], $dept);
+
     $stmt = $pdo->prepare($sql);
     $stmt->execute($fields);
 
+    logCardMoveIfChanged($pdo, $c['id'], $dept, $before, $c['personId'], $c['status'] ?? 'todo', $c['movedBy'] ?? null);
+    $pdo->commit();
+
     echo json_encode(['success' => true]);
 } catch (Throwable $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode([
         'error' => 'Falha ao salvar o post-it.',

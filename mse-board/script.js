@@ -303,7 +303,7 @@ async function persistCardMove(cardId, personId, status, completedAt) {
     return false;
 }
 function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
-function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt }); }
+function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt, movedBy: currentUserName }); }
 function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
 function toggleChecklistItemOnServer(cardId, itemIndex, subIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex, subIndex }); }
 function addCommentOnServer(cardId, author, text) { return apiCall('add_comment.php', { cardId, author, text }); }
@@ -5500,7 +5500,9 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
         return { text, checked };
     });
 
+    const pessoaAntes = card.personId;
     card.personId = personId;
+    marcarEntradaNaRaia(card, pessoaAntes, card.status);
     card.title = title;
     card.color = color;
     card.priority = priority;
@@ -5591,7 +5593,9 @@ function checkAutomationAutoMove(card) {
     if (currentPerson && currentPerson.isDone) return;
     if (card.status === 'done') return;
 
+    const statusAntes = card.status;
     card.status = 'done';
+    marcarEntradaNaRaia(card, card.personId, statusAntes);
     persistCard(card);
     logAudit(`Automação moveu "${card.title}" para a raia Concluído (checklist 100%)`);
     showToast(`"${card.title}" foi movido automaticamente para Concluído`, 'success');
@@ -5600,8 +5604,11 @@ function checkAutomationAutoMove(card) {
 function moveCard(cardId, newPersonId, newStatus) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
+    const pessoaAntes = card.personId;
+    const statusAntes = card.status;
     card.personId = newPersonId;
     if (newStatus) card.status = newStatus;
+    marcarEntradaNaRaia(card, pessoaAntes, statusAntes);
 
     const targetPerson = state.people.find(p => p.id === newPersonId);
     const isNowDone = (targetPerson && targetPerson.isDone) || newStatus === 'done';
@@ -7391,6 +7398,7 @@ function buildColunaDeRaia(person, lane) {
                 <h3>${lane.label}</h3>
             </div>
             <div class="column-header-actions">
+                ${botaoFiltroDeRaia(`${person.id}__${lane.key}`, `${person.name} · ${lane.label}`)}
                 <span class="card-count" id="count_${person.id}__${lane.key}">0</span>
             </div>
         </div>
@@ -7439,11 +7447,11 @@ function renderBoard() {
             grid.appendChild(buildColunaDeRaia(pessoa, lane));
             const container = document.getElementById(`cards_${pessoa.id}__${lane.key}`);
             if (!container) return;
-            sortCards(state.cards.filter(c =>
+            preencherRaiaFiltrada(container, state.cards.filter(c =>
                 c.personId === pessoa.id && !c.archived &&
                 (c.status || 'todo') === lane.key &&
                 cardMatchesFilters(c, filters)
-            )).forEach(card => container.appendChild(buildPostItElement(card)));
+            ), `${pessoa.id}__${lane.key}`);
         });
 
         updateCardCounts();
@@ -7462,18 +7470,16 @@ function renderBoard() {
 
         if (person.isDone) {
             const container = document.getElementById(`cards_${person.id}`);
-            const cardsForPerson = sortCards(state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters)));
-            cardsForPerson.forEach(card => container.appendChild(buildPostItElement(card)));
+            preencherRaiaFiltrada(container, state.cards.filter(c => c.personId === person.id && !c.archived && cardMatchesFilters(c, filters)), person.id);
         } else {
             ['afazer', 'todo', 'testing', 'paused', 'done'].forEach(status => {
                 const container = document.getElementById(`cards_${person.id}__${status}`);
                 if (!container) return;
-                const cardsForLane = sortCards(state.cards.filter(c =>
+                const cardsForLane = preencherRaiaFiltrada(container, state.cards.filter(c =>
                     c.personId === person.id && !c.archived &&
                     (c.status || 'todo') === status &&
                     cardMatchesFilters(c, filters)
-                ));
-                cardsForLane.forEach(card => container.appendChild(buildPostItElement(card)));
+                ), `${person.id}__${status}`);
 
                 // "Em Espera" e "Concluído" minimizam sozinhos quando estão vazios,
                 // dando mais espaço pra "A Fazer" mostrar mais post-its de uma vez.
@@ -7697,6 +7703,317 @@ function getInitials(name) {
 // ---------- Minimizar raia manualmente (botão ▾ no header de cada raia) ----------
 // Lembra a escolha do usuário por pessoa+raia entre acessos (mesmo padrão do
 // botão "Busca e Filtros", que usa localStorage).
+// ==========================================
+// FILTRO DE CADA RAIA (pelo log de movimentação)
+// ==========================================
+// Cada raia (Fazendo, A Fazer, Em Teste, Pausado, Concluída) e cada aba de
+// "Concluído" tem o próprio filtro: ordenar pela data em que o post-it ENTROU
+// ali (mais recente/mais antigo) e mostrar só quem entrou num período (esta
+// semana, mês passado, uma semana/mês escolhido, entre duas datas...).
+// A data vem do log de movimentação gravado pelo servidor (card_moves) — não
+// depende da data de término. Post-its que não foram movidos desde que o log
+// começou caem na data de conclusão (raia concluída) ou de criação.
+// O filtro é só de visualização: fica guardado neste navegador, por raia.
+
+const LANE_FILTER_STORAGE_KEY = 'mse_lane_filters';
+let laneFiltersCache = null;
+
+function getLaneFilters() {
+    if (laneFiltersCache) return laneFiltersCache;
+    try {
+        laneFiltersCache = JSON.parse(localStorage.getItem(`${LANE_FILTER_STORAGE_KEY}_${CURRENT_DEPARTMENT}`) || '{}') || {};
+    } catch (e) {
+        laneFiltersCache = {};
+    }
+    return laneFiltersCache;
+}
+
+function setLaneFilter(key, filtro) {
+    const filtros = getLaneFilters();
+    if (filtro && (filtro.ordem || filtro.periodo)) filtros[key] = filtro;
+    else delete filtros[key];
+    try { localStorage.setItem(`${LANE_FILTER_STORAGE_KEY}_${CURRENT_DEPARTMENT}`, JSON.stringify(filtros)); } catch (e) { /* segue sem lembrar */ }
+}
+
+function filtroDeRaiaAtivo(key) {
+    const f = getLaneFilters()[key];
+    return !!(f && (f.ordem || f.periodo));
+}
+
+// Quando o post-it entrou na coluna/raia em que está agora.
+function entradaNaRaia(card) {
+    if (card.enteredLaneAt) return { ts: card.enteredLaneAt, origem: 'log' };
+    const pessoa = state.people.find(p => p.id === card.personId);
+    const concluido = card.status === 'done' || (pessoa && pessoa.isDone);
+    if (concluido && card.completedAt) return { ts: card.completedAt, origem: 'conclusao' };
+    return { ts: card.createdAt || null, origem: 'criacao' };
+}
+
+// Atualiza na hora a data de entrada quando o post-it muda de lugar aqui no
+// navegador — o servidor grava o log de verdade e a próxima sincronização
+// traz o valor dele.
+function marcarEntradaNaRaia(card, pessoaAntes, statusAntes) {
+    if (card.personId !== pessoaAntes || (card.status || 'todo') !== (statusAntes || 'todo')) {
+        card.enteredLaneAt = Date.now();
+    }
+}
+
+function inicioDoDia(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+// Semana começa na segunda-feira
+function inicioDaSemana(d) {
+    const x = inicioDoDia(d);
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+}
+function somarDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function dataLocalISO(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function isoParaData(iso) { const [a, m, d] = iso.split('-').map(Number); return new Date(a, m - 1, d); }
+function formatarDiaMes(d) { return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`; }
+
+// Devolve [início, fim) em ms do período escolhido, ou null se for "tudo".
+function intervaloDoFiltroDeRaia(f) {
+    const hoje = inicioDoDia(new Date());
+    switch (f.periodo) {
+        case 'hoje': return [hoje.getTime(), somarDias(hoje, 1).getTime()];
+        case '7d': return [somarDias(hoje, -6).getTime(), somarDias(hoje, 1).getTime()];
+        case '30d': return [somarDias(hoje, -29).getTime(), somarDias(hoje, 1).getTime()];
+        case 'semana': {
+            const ini = inicioDaSemana(hoje);
+            return [ini.getTime(), somarDias(ini, 7).getTime()];
+        }
+        case 'semana_passada': {
+            const ini = somarDias(inicioDaSemana(hoje), -7);
+            return [ini.getTime(), somarDias(ini, 7).getTime()];
+        }
+        case 'mes': return [new Date(hoje.getFullYear(), hoje.getMonth(), 1).getTime(), new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1).getTime()];
+        case 'mes_passado': return [new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1).getTime(), new Date(hoje.getFullYear(), hoje.getMonth(), 1).getTime()];
+        case 'escolher_semana': {
+            if (!f.semana) return null;
+            const ini = isoParaData(f.semana);
+            return [ini.getTime(), somarDias(ini, 7).getTime()];
+        }
+        case 'escolher_mes': {
+            if (!f.mes) return null;
+            const [a, m] = f.mes.split('-').map(Number);
+            return [new Date(a, m - 1, 1).getTime(), new Date(a, m, 1).getTime()];
+        }
+        case 'datas': {
+            if (!f.de && !f.ate) return null;
+            return [
+                f.de ? isoParaData(f.de).getTime() : -Infinity,
+                f.ate ? somarDias(isoParaData(f.ate), 1).getTime() : Infinity
+            ];
+        }
+        default: return null;
+    }
+}
+
+// Aplica o filtro da raia (período + ordem) sobre os post-its dela. Sem
+// ordem escolhida, segue a ordenação normal do quadro (sortCards).
+function aplicarFiltroDeRaia(cards, key) {
+    const f = getLaneFilters()[key];
+    if (!f) return sortCards(cards);
+
+    const intervalo = intervaloDoFiltroDeRaia(f);
+    let lista = cards;
+    if (intervalo) {
+        lista = lista.filter(c => {
+            const { ts } = entradaNaRaia(c);
+            return ts !== null && ts >= intervalo[0] && ts < intervalo[1];
+        });
+    }
+
+    if (f.ordem === 'recente' || f.ordem === 'antigo') {
+        const dir = f.ordem === 'recente' ? -1 : 1;
+        return [...lista].sort((a, b) => ((entradaNaRaia(a).ts || 0) - (entradaNaRaia(b).ts || 0)) * dir);
+    }
+    return sortCards(lista);
+}
+
+// Com filtro ativo, cada post-it da raia mostra a data usada no filtro —
+// senão fica impossível conferir por que ele está (ou não) ali.
+function anexarDataDeEntrada(el, card) {
+    const { ts, origem } = entradaNaRaia(card);
+    if (!ts) return;
+    const d = new Date(ts);
+    const rotulo = { log: 'Entrou aqui em', conclusao: 'Concluído em', criacao: 'Criado em' }[origem];
+    const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const linha = document.createElement('div');
+    linha.className = 'postit-entrada';
+    linha.title = origem === 'log'
+        ? 'Data registrada no log de movimentação'
+        : 'Sem registro de movimentação pra esta raia — usando a data de ' + (origem === 'conclusao' ? 'conclusão' : 'criação');
+    linha.innerHTML = `<i class="fa-regular fa-clock"></i> ${rotulo} ${formatarDiaMes(d)}/${d.getFullYear()} ${hora}`;
+    el.appendChild(linha);
+}
+
+// Monta os post-its de uma raia/aba já filtrados e ordenados.
+function preencherRaiaFiltrada(container, cards, key) {
+    const ativo = filtroDeRaiaAtivo(key);
+    const lista = aplicarFiltroDeRaia(cards, key);
+    lista.forEach(card => {
+        const el = buildPostItElement(card);
+        if (ativo) anexarDataDeEntrada(el, card);
+        container.appendChild(el);
+    });
+    return lista;
+}
+
+function botaoFiltroDeRaia(key, label) {
+    const ativo = filtroDeRaiaAtivo(key);
+    return `<button type="button" class="lane-filter-btn${ativo ? ' is-active' : ''}" id="lanefilterbtn_${key}"
+                title="${ativo ? 'Filtro ativo — clique pra ajustar' : 'Filtrar/ordenar por data de entrada'}"
+                data-label="${escapeHtml(label)}"
+                onclick="event.stopPropagation(); abrirFiltroDeRaia(this, '${key}')">
+                <i class="fa-solid fa-filter"></i></button>`;
+}
+
+function fecharFiltroDeRaia() {
+    const pop = document.getElementById('laneFilterPopover');
+    if (pop) pop.remove();
+    document.removeEventListener('mousedown', fecharFiltroDeRaiaAoClicarFora, true);
+    document.removeEventListener('keydown', fecharFiltroDeRaiaComEsc, true);
+}
+function fecharFiltroDeRaiaAoClicarFora(e) {
+    const pop = document.getElementById('laneFilterPopover');
+    if (pop && !pop.contains(e.target) && !e.target.closest('.lane-filter-btn')) fecharFiltroDeRaia();
+}
+function fecharFiltroDeRaiaComEsc(e) {
+    if (e.key === 'Escape') { e.preventDefault(); fecharFiltroDeRaia(); }
+}
+
+function abrirFiltroDeRaia(botao, key) {
+    const jaAberto = document.getElementById('laneFilterPopover');
+    const mesmaRaia = jaAberto && jaAberto.dataset.key === key;
+    fecharFiltroDeRaia();
+    if (mesmaRaia) return; // segundo clique no mesmo botão fecha
+
+    const label = botao.dataset.label || '';
+    const f = { ...(getLaneFilters()[key] || {}) };
+    const hoje = new Date();
+
+    // Últimas 12 semanas e 12 meses, pra escolher sem depender de
+    // <input type="week/month"> (não funciona em todo navegador).
+    const semanas = [];
+    for (let i = 0; i < 12; i++) {
+        const ini = somarDias(inicioDaSemana(hoje), -7 * i);
+        const fim = somarDias(ini, 6);
+        semanas.push({ valor: dataLocalISO(ini), rotulo: `${formatarDiaMes(ini)} a ${formatarDiaMes(fim)}/${fim.getFullYear()}` });
+    }
+    const meses = [];
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        const nome = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        meses.push({ valor: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, rotulo: nome.charAt(0).toUpperCase() + nome.slice(1) });
+    }
+
+    const periodos = [
+        ['', 'Qualquer data'],
+        ['hoje', 'Hoje'],
+        ['semana', 'Esta semana'],
+        ['semana_passada', 'Semana passada'],
+        ['7d', 'Últimos 7 dias'],
+        ['mes', 'Este mês'],
+        ['mes_passado', 'Mês passado'],
+        ['30d', 'Últimos 30 dias'],
+        ['escolher_semana', 'Escolher semana…'],
+        ['escolher_mes', 'Escolher mês…'],
+        ['datas', 'Entre datas…']
+    ];
+
+    const pop = document.createElement('div');
+    pop.id = 'laneFilterPopover';
+    pop.className = 'lane-filter-popover';
+    pop.dataset.key = key;
+    pop.innerHTML = `
+        <div class="lfp-title"><i class="fa-solid fa-filter"></i> ${escapeHtml(label)}</div>
+        <label class="lfp-label" for="lfpOrdem">Ordem</label>
+        <select id="lfpOrdem" class="lfp-input">
+            <option value="">Padrão do quadro</option>
+            <option value="recente">Mais recente primeiro</option>
+            <option value="antigo">Mais antigo primeiro</option>
+        </select>
+        <label class="lfp-label" for="lfpPeriodo">Entrou nesta raia</label>
+        <select id="lfpPeriodo" class="lfp-input">
+            ${periodos.map(([v, r]) => `<option value="${v}">${r}</option>`).join('')}
+        </select>
+        <select id="lfpSemana" class="lfp-input lfp-extra" data-para="escolher_semana">
+            ${semanas.map(s => `<option value="${s.valor}">${s.rotulo}</option>`).join('')}
+        </select>
+        <select id="lfpMes" class="lfp-input lfp-extra" data-para="escolher_mes">
+            ${meses.map(m => `<option value="${m.valor}">${m.rotulo}</option>`).join('')}
+        </select>
+        <div class="lfp-datas lfp-extra" data-para="datas">
+            <label>De <input type="date" id="lfpDe" class="lfp-input"></label>
+            <label>Até <input type="date" id="lfpAte" class="lfp-input"></label>
+        </div>
+        <div class="lfp-resumo" id="lfpResumo"></div>
+        <div class="lfp-actions">
+            <button type="button" class="lfp-btn" id="lfpLimpar">Limpar filtro</button>
+            <button type="button" class="lfp-btn lfp-btn-primary" id="lfpFechar">Fechar</button>
+        </div>
+        <p class="lfp-nota">Usa o log de movimentação. Post-its que não foram movidos desde que o log começou usam a data de criação (ou de conclusão).</p>
+    `;
+    document.body.appendChild(pop);
+
+    const campo = id => pop.querySelector('#' + id);
+    campo('lfpOrdem').value = f.ordem || '';
+    campo('lfpPeriodo').value = f.periodo || '';
+    if (f.semana) campo('lfpSemana').value = f.semana;
+    if (f.mes) campo('lfpMes').value = f.mes;
+    campo('lfpDe').value = f.de || '';
+    campo('lfpAte').value = f.ate || '';
+
+    function mostrarCamposExtras() {
+        const periodo = campo('lfpPeriodo').value;
+        pop.querySelectorAll('.lfp-extra').forEach(el => { el.style.display = el.dataset.para === periodo ? '' : 'none'; });
+    }
+
+    function atualizarResumo() {
+        const container = document.getElementById(`cards_${key}`);
+        const resumo = campo('lfpResumo');
+        if (!container || !filtroDeRaiaAtivo(key)) { resumo.textContent = ''; return; }
+        const n = container.querySelectorAll('.postit').length;
+        resumo.textContent = `${n} post-it${n === 1 ? '' : 's'} com esse filtro`;
+    }
+
+    function aplicar() {
+        const periodo = campo('lfpPeriodo').value;
+        const novo = { ordem: campo('lfpOrdem').value, periodo };
+        if (periodo === 'escolher_semana') novo.semana = campo('lfpSemana').value;
+        if (periodo === 'escolher_mes') novo.mes = campo('lfpMes').value;
+        if (periodo === 'datas') { novo.de = campo('lfpDe').value; novo.ate = campo('lfpAte').value; }
+        setLaneFilter(key, novo);
+        mostrarCamposExtras();
+        renderBoard();
+        atualizarResumo();
+    }
+
+    ['lfpOrdem', 'lfpPeriodo', 'lfpSemana', 'lfpMes', 'lfpDe', 'lfpAte'].forEach(id => campo(id).addEventListener('change', aplicar));
+    campo('lfpLimpar').addEventListener('click', () => {
+        setLaneFilter(key, null);
+        renderBoard();
+        fecharFiltroDeRaia();
+    });
+    campo('lfpFechar').addEventListener('click', fecharFiltroDeRaia);
+    mostrarCamposExtras();
+    atualizarResumo();
+
+    // Posiciona embaixo do botão, sem sair da tela
+    const r = botao.getBoundingClientRect();
+    const largura = pop.offsetWidth;
+    const altura = pop.offsetHeight;
+    let top = r.bottom + 6;
+    if (top + altura > window.innerHeight - 12) top = Math.max(12, r.top - altura - 6);
+    pop.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - largura - 12))}px`;
+    pop.style.top = `${top}px`;
+
+    document.addEventListener('mousedown', fecharFiltroDeRaiaAoClicarFora, true);
+    document.addEventListener('keydown', fecharFiltroDeRaiaComEsc, true);
+}
+
 function getLaneCollapsePrefs() {
     try {
         return JSON.parse(localStorage.getItem('mse_lane_collapse_prefs') || '{}');
@@ -7806,7 +8123,10 @@ function buildColumn(person) {
                         <button type="button" class="lane-toggle-btn" onclick="toggleLaneCollapse('${personId}', '${lane.key}')" title="Minimizar/expandir raia">▾</button>
                         <span>${lane.label}</span>
                     </span>
-                    <span class="lane-count" id="count_${personId}__${lane.key}">0</span>
+                    <span class="lane-header-actions">
+                        ${botaoFiltroDeRaia(`${personId}__${lane.key}`, `${person.name} · ${lane.label}`)}
+                        <span class="lane-count" id="count_${personId}__${lane.key}">0</span>
+                    </span>
                 </div>
                 <div class="cards-container lane-container" id="cards_${personId}__${lane.key}" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
             </div>
@@ -7819,6 +8139,7 @@ function buildColumn(person) {
             <div class="column-header-actions">
                 ${dashChave}
                 ${focoBtn}
+                ${isDone ? botaoFiltroDeRaia(personId, person.name) : ''}
                 <span class="card-count" id="count_${personId}">0</span>
                 ${deleteBtn}
             </div>
