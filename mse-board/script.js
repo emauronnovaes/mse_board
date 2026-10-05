@@ -6299,7 +6299,9 @@ function setupComentariosParticulares() {
 // ==========================================
 // Uma tarefa marcada como recorrente é uma rotina que se repete: diária,
 // semanal (num dia da semana) ou mensal (num dia do mês). Sempre às 07:00 ela
-// SAI de "Concluída" e volta pra raia escolhida, na coluna de origem.
+// SAI de "Concluída" e volta pra raia escolhida, na coluna de origem — com a
+// data de início e de vencimento atualizadas pro novo ciclo
+// (datasDoCicloRecorrente).
 //
 // Não existe cron/agendador no servidor, então quem dispara o reinício é o
 // próprio navegador de quem está com o quadro aberto (ou de quem abrir
@@ -6438,6 +6440,22 @@ function ultimaOcorrenciaRecorrente(t, agora) {
     return null;
 }
 
+// Datas do ciclo que começa na ocorrência (AAAA-MM-DD): o início é o próprio
+// dia do reinício e o vencimento é a véspera do próximo reinício — ou seja, o
+// prazo é o ciclo inteiro. Diária vence no mesmo dia; semanal de segunda
+// vence no domingo; mensal do dia 5 vence no dia 4 do mês seguinte.
+function datasDoCicloRecorrente(t, ocorrencia) {
+    const [a, m, d] = ocorrencia.split('-').map(Number);
+    const inicio = new Date(a, m - 1, d);
+    const proxima = new Date(a, m - 1, d + 1);
+    // 400 dias pelo mesmo motivo de ultimaOcorrenciaRecorrente()
+    for (let i = 0; i < 400 && !dataBateComRecorrencia(t, proxima); i++) {
+        proxima.setDate(proxima.getDate() + 1);
+    }
+    const vencimento = new Date(proxima.getFullYear(), proxima.getMonth(), proxima.getDate() - 1);
+    return { startDate: recurringDateKey(inicio), dueDate: recurringDateKey(vencimento) };
+}
+
 // Frase curta descrevendo quando a tarefa reinicia ("Toda segunda-feira").
 function descreveRecorrencia(t) {
     const hora = horarioDaRecorrenciaTexto(t);
@@ -6565,7 +6583,16 @@ function runRecurringResetIfDue() {
         // do seletor existir ou não mexeu nele).
         const raiaDestino = t.targetStatus || 'todo';
         moveCard(card.id, destino, raiaDestino);
-        if (tinhaMarcado) persistCard(card); // moveCard só grava coluna/raia/conclusão
+
+        // Atualiza início e vencimento pro novo ciclo — sem isso a tarefa
+        // voltava com o prazo do ciclo anterior e já aparecia atrasada.
+        const ciclo = datasDoCicloRecorrente(t, ocorrencia);
+        card.startDate = ciclo.startDate;
+        card.dueDate = ciclo.dueDate;
+
+        // moveCard só grava coluna/raia/conclusão; datas e checklist vão no
+        // salvamento completo (sempre DEPOIS do moveCard — ver drop()).
+        persistCard(card);
 
         // Guarda a DATA DA OCORRÊNCIA, não a data de hoje. Faz diferença pra
         // horário tardio: numa tarefa das 23:00 rodando atrasada às 02:00 do
