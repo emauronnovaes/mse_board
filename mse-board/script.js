@@ -8369,6 +8369,68 @@ function setManualProgress(cardId, value) {
     renderBoard();
 }
 
+// ==========================================
+// POSIÇÃO NUMERADA DENTRO DA RAIA (1, 2, 3...)
+// ==========================================
+// O número é a ordem de prioridade da tarefa dentro da raia em que ela está:
+// a ordem manual (arrastar / campo "Posição" do post-it aberto), que é a
+// mesma de card.position. Não muda com o "Ordenar" nem com o filtro da raia
+// — esses só mudam a exibição, a prioridade continua a mesma.
+
+// Post-its de uma raia na ordem manual. Numa aba de "Concluído" não há
+// raias: vale a aba inteira.
+function cardsDaRaiaEmOrdem(personId, status) {
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    const semRaias = !!(pessoa && pessoa.isDone);
+    return sortByPosition((state.cards || []).filter(c =>
+        c.personId === personId && !c.archived &&
+        (semRaias || (c.status || 'todo') === (status || 'todo'))
+    ));
+}
+
+function posicaoNaRaia(card) {
+    return cardsDaRaiaEmOrdem(card.personId, card.status).findIndex(c => c.id === card.id) + 1;
+}
+
+function valorDePosicao(c) {
+    return typeof c.position === 'number' ? c.position : (c.createdAt || 0);
+}
+
+// Coloca o post-it na posição N (1 = primeiro) da raia em que ele JÁ está
+// (chamar depois do moveCard). Grava sozinho no servidor.
+function colocarNaPosicao(card, numero) {
+    const outros = cardsDaRaiaEmOrdem(card.personId, card.status).filter(c => c.id !== card.id);
+    const indice = Math.max(0, Math.min(outros.length, (parseInt(numero, 10) || 1) - 1));
+    const antes = indice > 0 ? outros[indice - 1] : null;
+    const depois = indice < outros.length ? outros[indice] : null;
+    const pa = antes ? valorDePosicao(antes) : null;
+    const pd = depois ? valorDePosicao(depois) : null;
+
+    let nova;
+    if (pa !== null && pd !== null) nova = (pa + pd) / 2;
+    else if (pd !== null) nova = pd - 1;
+    else if (pa !== null) nova = pa + 1;
+    else nova = Date.now();
+
+    // Vizinhos com o mesmo valor (post-its antigos, sem posição, criados no
+    // mesmo instante) não deixam espaço no meio: renumera a raia inteira.
+    const coube = (pa === null || nova > pa) && (pd === null || nova < pd);
+    if (!coube) {
+        const lista = [...outros];
+        lista.splice(indice, 0, card);
+        lista.forEach((c, i) => {
+            const pos = (i + 1) * 1000;
+            if (c.position !== pos) {
+                c.position = pos;
+                if (c.id !== card.id) persistCard(c);
+            }
+        });
+    } else {
+        card.position = nova;
+    }
+    persistCard(card);
+}
+
 function buildPostItElement(card) {
     const el = document.createElement('div');
     el.className = `postit ${card.color}`;
@@ -8411,7 +8473,10 @@ function buildPostItElement(card) {
         ${coverHtml}
         ${stickerHtml}
         <div class="postit-compact-top">
-            <h4 class="inline-editable" onclick="event.stopPropagation();" ${isObserver ? '' : `ondblclick="startInlineEditCardTitle(event, '${card.id}')"`}>${escapeHtml(card.title)}</h4>
+            <div class="postit-title-wrap">
+                <span class="postit-posicao" title="Posição na raia (prioridade)">${posicaoNaRaia(card)}</span>
+                <h4 class="inline-editable" onclick="event.stopPropagation();" ${isObserver ? '' : `ondblclick="startInlineEditCardTitle(event, '${card.id}')"`}>${escapeHtml(card.title)}</h4>
+            </div>
             <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
                 <button class="postit-star-btn ${card.starred ? 'is-starred' : ''}" title="Favoritar" onclick="event.stopPropagation(); handleToggleStar('${card.id}')"><i class="fa-solid fa-star"></i></button>
                 <button class="delete-card-btn" onclick="event.stopPropagation(); handleDeleteCard('${card.id}')">&times;</button>
@@ -9854,6 +9919,7 @@ function preencherMoverPara(card) {
     const secao = document.getElementById('viewMoveSection');
     const selPessoa = document.getElementById('viewMovePerson');
     const selRaia = document.getElementById('viewMoveLane');
+    const selPosicao = document.getElementById('viewMovePosition');
     if (!secao || !selPessoa || !selRaia) return;
 
     // Observador não move nada
@@ -9879,10 +9945,28 @@ function preencherMoverPara(card) {
         `<option value="${l.key}" ${l.key === atual ? 'selected' : ''}>${l.label}</option>`
     ).join('');
 
+    // Posições possíveis no destino: 1 até o total da raia (contando o
+    // próprio post-it). Na raia atual vem marcada a posição de agora; numa
+    // raia nova, a última (ele entra no fim da fila).
+    const ajustaPosicao = () => {
+        if (!selPosicao) return;
+        const destinoRaia = selRaia.disabled ? 'done' : selRaia.value;
+        const mesmaRaia = destinoMesmaRaia(card, selPessoa.value, destinoRaia);
+        const outros = cardsDaRaiaEmOrdem(selPessoa.value, destinoRaia).filter(c => c.id !== card.id).length;
+        const total = outros + 1;
+        const marcada = mesmaRaia ? posicaoNaRaia(card) : total;
+        let opcoes = '';
+        for (let i = 1; i <= total; i++) {
+            opcoes += `<option value="${i}" ${i === marcada ? 'selected' : ''}>${i}º${i === total && total > 1 ? ' (último)' : ''}</option>`;
+        }
+        selPosicao.innerHTML = opcoes;
+    };
+
     // Aba de "Concluído" não tem raias — o seletor de raia não faz sentido
     const ajustaRaia = () => {
         const escolhida = pessoas.find(p => p.id === selPessoa.value);
         selRaia.disabled = !!(escolhida && escolhida.isDone);
+        ajustaPosicao();
     };
 
     // Trocar a raia aplica na hora: mudar o status é o gesto mais comum aqui
@@ -9890,11 +9974,29 @@ function preencherMoverPara(card) {
     // O botão continua existindo pra quem for TROCAR DE COLUNA — aí faz
     // sentido confirmar, porque muda de responsável.
     selRaia.onchange = () => {
+        ajustaPosicao();
         if (selPessoa.value === card.personId) moverPeloPostItAberto();
     };
 
+    // Trocar a posição dentro da mesma raia também aplica na hora
+    if (selPosicao) {
+        selPosicao.onchange = () => {
+            const destinoRaia = selRaia.disabled ? 'done' : selRaia.value;
+            if (destinoMesmaRaia(card, selPessoa.value, destinoRaia)) moverPeloPostItAberto();
+        };
+    }
+
     selPessoa.onchange = ajustaRaia;
     ajustaRaia();
+}
+
+// O destino escolhido é a raia onde o post-it já está? Numa aba de
+// "Concluído" a raia não importa (a aba inteira é uma lista só).
+function destinoMesmaRaia(card, destinoPessoa, destinoRaia) {
+    if (card.personId !== destinoPessoa) return false;
+    const pessoa = (state.people || []).find(p => p.id === destinoPessoa);
+    if (pessoa && pessoa.isDone) return true;
+    return (card.status || 'todo') === destinoRaia;
 }
 
 function moverPeloPostItAberto() {
@@ -9908,19 +10010,29 @@ function moverPeloPostItAberto() {
     // Numa aba de "Concluído" o post-it não fica numa raia; guarda 'done' pra
     // ele não voltar pra "Fazendo" caso seja tirado da aba depois.
     const destinoRaia = selRaia.disabled ? 'done' : selRaia.value;
+    const selPosicao = document.getElementById('viewMovePosition');
+    const destinoPosicao = selPosicao && selPosicao.value ? parseInt(selPosicao.value, 10) : null;
+    const mesmaRaia = destinoMesmaRaia(card, destinoPessoa, destinoRaia);
 
-    if (card.personId === destinoPessoa && (card.status || 'todo') === destinoRaia) {
+    if (mesmaRaia && (!destinoPosicao || destinoPosicao === posicaoNaRaia(card))) {
         showToast('A tarefa já está aí.');
         return;
     }
 
-    moveCard(cardId, destinoPessoa, destinoRaia);
+    // moveCard ANTES de mexer na posição — a posição é calculada dentro da
+    // raia de destino, e ele que troca coluna/raia do post-it (ver drop()).
+    if (!mesmaRaia) moveCard(cardId, destinoPessoa, destinoRaia);
+    if (destinoPosicao) colocarNaPosicao(card, destinoPosicao);
+    else if (!mesmaRaia) persistCard(card);
 
     const pessoa = (state.people || []).find(p => p.id === destinoPessoa);
     const nomeRaia = (RAIAS_PARA_MOVER.find(l => l.key === destinoRaia) || {}).label || '';
+    const posicaoFinal = posicaoNaRaia(card);
     showToast(
-        `"${card.title}" foi para ${escapeHtml(pessoa ? pessoa.name : 'outra coluna')}`
-        + (selRaia.disabled ? '' : ` · ${nomeRaia}`),
+        mesmaRaia
+            ? `"${escapeHtml(card.title)}" agora é a ${posicaoFinal}ª da raia`
+            : `"${escapeHtml(card.title)}" foi para ${escapeHtml(pessoa ? pessoa.name : 'outra coluna')}`
+                + (selRaia.disabled ? '' : ` · ${nomeRaia}`) + ` · ${posicaoFinal}ª posição`,
         'success'
     );
 
