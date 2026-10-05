@@ -2,12 +2,14 @@
 // ==========================================
 // MSE Board — POST: move um post-it (arrastar entre colunas/raias)
 // Endpoint leve — só troca person_id/status/completed_at, não reenvia o post-it inteiro.
+// Se a coluna ou a raia mudou, grava a movimentação no log (card_moves).
 //
 // Agora com try/catch: se der erro, devolve a mensagem real do banco em vez
 // de uma tela em branco (500 sem corpo) — facilita muito o diagnóstico.
 // ==========================================
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../card_moves_helper.php';
 
 header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -28,6 +30,11 @@ if (!$p || empty($p['id']) || empty($p['personId'])) {
 
 try {
     $pdo = getDbConnection();
+    $dept = getCurrentDepartment();
+    ensureCardMovesTable($pdo);
+
+    $pdo->beginTransaction();
+    $before = lockCardPosition($pdo, $p['id'], $dept);
 
     $stmt = $pdo->prepare(
         "UPDATE cards SET person_id = :person_id,
@@ -40,11 +47,17 @@ try {
         'status' => $p['status'] ?? null,
         'completed_at' => array_key_exists('completedAt', $p) ? $p['completedAt'] : null,
         'id' => $p['id'],
-        'dept' => getCurrentDepartment()
+        'dept' => $dept
     ]);
+
+    // status nulo = o quadro não mandou raia (manteve a atual)
+    $toStatus = $p['status'] ?? ($before['status'] ?? 'todo');
+    logCardMoveIfChanged($pdo, $p['id'], $dept, $before, $p['personId'], $toStatus, $p['movedBy'] ?? null);
+    $pdo->commit();
 
     echo json_encode(['success' => true]);
 } catch (Throwable $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode([
         'error' => 'Falha ao mover o post-it.',

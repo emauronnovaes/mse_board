@@ -7,6 +7,7 @@ ini_set('display_errors', '0'); // nunca deixa o PHP imprimir erro em HTML no me
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../card_moves_helper.php';
 
 header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -22,7 +23,29 @@ try {
     $stmt->execute(['dept' => getCurrentDepartment()]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $cards = array_map(function ($r) {
+    // Quando cada post-it entrou na coluna/raia em que está agora, segundo o
+    // log de movimentação (card_moves). Buscado à parte e juntado aqui no PHP
+    // (sem JOIN) pra não depender das duas tabelas terem o mesmo collation.
+    // Se o log falhar por qualquer motivo, os post-its carregam normalmente,
+    // só sem essa data.
+    $enteredLaneAt = [];
+    try {
+        ensureCardMovesTable($pdo);
+        $mv = $pdo->prepare(
+            "SELECT card_id, to_person_id, to_status, MAX(moved_at) AS moved_at
+             FROM card_moves WHERE department = :dept
+             GROUP BY card_id, to_person_id, to_status"
+        );
+        $mv->execute(['dept' => getCurrentDepartment()]);
+        foreach ($mv->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $enteredLaneAt[$m['card_id'] . '|' . $m['to_person_id'] . '|' . $m['to_status']] = (int) $m['moved_at'];
+        }
+    } catch (Throwable $e) {
+        $enteredLaneAt = [];
+    }
+
+    $cards = array_map(function ($r) use ($enteredLaneAt) {
+        $laneKey = $r['id'] . '|' . $r['person_id'] . '|' . ($r['status'] ?: 'todo');
         return [
             'id' => $r['id'],
             'personId' => $r['person_id'],
@@ -52,7 +75,8 @@ try {
             'labelIds' => json_decode($r['label_ids'] ?? '[]', true) ?? [],
             'customValues' => json_decode($r['custom_values'] ?? '{}', true) ?? (object)[],
             'createdAt' => $r['created_at'] !== null ? (int) $r['created_at'] : null,
-            'completedAt' => $r['completed_at'] !== null ? (int) $r['completed_at'] : null
+            'completedAt' => $r['completed_at'] !== null ? (int) $r['completed_at'] : null,
+            'enteredLaneAt' => $enteredLaneAt[$laneKey] ?? null
         ];
     }, $rows);
 
