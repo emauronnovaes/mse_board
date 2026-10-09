@@ -2623,7 +2623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isAdminViewer = getMemberRole(userData.name) === 'Admin';
 
-        // Menu lateral — só existe no quadro de PLANEJAMENTO e, lá dentro,
+        // Menu lateral — existe nos quadros de PLANEJAMENTO e PROGRAMAÇÃO,
         // só pra conta admin@mse.com.br. NÃO basta ter papel de Admin: o
         // quadro tem vários Admins (que criam post-its, gerenciam membros
         // pelo botão do menu de cima), mas as ferramentas do menu lateral
@@ -2639,7 +2639,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // página. Aqui é só display:none e não .remove() porque mais abaixo
         // o código mexe em #sidebarFootRole e #sidebarFootAvatar (que vivem
         // dentro da sidebar) sem checar se existem — removendo, quebraria.
-        const podeVerMenuLateral = CURRENT_DEPARTMENT === 'planejamento' && userData.name === BOOTSTRAP_ADMIN_EMAIL;
+        const podeVerMenuLateral = userData.name === BOOTSTRAP_ADMIN_EMAIL;
         const sidebarEl = document.getElementById('sidebar');
         const mobileToggleEl = document.getElementById('mobileSidebarToggle');
         if (podeVerMenuLateral) {
