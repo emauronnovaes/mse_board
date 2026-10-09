@@ -305,7 +305,7 @@ async function persistCardMove(cardId, personId, status, completedAt) {
     );
     return false;
 }
-function deleteCardFromServer(id) { return apiCall('delete_card.php', { id }); }
+function deleteCardFromServer(id, reason) { return apiCall('delete_card.php', { id, reason, deletedBy: currentUserName }); }
 function moveCardOnServer(id, personId, status, completedAt) { return apiCall('move_card.php', { id, personId, status, completedAt, movedBy: currentUserName }); }
 function reorderPeopleOnServer(orderedIds) { return apiCall('reorder_people.php', { order: orderedIds }); }
 function toggleChecklistItemOnServer(cardId, itemIndex, subIndex) { return apiCall('toggle_checklist_item.php', { cardId, itemIndex, subIndex }); }
@@ -2650,6 +2650,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Botão "Adicionar Membros" no menu de cima — só aparece pra Admin.
         // Roda aqui (depois do loadState) porque precisa de state.members
         // já carregado do servidor pra saber o papel de quem está vendo.
+        // Histórico de excluídos — também só pra Admin, nos dois quadros.
+        setupHistoricoExcluidos(isAdminViewer);
+
         const addMembersBtnEl = document.getElementById('addMembersBtn');
         if (addMembersBtnEl) {
             if (isAdminViewer) {
@@ -3545,6 +3548,134 @@ function renderChatMessages() {
     }).join('');
 
     container.scrollTop = container.scrollHeight;
+}
+
+// ==========================================
+// HISTÓRICO DE EXCLUÍDOS (restaurar post-its apagados)
+// ==========================================
+// Diferente da Lixeira (que vive dentro do blob do quadro), este histórico
+// vem de uma tabela do servidor (cards_deleted) que guarda a linha inteira de
+// cada post-it apagado e nunca é limpa. Também lista o que só existe em
+// arquivos de backup (apagado antes do histórico existir). Só Admin vê o botão.
+
+let historicoExcluidosTimer = null;
+
+async function buscarExcluidosNoServidor() {
+    const q = document.getElementById('deletedHistorySearch').value.trim();
+    const de = document.getElementById('deletedHistoryFrom').value;
+    const ate = document.getElementById('deletedHistoryTo').value;
+    let url = apiUrl('list_deleted_cards.php');
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    if (de) url += `&de=${encodeURIComponent(de)}`;
+    if (ate) url += `&ate=${encodeURIComponent(ate)}`;
+    try {
+        const res = await fetch(url, { headers: { 'X-API-Key': API_SECRET } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+    } catch (err) {
+        console.error('Não foi possível buscar o histórico de excluídos:', err);
+        return null;
+    }
+}
+
+async function renderHistoricoExcluidos() {
+    const list = document.getElementById('deletedHistoryList');
+    list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Buscando...</p>';
+    const itens = await buscarExcluidosNoServidor();
+    if (itens === null) {
+        list.innerHTML = '<p style="color:var(--red); font-size:0.85rem;">Não foi possível buscar o histórico. Tente de novo.</p>';
+        return;
+    }
+    if (itens.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhuma tarefa excluída encontrada com esse filtro.</p>';
+        return;
+    }
+
+    list.innerHTML = '';
+    itens.forEach(item => {
+        const d = new Date(item.deletedAt);
+        const dataTxt = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const pessoa = (state.people || []).find(p => p.id === item.personId);
+        const onde = pessoa ? pessoa.name : 'coluna não existe mais';
+        const quando = item.source === 'backup' ? `Ainda existia em ${dataTxt}` : `Excluída em ${dataTxt}${item.deletedBy ? ' por ' + escapeHtml(deriveNameFromEmail(item.deletedBy)) : ''}`;
+
+        const row = document.createElement('div');
+        row.className = 'archived-item';
+        row.innerHTML = `
+            <div class="archived-item-info">
+                <h4>${escapeHtml(item.title || '(sem título)')}${item.source === 'backup' ? ' <span class="deleted-history-badge">backup</span>' : ''}</h4>
+                <p>${quando} · coluna: ${escapeHtml(onde)}${item.reason && item.source !== 'backup' ? ' · ' + escapeHtml(item.reason) : ''}</p>
+            </div>
+            <div class="archived-item-actions">
+                <button type="button" class="btn-secondary" data-action="restore">Restaurar</button>
+            </div>
+        `;
+        const btn = row.querySelector('[data-action="restore"]');
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = 'Restaurando...';
+            const r = await restaurarExcluido(item);
+            if (r.ok) {
+                showToast(`"${item.title}" foi restaurada!`, 'success');
+                renderHistoricoExcluidos();
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Restaurar';
+                showToast(r.erro || 'Não foi possível restaurar.');
+            }
+        });
+        list.appendChild(row);
+    });
+}
+
+async function restaurarExcluido(item) {
+    try {
+        const res = await fetch(apiUrl('restore_deleted_card.php'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            body: JSON.stringify({ source: item.source, historyId: item.historyId, file: item.file, cardId: item.cardId })
+        });
+        const dados = await res.json().catch(() => ({}));
+        if (!res.ok) return { ok: false, erro: dados.error };
+
+        // Traz o post-it de volta pra tela. Mantém a versão local dos que
+        // ainda têm salvamento pendente, pra não perder edição em andamento.
+        const frescos = await fetchCardsFromServer();
+        if (frescos) {
+            state.cards = frescos.map(fc => (pendingCardSaves.has(fc.id) && state.cards.find(c => c.id === fc.id)) || fc);
+            renderBoard();
+        }
+        logAudit(`Restaurou do histórico de excluídos a tarefa "${item.title}"`);
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, erro: 'Falha de conexão ao restaurar.' };
+    }
+}
+
+function setupHistoricoExcluidos(visivel) {
+    const btn = document.getElementById('deletedHistoryBtn');
+    const modal = document.getElementById('deletedHistoryModal');
+    if (!btn || !modal) return;
+    if (!visivel) { btn.style.display = 'none'; return; }
+
+    btn.style.display = 'inline-flex';
+    btn.addEventListener('click', () => {
+        modal.style.display = 'flex';
+        renderHistoricoExcluidos();
+    });
+    document.getElementById('closeDeletedHistoryBtn').addEventListener('click', () => { modal.style.display = 'none'; });
+
+    const agendar = () => {
+        clearTimeout(historicoExcluidosTimer);
+        historicoExcluidosTimer = setTimeout(renderHistoricoExcluidos, 300);
+    };
+    ['deletedHistorySearch', 'deletedHistoryFrom', 'deletedHistoryTo'].forEach(id => {
+        document.getElementById(id).addEventListener('input', agendar);
+    });
+    document.getElementById('deletedHistoryClear').addEventListener('click', () => {
+        ['deletedHistorySearch', 'deletedHistoryFrom', 'deletedHistoryTo'].forEach(id => { document.getElementById(id).value = ''; });
+        renderHistoricoExcluidos();
+    });
 }
 
 // ==========================================
@@ -5443,7 +5574,7 @@ function deletePerson(personId) {
     cardsToTrash.forEach(c => moveCardToTrash(c, `Coluna "${person ? person.name : ''}" excluída`));
     cardsToTrash.forEach(c => {
         pendingCardDeletes.add(c.id);
-        persistCardDelete(c.id);
+        persistCardDelete(c.id, 1, `Coluna "${person ? person.name : ''}" excluída`);
     });
     state.people = state.people.filter(p => p.id !== personId);
     state.cards = state.cards.filter(c => c.personId !== personId);
@@ -5536,8 +5667,8 @@ function moveCardToTrash(card, reason) {
 // falha de rede não vira um post-it "ressuscitando" sozinho).
 const pendingCardDeletes = new Set();
 
-async function persistCardDelete(cardId, attempt = 1) {
-    const ok = await deleteCardFromServer(cardId);
+async function persistCardDelete(cardId, attempt = 1, reason) {
+    const ok = await deleteCardFromServer(cardId, reason);
     if (ok) {
         pendingCardDeletes.delete(cardId);
         clearErrorOnce(`card_delete_${cardId}`);
@@ -5545,7 +5676,7 @@ async function persistCardDelete(cardId, attempt = 1) {
     }
     if (attempt < 4) {
         await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
-        return persistCardDelete(cardId, attempt + 1);
+        return persistCardDelete(cardId, attempt + 1, reason);
     }
     logErrorOnce(
         `card_delete_${cardId}`,

@@ -289,6 +289,7 @@
             <div class="action-buttons-group">
                 <button id="addPersonBtn" class="btn-secondary"><i class="fa-solid fa-user-plus"></i> Adicionar Pessoa</button>
                 <button id="addMembersBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-users"></i> Adicionar Membros</button>
+                <button id="deletedHistoryBtn" class="btn-secondary" style="display:none;" title="Tarefas excluídas — dá pra restaurar"><i class="fa-solid fa-clock-rotate-left"></i> Excluídos</button>
                 <!-- Só aparece no quadro de Planejamento (ver setupTarefasRecorrentes),
                      e lá fica visível pra todo mundo, não só pra Admin. -->
                 <button id="recurringTasksBtn" class="btn-secondary" style="display:none;" title="Tarefas que se repetem e voltam sozinhas pra raia escolhida"><i class="fa-solid fa-rotate"></i> Tarefas Recorrentes</button>
@@ -1171,6 +1172,22 @@
             <p class="settings-subtitle">O que deu errado no quadro e como resolver.</p>
             <div id="errorLogList" class="audit-list"></div>
             <button type="button" id="clearErrorLogBtn" class="btn-secondary" style="width:100%; margin-top:1rem;">Limpar Registro</button>
+        </div>
+    </div>
+
+    <!-- Modal: Histórico de excluídos (restaurar tarefas apagadas) — só Admin -->
+    <div id="deletedHistoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closeDeletedHistoryBtn">&times;</span>
+            <h3>Histórico de excluídos</h3>
+            <p class="settings-subtitle">Toda tarefa apagada fica guardada aqui. Inclui as que foram apagadas antes deste histórico existir, quando ainda constam nos backups.</p>
+            <div class="deleted-history-filters">
+                <input type="search" id="deletedHistorySearch" placeholder="Buscar pelo título...">
+                <label>De <input type="date" id="deletedHistoryFrom"></label>
+                <label>Até <input type="date" id="deletedHistoryTo"></label>
+                <button type="button" class="btn-secondary" id="deletedHistoryClear">Limpar</button>
+            </div>
+            <div id="deletedHistoryList" class="archived-list"></div>
         </div>
     </div>
 
