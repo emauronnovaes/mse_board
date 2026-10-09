@@ -8455,6 +8455,10 @@ function buildProgressBarHtml(progress, card) {
                     onchange="setManualProgress('${card.id}', this.value)">
                 <span>%</span>
             ` : ''}
+            <span class="progress-launchers">
+                <button type="button" class="float-launcher float-launcher-resumo" data-abrir-painel="resumo" title="Abrir o resumo" style="display:none;"><i class="fa-solid fa-align-left"></i></button>
+                <button type="button" class="float-launcher float-launcher-email" data-abrir-painel="email" title="Abrir o e-mail" style="display:none;"><i class="fa-solid fa-envelope"></i></button>
+            </span>
         </div>
     ` : '';
 
@@ -8888,12 +8892,6 @@ function posicionarPaineisFlutuantes() {
     const salvas = lerPosicoesDosPaineis();
     const gap = 14;
 
-    // Botõezinhos que abrem os painéis: colados nas laterais do post-it.
-    const btnResumo = document.getElementById('abrirResumoBtn');
-    const btnEmail = document.getElementById('abrirEmailBtn');
-    if (btnResumo) aplicarPosicaoDoPainel(btnResumo, r.left - 48 - 8, r.top + 20);
-    if (btnEmail) aplicarPosicaoDoPainel(btnEmail, r.right + 8, r.top + 20);
-
     document.querySelectorAll('#viewCardModal .float-panel').forEach(painel => {
         if (painel.style.display === 'none') return;
         const nome = painel.dataset.panel;
@@ -8981,20 +8979,21 @@ function sugestoesDeDestinatarios(card) {
 // aberto; um botãozinho ao lado do post-it abre cada um, e o X do painel fecha.
 const paineisAbertos = { resumo: false, email: false };
 const PAINEL_IDS = { resumo: 'viewCardResumoSection', email: 'viewEmailPanel' };
-const LANCADOR_IDS = { resumo: 'abrirResumoBtn', email: 'abrirEmailBtn' };
-
 // Mostra cada painel só se estiver aberto, e o botãozinho só se estiver fechado.
 // data-disponivel = 0 quando o painel não faz sentido (ex.: resumo vazio para
 // quem só observa).
 function atualizarPaineis() {
     Object.keys(PAINEL_IDS).forEach(nome => {
         const painel = document.getElementById(PAINEL_IDS[nome]);
-        const botao = document.getElementById(LANCADOR_IDS[nome]);
-        if (!painel || !botao) return;
+        if (!painel) return;
         const disponivel = painel.dataset.disponivel !== '0';
         const aberto = disponivel && paineisAbertos[nome];
         painel.style.display = aberto ? (nome === 'email' ? 'flex' : 'block') : 'none';
-        botao.style.display = disponivel && !aberto ? 'flex' : 'none';
+        // Os botões moram na linha do "Automático (pelo checklist)", dentro do
+        // post-it — que é redesenhada várias vezes (ver observador em setupPaineisFlutuantes).
+        document.querySelectorAll(`#viewCardModal [data-abrir-painel="${nome}"]`).forEach(botao => {
+            botao.style.display = disponivel && !aberto ? 'flex' : 'none';
+        });
     });
     posicionarPaineisFlutuantes();
 }
@@ -9077,8 +9076,15 @@ function setupPaineisFlutuantes() {
 
     document.getElementById('emailMinBtn').addEventListener('click', () => fecharPainel('email'));
     document.getElementById('resumoFecharBtn').addEventListener('click', () => fecharPainel('resumo'));
-    document.getElementById('abrirEmailBtn').addEventListener('click', () => abrirPainel('email'));
-    document.getElementById('abrirResumoBtn').addEventListener('click', () => abrirPainel('resumo'));
+    // Os botões que abrem os painéis são recriados toda vez que a linha de
+    // progresso é redesenhada: por isso o clique é tratado no modal inteiro
+    // e um observador reaplica quem aparece/some.
+    document.getElementById('viewCardModal').addEventListener('click', (e) => {
+        const botao = e.target.closest('[data-abrir-painel]');
+        if (botao) abrirPainel(botao.dataset.abrirPainel);
+    });
+    const progressoEl = document.getElementById('viewCardProgress');
+    if (progressoEl) new MutationObserver(() => atualizarPaineis()).observe(progressoEl, { childList: true });
     document.getElementById('emailResetBtn').addEventListener('click', () => {
         const card = (state.cards || []).find(c => c.id === emailCardId);
         if (!card) return;
