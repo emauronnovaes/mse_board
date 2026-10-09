@@ -6120,3 +6120,47 @@ body.dashboard-only-mode .dashboard-modal-content {
     flex: 0 0 auto;
     min-width: 90px;
 }
+
+
+/* ==========================================
+   HISTÓRICO DE EXCLUÍDOS
+   ========================================== */
+.deleted-history-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-end;
+    margin-bottom: 0.8rem;
+}
+
+.deleted-history-filters input[type="search"] {
+    flex: 1 1 180px;
+}
+
+.deleted-history-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.deleted-history-filters input {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+}
+
+.deleted-history-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    background: var(--gold);
+    color: #fff;
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    vertical-align: middle;
+}
