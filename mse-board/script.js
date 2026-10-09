@@ -3032,6 +3032,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target === viewCardModal) viewCardModal.style.display = 'none';
         });
 
+        setupPaineisFlutuantes();
+
         const viewMoveBtnEl = document.getElementById('viewMoveBtn');
         if (viewMoveBtnEl) viewMoveBtnEl.addEventListener('click', moverPeloPostItAberto);
 
@@ -8618,6 +8620,7 @@ function buildPostItElement(card) {
         </div>
         ${labelsHtml}
         ${datesHtml}
+        ${card.emailDraft && card.emailDraft.to ? `<div class="postit-email-para" title="E-mail previsto para: ${escapeHtml(card.emailDraft.to)}"><i class="fa-solid fa-envelope"></i> ${escapeHtml(card.emailDraft.to)}</div>` : ''}
         <div class="postit-compact-meta">
             <span class="tag tag-priority-${card.priority}">${priorityLabel}</span>
             <span class="postit-compact-percent">${percentLabel}</span>
@@ -8841,7 +8844,222 @@ function updateChecklistLineNumbers() {
     gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
 }
 
-// Desenha a caixa de resumo no cabeçalho do post-it.
+// ==========================================
+// PAINÉIS FLUTUANTES: RESUMO (esquerda) E E-MAIL (direita)
+// ==========================================
+// Aparecem ao lado do post-it aberto e podem ser arrastados pela barra de
+// cima. Se a pessoa arrastar, a posição fica lembrada neste navegador; sem
+// isso, ficam colados nas laterais do post-it a cada abertura.
+// O e-mail NÃO é enviado: o painel só registra PARA QUEM a tarefa será
+// enviada e o texto da mensagem. Fica gravado na própria tarefa (emailDraft),
+// então qualquer pessoa que abrir a tarefa vê o destinatário e o texto.
+
+const PAINEIS_POS_KEY = 'mse_paineis_flutuantes';
+let emailCardId = null;
+let emailSalvarTimer = null;
+
+function lerPosicoesDosPaineis() {
+    try { return JSON.parse(localStorage.getItem(PAINEIS_POS_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+
+function salvarPosicaoDoPainel(nome, x, y) {
+    const pos = lerPosicoesDosPaineis();
+    pos[nome] = { x, y };
+    try { localStorage.setItem(PAINEIS_POS_KEY, JSON.stringify(pos)); } catch (e) { /* segue sem lembrar */ }
+}
+
+function manterPainelNaTela(painel, x, y) {
+    const maxX = Math.max(0, window.innerWidth - painel.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - 40); // deixa sempre a barra visível
+    return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) };
+}
+
+function aplicarPosicaoDoPainel(painel, x, y) {
+    const p = manterPainelNaTela(painel, x, y);
+    painel.style.left = `${p.x}px`;
+    painel.style.top = `${p.y}px`;
+}
+
+// Cola cada painel numa lateral do post-it (a menos que a pessoa já tenha
+// arrastado: aí vale a posição lembrada).
+function posicionarPaineisFlutuantes() {
+    const conteudo = document.querySelector('#viewCardModal .view-modal-content');
+    if (!conteudo) return;
+    const r = conteudo.getBoundingClientRect();
+    const salvas = lerPosicoesDosPaineis();
+    const gap = 14;
+
+    document.querySelectorAll('#viewCardModal .float-panel').forEach(painel => {
+        if (painel.style.display === 'none') return;
+        const nome = painel.dataset.panel;
+        if (salvas[nome]) {
+            aplicarPosicaoDoPainel(painel, salvas[nome].x, salvas[nome].y);
+        } else if (nome === 'resumo') {
+            aplicarPosicaoDoPainel(painel, r.left - painel.offsetWidth - gap, r.top + 20);
+        } else {
+            aplicarPosicaoDoPainel(painel, r.right + gap, r.top + 20);
+        }
+    });
+}
+
+function tornarPainelArrastavel(painel) {
+    const alca = painel.querySelector('.float-panel-handle');
+    if (!alca || alca.dataset.arrastavel) return;
+    alca.dataset.arrastavel = '1';
+
+    alca.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return; // botões da barra (minimizar) não arrastam
+        e.preventDefault();
+        const inicio = painel.getBoundingClientRect();
+        const dx = e.clientX - inicio.left;
+        const dy = e.clientY - inicio.top;
+        painel.classList.add('is-dragging');
+        alca.setPointerCapture(e.pointerId);
+
+        const mover = (ev) => aplicarPosicaoDoPainel(painel, ev.clientX - dx, ev.clientY - dy);
+        const soltar = (ev) => {
+            alca.removeEventListener('pointermove', mover);
+            alca.removeEventListener('pointerup', soltar);
+            alca.removeEventListener('pointercancel', soltar);
+            painel.classList.remove('is-dragging');
+            const f = painel.getBoundingClientRect();
+            salvarPosicaoDoPainel(painel.dataset.panel, Math.round(f.left), Math.round(f.top));
+        };
+        alca.addEventListener('pointermove', mover);
+        alca.addEventListener('pointerup', soltar);
+        alca.addEventListener('pointercancel', soltar);
+    });
+}
+
+// Texto padrão do e-mail, montado a partir da tarefa.
+function montarTextoDoEmail(card) {
+    const pessoa = (state.people || []).find(p => p.id === card.personId);
+    const raia = (RAIAS_PARA_MOVER.find(l => l.key === (card.status || 'todo')) || {}).label || '';
+    const prioridade = { baixa: 'Baixa', media: 'Média', alta: 'Alta' }[card.priority] || '';
+    const fmt = (d) => d ? d.split('-').reverse().join('/') : '';
+
+    const linhas = [];
+    linhas.push(`Tarefa: ${card.title}`);
+    if (pessoa) linhas.push(`Responsável (coluna): ${pessoa.name}${pessoa.isDone ? '' : (raia ? ' · ' + raia : '')}`);
+    if (prioridade) linhas.push(`Prioridade: ${prioridade}`);
+    if (card.startDate) linhas.push(`Início: ${fmt(card.startDate)}`);
+    if (card.dueDate) linhas.push(`Prazo: ${fmt(card.dueDate)}`);
+    const progresso = getProgress(card);
+    if (progresso.total > 0) linhas.push(`Progresso: ${progresso.percent}% (${progresso.done}/${progresso.total})`);
+
+    if ((card.resumo || '').trim()) {
+        linhas.push('', 'Resumo:', card.resumo.trim());
+    }
+
+    if ((card.checklist || []).length > 0) {
+        linhas.push('', 'Checklist:');
+        card.checklist.forEach(item => {
+            linhas.push(`${item.checked ? '[x]' : '[ ]'} ${item.text}`);
+            (item.subItems || []).forEach(sub => linhas.push(`      ${sub.checked ? '[x]' : '[ ]'} ${sub.text}`));
+        });
+    }
+
+    return { subject: card.title, text: linhas.join('\n') };
+}
+
+// Destinatários prováveis: quem está no quadro (e-mails dos membros).
+function sugestoesDeDestinatarios(card) {
+    const emails = new Set();
+    (state.knownUsers || []).forEach(u => { if (String(u).includes('@')) emails.add(u); });
+    Object.keys(state.members || {}).forEach(u => { if (String(u).includes('@')) emails.add(u); });
+    (card.assignees || []).forEach(u => { if (String(u).includes('@')) emails.add(u); });
+    emails.delete(currentUserName);
+    return [...emails];
+}
+
+function prepararPainelEmail(card) {
+    const painel = document.getElementById('viewEmailPanel');
+    if (!painel) return;
+    painel.style.display = 'flex';
+
+    // Fecha pendência de gravação do post-it anterior antes de trocar
+    gravarRascunhoDoEmail(true);
+
+    emailCardId = card.id;
+    const salvo = card.emailDraft;
+    const padrao = montarTextoDoEmail(card);
+    document.getElementById('emailTo').value = salvo ? (salvo.to || '') : '';
+    document.getElementById('emailSubject').value = salvo && salvo.subject != null ? salvo.subject : padrao.subject;
+    document.getElementById('emailText').value = salvo && salvo.text != null ? salvo.text : padrao.text;
+
+    document.getElementById('emailToList').innerHTML = sugestoesDeDestinatarios(card)
+        .map(e => `<option value="${escapeHtml(e)}"></option>`).join('');
+
+    // Quem só observa lê, mas não altera
+    ['emailTo', 'emailSubject', 'emailText'].forEach(id => { document.getElementById(id).readOnly = isObserver; });
+    document.getElementById('emailResetBtn').style.display = isObserver ? 'none' : '';
+    document.getElementById('emailHint').textContent = 'Salvo na tarefa. Nada é enviado.';
+}
+
+// Grava o rascunho na tarefa (e no servidor). Só grava se mudou alguma coisa.
+function gravarRascunhoDoEmail(imediato) {
+    clearTimeout(emailSalvarTimer);
+    if (!emailCardId || isObserver) return;
+    const card = (state.cards || []).find(c => c.id === emailCardId);
+    const para = document.getElementById('emailTo');
+    if (!card || !para) return;
+
+    const novo = {
+        to: para.value.trim(),
+        subject: document.getElementById('emailSubject').value,
+        text: document.getElementById('emailText').value
+    };
+    const atual = card.emailDraft || null;
+    const padrao = montarTextoDoEmail(card);
+    // Rascunho em branco (sem destinatário e com o texto padrão) não precisa ficar guardado
+    const semNada = !novo.to && novo.subject === padrao.subject && novo.text === padrao.text;
+    if (semNada && !atual) return;
+    if (atual && atual.to === novo.to && atual.subject === novo.subject && atual.text === novo.text) return;
+
+    card.emailDraft = semNada ? null : novo;
+    persistCard(card);
+    document.getElementById('emailHint').textContent = 'Salvo na tarefa. Nada é enviado.';
+    if (typeof renderBoard === 'function') renderBoard();
+}
+
+function agendarGravacaoDoEmail() {
+    clearTimeout(emailSalvarTimer);
+    document.getElementById('emailHint').textContent = 'Salvando...';
+    emailSalvarTimer = setTimeout(() => gravarRascunhoDoEmail(false), 900);
+}
+
+function setupPaineisFlutuantes() {
+    document.querySelectorAll('#viewCardModal .float-panel').forEach(tornarPainelArrastavel);
+
+    const painel = document.getElementById('viewEmailPanel');
+    if (!painel) return;
+
+    document.getElementById('emailMinBtn').addEventListener('click', () => {
+        painel.classList.toggle('is-minimized');
+    });
+    document.getElementById('emailResetBtn').addEventListener('click', () => {
+        const card = (state.cards || []).find(c => c.id === emailCardId);
+        if (!card) return;
+        const padrao = montarTextoDoEmail(card);
+        document.getElementById('emailSubject').value = padrao.subject;
+        document.getElementById('emailText').value = padrao.text;
+        gravarRascunhoDoEmail(true);
+    });
+    ['emailTo', 'emailSubject', 'emailText'].forEach(id => {
+        document.getElementById(id).addEventListener('input', agendarGravacaoDoEmail);
+    });
+    // Fechar o post-it também grava o que estava pendente
+    document.getElementById('viewCardModal').addEventListener('click', (e) => {
+        if (e.target.id === 'closeViewModalBtn' || e.target.id === 'viewCardModal') gravarRascunhoDoEmail(true);
+    });
+
+    // Se a janela mudar de tamanho, traz de volta pra tela quem ficou de fora
+    window.addEventListener('resize', () => {
+        if (document.getElementById('viewCardModal').style.display === 'flex') posicionarPaineisFlutuantes();
+    });
+}
+
+// Desenha o painel de resumo ao lado do post-it.
 function renderViewCardResumo(card) {
     const section = document.getElementById('viewCardResumoSection');
     const el = document.getElementById('viewCardResumo');
@@ -9625,8 +9843,12 @@ function openViewModal(cardId) {
 
     renderViewCommentsList(cardId);
     preencherMoverPara(card);
+    prepararPainelEmail(card);
 
     modal.style.display = 'flex';
+    // Só dá pra medir o post-it (e cravar os painéis do lado dele) depois
+    // que o modal está visível.
+    posicionarPaineisFlutuantes();
 }
 
 function renderViewCommentsList(cardId) {

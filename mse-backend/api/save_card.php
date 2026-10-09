@@ -47,6 +47,16 @@ try {
         'Field'
     );
 
+    // Rascunho de e-mail da tarefa (destinatário + texto): coluna nova. Se o
+    // banco ainda não tem, cria agora (ALTER faz commit implícito, por isso
+    // vem antes de qualquer transação).
+    if (!in_array('email_draft', $existingColumns, true)) {
+        try {
+            $pdo->exec("ALTER TABLE cards ADD COLUMN email_draft TEXT NULL");
+            $existingColumns[] = 'email_draft';
+        } catch (Throwable $e) { /* sem a coluna, o rascunho só não é gravado */ }
+    }
+
     // Candidatos: nome_da_coluna => valor a gravar. Cobre tanto os campos
     // antigos (project/estimated_hours/worked_hours) quanto os novos
     // (start_date/observacao) — só entra na query o que existir de verdade.
@@ -77,6 +87,7 @@ try {
         'assignees'       => json_encode($c['assignees'] ?? []),
         'label_ids'       => json_encode($c['labelIds'] ?? []),
         'custom_values'   => json_encode($c['customValues'] ?? (object)[]),
+        'email_draft'     => !empty($c['emailDraft']) ? json_encode($c['emailDraft'], JSON_UNESCAPED_UNICODE) : null,
         'created_at'      => $c['createdAt'] ?? round(microtime(true) * 1000),
         'completed_at'    => $c['completedAt'] ?? null
     ];

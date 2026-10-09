@@ -6164,3 +6164,166 @@ body.dashboard-only-mode .dashboard-modal-content {
     padding: 0.05rem 0.35rem;
     vertical-align: middle;
 }
+
+
+/* ==========================================
+   PAINÉIS FLUTUANTES DO POST-IT ABERTO (Resumo e E-mail)
+   ========================================== */
+.float-panel {
+    position: fixed;
+    z-index: 1100;
+    width: 260px;
+    background: var(--card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.float-panel-handle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.float-panel.is-dragging .float-panel-handle { cursor: grabbing; }
+.float-panel.is-dragging { box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32); }
+
+.float-panel-resumo { border-left: 3px solid var(--accent); }
+
+.float-panel-resumo .float-panel-body {
+    padding: 0.7rem 0.8rem;
+    max-height: 45vh;
+    overflow-y: auto;
+}
+
+/* ---- E-mail no estilo do Gmail (janela "Nova mensagem") ---- */
+.float-panel-email {
+    width: 420px;
+    max-width: calc(100vw - 16px);
+    border-radius: 10px 10px 0 0;
+}
+
+.float-panel-email .email-handle {
+    background: #404040;
+    color: #fff;
+    border-bottom: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.email-handle-actions button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+}
+
+.email-handle-actions button:hover { background: rgba(255, 255, 255, 0.18); }
+
+.email-body { display: flex; flex-direction: column; }
+.float-panel-email.is-minimized .email-body { display: none; }
+
+.email-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.1rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.email-row span {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    min-width: 3.2rem;
+}
+
+.email-row input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    padding: 0.55rem 0;
+    min-width: 0;
+}
+
+.email-text {
+    border: none;
+    outline: none;
+    resize: vertical;
+    min-height: 230px;
+    max-height: 50vh;
+    padding: 0.7rem 0.8rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.email-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    border-top: 1px solid var(--border);
+}
+
+.email-gmail-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 18px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.email-gmail-btn:hover { background: var(--bg); }
+
+.email-hint {
+    margin-left: auto;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+/* Tela estreita: os painéis não cabem ao lado do post-it, então ficam
+   por cima e continuam arrastáveis. */
+@media (max-width: 900px) {
+    .float-panel-resumo { width: 220px; }
+}
+
+
+.postit-email-para {
+    margin-top: 0.3rem;
+    font-size: 0.68rem;
+    color: rgba(0, 0, 0, 0.62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
