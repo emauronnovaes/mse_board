@@ -2890,7 +2890,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // um clique fora por acidente apagaria tudo que já foi digitado. O caso
         // que motivou isso: selecionar texto arrastando o mouse e soltar o botão
         // fora da caixa conta como clique no fundo. Nesses, só o X fecha.
-        const MODAIS_QUE_SO_FECHAM_NO_X = ['cardModal', 'privateCommentModal'];
+        // viewCardModal = o post-it aberto (com os painéis de resumo e e-mail): só o X fecha.
+        const MODAIS_QUE_SO_FECHAM_NO_X = ['cardModal', 'privateCommentModal', 'viewCardModal'];
         document.querySelectorAll('.modal').forEach(modal => {
             if (MODAIS_QUE_SO_FECHAM_NO_X.includes(modal.id)) return;
             modal.addEventListener('click', (e) => {
@@ -9033,8 +9034,6 @@ function prepararPainelEmail(card) {
 
     // Quem só observa lê, mas não altera
     ['emailTo', 'emailSubject', 'emailText'].forEach(id => { document.getElementById(id).readOnly = isObserver; });
-    document.getElementById('emailResetBtn').style.display = isObserver ? 'none' : '';
-    document.getElementById('emailHint').textContent = 'Salvo na tarefa. Nada é enviado.';
 }
 
 // Grava o rascunho na tarefa (e no servidor). Só grava se mudou alguma coisa.
@@ -9058,13 +9057,11 @@ function gravarRascunhoDoEmail(imediato) {
 
     card.emailDraft = semNada ? null : novo;
     persistCard(card);
-    document.getElementById('emailHint').textContent = 'Salvo na tarefa. Nada é enviado.';
     if (typeof renderBoard === 'function') renderBoard();
 }
 
 function agendarGravacaoDoEmail() {
     clearTimeout(emailSalvarTimer);
-    document.getElementById('emailHint').textContent = 'Salvando...';
     emailSalvarTimer = setTimeout(() => gravarRascunhoDoEmail(false), 900);
 }
 
@@ -9085,14 +9082,6 @@ function setupPaineisFlutuantes() {
     });
     const progressoEl = document.getElementById('viewCardProgress');
     if (progressoEl) new MutationObserver(() => atualizarPaineis()).observe(progressoEl, { childList: true });
-    document.getElementById('emailResetBtn').addEventListener('click', () => {
-        const card = (state.cards || []).find(c => c.id === emailCardId);
-        if (!card) return;
-        const padrao = montarTextoDoEmail(card);
-        document.getElementById('emailSubject').value = padrao.subject;
-        document.getElementById('emailText').value = padrao.text;
-        gravarRascunhoDoEmail(true);
-    });
     ['emailTo', 'emailSubject', 'emailText'].forEach(id => {
         document.getElementById(id).addEventListener('input', agendarGravacaoDoEmail);
     });
