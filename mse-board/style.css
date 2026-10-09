@@ -6366,3 +6366,20 @@ body.dashboard-only-mode .dashboard-modal-content {
     box-shadow: none;
     font-size: 0.85rem;
 }
+
+
+/* Resumo dentro do post-it, logo abaixo da barra de progressão: ocupa a
+   largura toda (o estilo antigo era de uma caixinha ao lado do título) */
+.view-resumo-box.view-resumo-inline {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0 0 0.9rem;
+    padding: 0.8rem 1rem;
+}
+
+.view-resumo-box.view-resumo-inline .view-resumo {
+    font-size: 0.92rem;
+    line-height: 1.6;
+}

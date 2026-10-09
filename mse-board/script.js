@@ -8457,7 +8457,6 @@ function buildProgressBarHtml(progress, card) {
                 <span>%</span>
             ` : ''}
             <span class="progress-launchers">
-                <button type="button" class="float-launcher float-launcher-resumo" data-abrir-painel="resumo" title="Abrir o resumo" style="display:none;"><i class="fa-solid fa-align-left"></i></button>
                 <button type="button" class="float-launcher float-launcher-email" data-abrir-painel="email" title="Abrir o e-mail" style="display:none;"><i class="fa-solid fa-envelope"></i></button>
             </span>
         </div>
@@ -8898,8 +8897,6 @@ function posicionarPaineisFlutuantes() {
         const nome = painel.dataset.panel;
         if (salvas[nome]) {
             aplicarPosicaoDoPainel(painel, salvas[nome].x, salvas[nome].y);
-        } else if (nome === 'resumo') {
-            aplicarPosicaoDoPainel(painel, r.left - painel.offsetWidth - gap, r.top + 20);
         } else {
             aplicarPosicaoDoPainel(painel, r.right + gap, r.top + 20);
         }
@@ -8978,8 +8975,8 @@ function sugestoesDeDestinatarios(card) {
 
 // Os painéis de resumo e e-mail começam FECHADOS toda vez que um post-it é
 // aberto; um botãozinho ao lado do post-it abre cada um, e o X do painel fecha.
-const paineisAbertos = { resumo: false, email: false };
-const PAINEL_IDS = { resumo: 'viewCardResumoSection', email: 'viewEmailPanel' };
+const paineisAbertos = { email: false };
+const PAINEL_IDS = { email: 'viewEmailPanel' };
 // Mostra cada painel só se estiver aberto, e o botãozinho só se estiver fechado.
 // data-disponivel = 0 quando o painel não faz sentido (ex.: resumo vazio para
 // quem só observa).
@@ -9072,7 +9069,6 @@ function setupPaineisFlutuantes() {
     if (!painel) return;
 
     document.getElementById('emailMinBtn').addEventListener('click', () => fecharPainel('email'));
-    document.getElementById('resumoFecharBtn').addEventListener('click', () => fecharPainel('resumo'));
     // Os botões que abrem os painéis são recriados toda vez que a linha de
     // progresso é redesenhada: por isso o clique é tratado no modal inteiro
     // e um observador reaplica quem aparece/some.
@@ -9096,7 +9092,7 @@ function setupPaineisFlutuantes() {
     });
 }
 
-// Desenha o painel de resumo ao lado do post-it.
+// Desenha o resumo, logo abaixo da barra de progressão do post-it aberto.
 function renderViewCardResumo(card) {
     const section = document.getElementById('viewCardResumoSection');
     const el = document.getElementById('viewCardResumo');
@@ -9108,20 +9104,18 @@ function renderViewCardResumo(card) {
         // linkifyText já escapa o texto e transforma links em <a> clicáveis
         el.innerHTML = linkifyText(texto);
         el.classList.remove('view-resumo-vazio');
-        section.dataset.disponivel = '1';
+        section.style.display = 'block';
     } else if (!isObserver) {
         // Sem resumo, mas quem está vendo pode escrever: mostra o convite,
         // senão não haveria onde dar o duplo clique pra criar o primeiro.
         el.textContent = 'Sem resumo — dois cliques para escrever';
         el.classList.add('view-resumo-vazio');
-        section.dataset.disponivel = '1';
+        section.style.display = 'block';
     } else {
         el.textContent = '';
         el.classList.remove('view-resumo-vazio');
-        section.dataset.disponivel = '0';
+        section.style.display = 'none';
     }
-    // (quem mostra ou esconde o painel é atualizarPaineis, conforme o estado aberto/fechado)
-    if (typeof atualizarPaineis === 'function') atualizarPaineis();
 
     // Recria o listener a cada render porque o texto (e o card) mudam
     el.ondblclick = isObserver ? null : (e) => startInlineEditCardResumo(e, card.id);
@@ -9781,7 +9775,6 @@ function openViewModal(cardId) {
     const modal = document.getElementById('viewCardModal');
     modal.dataset.cardId = cardId;
     // Resumo e e-mail começam fechados em todo post-it que se abre.
-    paineisAbertos.resumo = false;
     paineisAbertos.email = false;
 
     const coverEl = document.getElementById('viewCardCover');
