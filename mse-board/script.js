@@ -3653,23 +3653,48 @@ function marcarReuniao(cardId, status) {
     persistCard(card);
 }
 
+// Liga/desliga o item nas Reuniões. O que o usuário vê (botão, mensagem)
+// acontece na hora; gravar no servidor e registrar no histórico ficam pra
+// depois, em segundo plano — antes o quadro inteiro era redesenhado e o
+// estado todo regravado antes de qualquer resposta na tela.
+function aplicarReuniao(card, ligar) {
+    card.reuniao = ligar;
+    if (ligar) {
+        card.reuniaoStatus = 'pendente';
+        if (!card.reuniaoNum) card.reuniaoNum = proximoNumeroDeReuniao();
+    }
+    persistCard(card);
+    setTimeout(() => logAudit(ligar
+        ? `Enviou a tarefa "${card.title}" para Reuniões`
+        : `Tirou a tarefa "${card.title}" de Reuniões`), 0);
+}
+
+// Atualiza na hora todos os botões desta tarefa que estiverem na tela
+// (o do post-it e o do post-it aberto)
+function pintarBotoesDeReuniao(card) {
+    document.querySelectorAll('[data-reuniao-card]').forEach(btn => {
+        if (btn.dataset.reuniaoCard !== card.id) return;
+        btn.classList.toggle('is-on', !!card.reuniao);
+        btn.title = card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões';
+    });
+}
+
 function enviarParaReunioes(cardId) {
     const card = (state.cards || []).find(c => c.id === cardId);
     if (!card || isObserver) return;
-    marcarReuniao(cardId, 'pendente');
-    logAudit(`Enviou a tarefa "${card.title}" para Reuniões`);
-    showToast(`"${card.title}" foi para a aba Reuniões (Pendente).`, 'success');
-    redesenharReunioes();
+    aplicarReuniao(card, true);
+    pintarBotoesDeReuniao(card);
+    showToast(`"${card.title}" foi adicionada às Reuniões.`, 'success');
+    if (document.body.dataset.standaloneReunioes) redesenharReunioes();
 }
 
 function tirarDasReunioes(cardId) {
     const card = (state.cards || []).find(c => c.id === cardId);
     if (!card || isObserver) return;
-    card.reuniao = false;
-    persistCard(card);
-    logAudit(`Tirou a tarefa "${card.title}" de Reuniões`);
-    showToast(`"${card.title}" saiu das Reuniões (continua no quadro).`, 'success');
-    redesenharReunioes();
+    aplicarReuniao(card, false);
+    pintarBotoesDeReuniao(card);
+    showToast(`"${card.title}" foi retirada das Reuniões.`, 'success');
+    if (document.body.dataset.standaloneReunioes) redesenharReunioes();
 }
 
 // Botão de cada tarefa do quadro: manda pra Reuniões ou tira de lá
@@ -9049,7 +9074,7 @@ function buildPostItElement(card) {
                 <h4 class="inline-editable" onclick="event.stopPropagation();" ${isObserver ? '' : `ondblclick="startInlineEditCardTitle(event, '${card.id}')"`}>${escapeHtml(card.title)}</h4>
             </div>
             <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
-                ${isObserver ? '' : `<button class="postit-reuniao-btn ${card.reuniao ? 'is-on' : ''}" title="${card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões'}" onclick="event.stopPropagation(); alternarReuniao('${card.id}')"><i class="fa-solid fa-users"></i></button>`}
+                ${isObserver ? '' : `<button class="postit-reuniao-btn ${card.reuniao ? 'is-on' : ''}" data-reuniao-card="${card.id}" title="${card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões'}" onclick="event.stopPropagation(); alternarReuniao('${card.id}')"><i class="fa-solid fa-users"></i></button>`}
                 <button class="postit-star-btn ${card.starred ? 'is-starred' : ''}" title="Favoritar" onclick="event.stopPropagation(); handleToggleStar('${card.id}')"><i class="fa-solid fa-star"></i></button>
                 <button class="delete-card-btn" onclick="event.stopPropagation(); handleDeleteCard('${card.id}')">&times;</button>
             </div>
@@ -10249,7 +10274,8 @@ function openViewModal(cardId) {
         reuBtn.style.display = isObserver ? 'none' : '';
         reuBtn.classList.toggle('is-on', !!card.reuniao);
         reuBtn.title = card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões';
-        reuBtn.onclick = () => { alternarReuniao(card.id); openViewModal(card.id); };
+        reuBtn.dataset.reuniaoCard = card.id;
+        reuBtn.onclick = () => alternarReuniao(card.id);
     }
 
     const cardLabels = (card.labelIds || []).map(id => state.labels.find(l => l.id === id)).filter(Boolean);
