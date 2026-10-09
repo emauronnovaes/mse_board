@@ -505,6 +505,42 @@
 
     <!-- Modal 3: Visualizar Tarefa em detalhes (leitura grande) -->
     <div id="viewCardModal" class="modal">
+        <!-- Painéis flutuantes ao lado do post-it aberto: arrastáveis pela
+             barra de cima. Ficam FORA do .modal-content de propósito (ele
+             tem rolagem e cortaria o painel). -->
+        <div id="viewCardResumoSection" class="float-panel float-panel-resumo" data-panel="resumo" style="display:none;">
+            <div class="float-panel-handle" title="Arraste pra mover">
+                <span><i class="fa-solid fa-align-left"></i> Resumo</span>
+                <i class="fa-solid fa-grip-lines"></i>
+            </div>
+            <div class="float-panel-body">
+                <p id="viewCardResumo" class="view-resumo"></p>
+            </div>
+        </div>
+
+        <div id="viewEmailPanel" class="float-panel float-panel-email" data-panel="email" style="display:none;">
+            <div class="float-panel-handle email-handle" title="Arraste pra mover">
+                <span><i class="fa-solid fa-envelope"></i> E-mail (rascunho)</span>
+                <span class="email-handle-actions">
+                    <button type="button" id="emailMinBtn" title="Minimizar"><i class="fa-solid fa-minus"></i></button>
+                </span>
+            </div>
+            <div class="email-body" id="emailBodyWrap">
+                <label class="email-row"><span>Para</span>
+                    <input type="text" id="emailTo" list="emailToList" placeholder="Quem vai receber (separe por vírgula)" autocomplete="off">
+                    <datalist id="emailToList"></datalist>
+                </label>
+                <label class="email-row"><span>Assunto</span>
+                    <input type="text" id="emailSubject" placeholder="Assunto">
+                </label>
+                <textarea id="emailText" class="email-text" spellcheck="true"></textarea>
+                <div class="email-footer">
+                    <button type="button" id="emailResetBtn" class="email-gmail-btn" title="Refazer o texto a partir dos dados da tarefa"><i class="fa-solid fa-rotate-left"></i> Refazer texto</button>
+                    <span class="email-hint" id="emailHint">Salvo na tarefa. Nada é enviado.</span>
+                </div>
+            </div>
+        </div>
+
         <div class="modal-content view-modal-content">
             <span class="close-btn" id="closeViewModalBtn">&times;</span>
 
@@ -516,13 +552,6 @@
                     <h2 id="viewCardTitle">Título da Tarefa</h2>
                     <span id="viewCardSticker" class="view-sticker-badge" style="display:none;"></span>
                     <button type="button" id="viewStarBtn" class="postit-star-btn" title="Favoritar" style="font-size:1.3rem;"><i class="fa-solid fa-star"></i></button>
-                </div>
-
-                <!-- Resumo ao lado do título. Só aparece quando a tarefa tem
-                     resumo escrito (ver openViewModal). -->
-                <div id="viewCardResumoSection" class="view-resumo-box" style="display:none;">
-                    <span class="view-resumo-label">Resumo</span>
-                    <p id="viewCardResumo" class="view-resumo"></p>
                 </div>
             </div>
 
