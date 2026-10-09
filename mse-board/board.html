@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=202610091047">
+    <link rel="stylesheet" href="style.css?v=202610091059">
     <link rel="stylesheet" href="sidebar.css">
 </head>
 <body class="board-body">
@@ -508,10 +508,20 @@
         <!-- Painéis flutuantes ao lado do post-it aberto: arrastáveis pela
              barra de cima. Ficam FORA do .modal-content de propósito (ele
              tem rolagem e cortaria o painel). -->
+        <!-- Botõezinhos que abrem os painéis (eles começam fechados). -->
+        <button type="button" id="abrirResumoBtn" class="float-launcher float-launcher-resumo" title="Abrir o resumo" style="display:none; position:fixed; left:0; top:0;">
+            <i class="fa-solid fa-align-left"></i>
+        </button>
+        <button type="button" id="abrirEmailBtn" class="float-launcher float-launcher-email" title="Abrir o e-mail" style="display:none; position:fixed; left:0; top:0;">
+            <i class="fa-solid fa-envelope"></i>
+        </button>
+
         <div id="viewCardResumoSection" class="float-panel float-panel-resumo" data-panel="resumo" style="display:none; position:fixed; left:0; top:0;">
             <div class="float-panel-handle" title="Arraste pra mover">
                 <span><i class="fa-solid fa-align-left"></i> Resumo</span>
-                <i class="fa-solid fa-grip-lines"></i>
+                <span class="email-handle-actions resumo-handle-actions">
+                    <button type="button" id="resumoFecharBtn" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+                </span>
             </div>
             <div class="float-panel-body">
                 <p id="viewCardResumo" class="view-resumo"></p>
@@ -522,7 +532,7 @@
             <div class="float-panel-handle email-handle" title="Arraste pra mover">
                 <span><i class="fa-solid fa-envelope"></i> E-mail (rascunho)</span>
                 <span class="email-handle-actions">
-                    <button type="button" id="emailMinBtn" title="Minimizar"><i class="fa-solid fa-minus"></i></button>
+                    <button type="button" id="emailMinBtn" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
                 </span>
             </div>
             <div class="email-body" id="emailBodyWrap">
@@ -535,7 +545,7 @@
                 </label>
                 <textarea id="emailText" class="email-text" spellcheck="true"></textarea>
                 <div class="email-footer">
-                    <button type="button" id="emailResetBtn" class="email-gmail-btn" title="Refazer o texto a partir dos dados da tarefa"><i class="fa-solid fa-rotate-left"></i> Refazer texto</button>
+                    <button type="button" id="emailResetBtn" class="email-gmail-btn" title="Preencher com os dados da tarefa (título, prazo, checklist...)"><i class="fa-solid fa-rotate-left"></i> Preencher com a tarefa</button>
                     <span class="email-hint" id="emailHint">Salvo na tarefa. Nada é enviado.</span>
                 </div>
             </div>
@@ -1293,6 +1303,6 @@
     <a href="#" class="matheus-admin-access-btn voltar-perfil-btn" id="voltarPerfilBtn" style="display:none;"><i class="fa-solid fa-rotate-left"></i> Voltar</a>
 
     <script src="config.js.php"></script>
-    <script src="script.js?v=202610091047"></script>
+    <script src="script.js?v=202610091059"></script>
 </body>
 </html>

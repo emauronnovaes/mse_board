@@ -6243,7 +6243,7 @@ body.dashboard-only-mode .dashboard-modal-content {
 .email-handle-actions button:hover { background: rgba(255, 255, 255, 0.18); }
 
 .email-body { display: flex; flex-direction: column; }
-.float-panel-email.is-minimized .email-body { display: none; }
+/* (o e-mail não minimiza mais: fecha pelo X e abre pelo botãozinho ao lado do post-it) */
 
 .email-row {
     display: flex;
@@ -6327,3 +6327,26 @@ body.dashboard-only-mode .dashboard-modal-content {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Botõezinhos que abrem os painéis de resumo e e-mail do post-it */
+.float-launcher {
+    z-index: 1100;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-primary);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+.float-launcher:hover { transform: scale(1.08); background: var(--bg); }
+.float-launcher-resumo { color: var(--accent); }
+.float-launcher-email { background: #404040; color: #fff; border-color: #404040; }
+.float-launcher-email:hover { background: #2b2b2b; }
+.resumo-handle-actions button { color: var(--text-muted); }
+.resumo-handle-actions button:hover { background: rgba(0, 0, 0, 0.08); }
