@@ -6575,3 +6575,5 @@ body.dashboard-only-mode .dashboard-modal-content {
    a janela pedida, sem o quadro ao fundo */
 body.modo-so-modal > *:not(.modal):not(script):not(.toast-container) { visibility: hidden; }
 body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; }
+
+.reu-coluna .pend-novo-form { margin: 0 0.7rem 0.4rem; }
