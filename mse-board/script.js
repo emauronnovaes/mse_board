@@ -3028,9 +3028,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             viewCardModal.style.display = 'none';
         });
 
-        window.addEventListener('click', (e) => {
-            if (e.target === viewCardModal) viewCardModal.style.display = 'none';
-        });
+        // De propósito NÃO fecha ao clicar fora do post-it: só o X fecha
+        // (clicar fora sem querer fechava o post-it e os painéis de resumo e e-mail).
 
         setupPaineisFlutuantes();
 
@@ -8889,6 +8888,12 @@ function posicionarPaineisFlutuantes() {
     const salvas = lerPosicoesDosPaineis();
     const gap = 14;
 
+    // Botõezinhos que abrem os painéis: colados nas laterais do post-it.
+    const btnResumo = document.getElementById('abrirResumoBtn');
+    const btnEmail = document.getElementById('abrirEmailBtn');
+    if (btnResumo) aplicarPosicaoDoPainel(btnResumo, r.left - 48 - 8, r.top + 20);
+    if (btnEmail) aplicarPosicaoDoPainel(btnEmail, r.right + 8, r.top + 20);
+
     document.querySelectorAll('#viewCardModal .float-panel').forEach(painel => {
         if (painel.style.display === 'none') return;
         const nome = painel.dataset.panel;
@@ -8972,10 +8977,45 @@ function sugestoesDeDestinatarios(card) {
     return [...emails];
 }
 
+// Os painéis de resumo e e-mail começam FECHADOS toda vez que um post-it é
+// aberto; um botãozinho ao lado do post-it abre cada um, e o X do painel fecha.
+const paineisAbertos = { resumo: false, email: false };
+const PAINEL_IDS = { resumo: 'viewCardResumoSection', email: 'viewEmailPanel' };
+const LANCADOR_IDS = { resumo: 'abrirResumoBtn', email: 'abrirEmailBtn' };
+
+// Mostra cada painel só se estiver aberto, e o botãozinho só se estiver fechado.
+// data-disponivel = 0 quando o painel não faz sentido (ex.: resumo vazio para
+// quem só observa).
+function atualizarPaineis() {
+    Object.keys(PAINEL_IDS).forEach(nome => {
+        const painel = document.getElementById(PAINEL_IDS[nome]);
+        const botao = document.getElementById(LANCADOR_IDS[nome]);
+        if (!painel || !botao) return;
+        const disponivel = painel.dataset.disponivel !== '0';
+        const aberto = disponivel && paineisAbertos[nome];
+        painel.style.display = aberto ? (nome === 'email' ? 'flex' : 'block') : 'none';
+        botao.style.display = disponivel && !aberto ? 'flex' : 'none';
+    });
+    posicionarPaineisFlutuantes();
+}
+
+function abrirPainel(nome) {
+    paineisAbertos[nome] = true;
+    atualizarPaineis();
+    const campo = nome === 'email' ? document.getElementById('emailTo') : null;
+    if (campo && !campo.readOnly) campo.focus();
+}
+
+function fecharPainel(nome) {
+    if (nome === 'email') gravarRascunhoDoEmail(true); // grava o que estava pendente
+    paineisAbertos[nome] = false;
+    atualizarPaineis();
+}
+
 function prepararPainelEmail(card) {
     const painel = document.getElementById('viewEmailPanel');
     if (!painel) return;
-    painel.style.display = 'flex';
+    painel.dataset.disponivel = '1';
 
     // Fecha pendência de gravação do post-it anterior antes de trocar
     gravarRascunhoDoEmail(true);
@@ -8983,9 +9023,11 @@ function prepararPainelEmail(card) {
     emailCardId = card.id;
     const salvo = card.emailDraft;
     const padrao = montarTextoDoEmail(card);
+    // O e-mail começa VAZIO: só traz o texto da tarefa se a pessoa pedir
+    // (botão "Preencher com os dados da tarefa").
     document.getElementById('emailTo').value = salvo ? (salvo.to || '') : '';
-    document.getElementById('emailSubject').value = salvo && salvo.subject != null ? salvo.subject : padrao.subject;
-    document.getElementById('emailText').value = salvo && salvo.text != null ? salvo.text : padrao.text;
+    document.getElementById('emailSubject').value = salvo && salvo.subject != null ? salvo.subject : '';
+    document.getElementById('emailText').value = salvo && salvo.text != null ? salvo.text : '';
 
     document.getElementById('emailToList').innerHTML = sugestoesDeDestinatarios(card)
         .map(e => `<option value="${escapeHtml(e)}"></option>`).join('');
@@ -9010,9 +9052,8 @@ function gravarRascunhoDoEmail(imediato) {
         text: document.getElementById('emailText').value
     };
     const atual = card.emailDraft || null;
-    const padrao = montarTextoDoEmail(card);
-    // Rascunho em branco (sem destinatário e com o texto padrão) não precisa ficar guardado
-    const semNada = !novo.to && novo.subject === padrao.subject && novo.text === padrao.text;
+    // Rascunho em branco (sem destinatário, assunto nem texto) não precisa ficar guardado
+    const semNada = !novo.to && !novo.subject.trim() && !novo.text.trim();
     if (semNada && !atual) return;
     if (atual && atual.to === novo.to && atual.subject === novo.subject && atual.text === novo.text) return;
 
@@ -9034,9 +9075,10 @@ function setupPaineisFlutuantes() {
     const painel = document.getElementById('viewEmailPanel');
     if (!painel) return;
 
-    document.getElementById('emailMinBtn').addEventListener('click', () => {
-        painel.classList.toggle('is-minimized');
-    });
+    document.getElementById('emailMinBtn').addEventListener('click', () => fecharPainel('email'));
+    document.getElementById('resumoFecharBtn').addEventListener('click', () => fecharPainel('resumo'));
+    document.getElementById('abrirEmailBtn').addEventListener('click', () => abrirPainel('email'));
+    document.getElementById('abrirResumoBtn').addEventListener('click', () => abrirPainel('resumo'));
     document.getElementById('emailResetBtn').addEventListener('click', () => {
         const card = (state.cards || []).find(c => c.id === emailCardId);
         if (!card) return;
@@ -9071,18 +9113,20 @@ function renderViewCardResumo(card) {
         // linkifyText já escapa o texto e transforma links em <a> clicáveis
         el.innerHTML = linkifyText(texto);
         el.classList.remove('view-resumo-vazio');
-        section.style.display = 'block';
+        section.dataset.disponivel = '1';
     } else if (!isObserver) {
         // Sem resumo, mas quem está vendo pode escrever: mostra o convite,
         // senão não haveria onde dar o duplo clique pra criar o primeiro.
         el.textContent = 'Sem resumo — dois cliques para escrever';
         el.classList.add('view-resumo-vazio');
-        section.style.display = 'block';
+        section.dataset.disponivel = '1';
     } else {
         el.textContent = '';
         el.classList.remove('view-resumo-vazio');
-        section.style.display = 'none';
+        section.dataset.disponivel = '0';
     }
+    // (quem mostra ou esconde o painel é atualizarPaineis, conforme o estado aberto/fechado)
+    if (typeof atualizarPaineis === 'function') atualizarPaineis();
 
     // Recria o listener a cada render porque o texto (e o card) mudam
     el.ondblclick = isObserver ? null : (e) => startInlineEditCardResumo(e, card.id);
@@ -9741,6 +9785,9 @@ function openViewModal(cardId) {
 
     const modal = document.getElementById('viewCardModal');
     modal.dataset.cardId = cardId;
+    // Resumo e e-mail começam fechados em todo post-it que se abre.
+    paineisAbertos.resumo = false;
+    paineisAbertos.email = false;
 
     const coverEl = document.getElementById('viewCardCover');
     if (card.coverImage) {
@@ -9846,9 +9893,9 @@ function openViewModal(cardId) {
     prepararPainelEmail(card);
 
     modal.style.display = 'flex';
-    // Só dá pra medir o post-it (e cravar os painéis do lado dele) depois
-    // que o modal está visível.
-    posicionarPaineisFlutuantes();
+    // Só dá pra medir o post-it (e cravar os painéis e os botõezinhos do
+    // lado dele) depois que o modal está visível.
+    atualizarPaineis();
 }
 
 function renderViewCommentsList(cardId) {
