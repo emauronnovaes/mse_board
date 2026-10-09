@@ -1676,6 +1676,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // puxar o card da mão de quem está arrastando ou digitando.
         setInterval(async () => {
             if (document.querySelector('.reu-card.is-dragging')) return;
+            if (document.querySelector('.pend-novo-form')) return;
             if (document.querySelector('[contenteditable="true"]')) return;
             if (pendingCardSaves.size > 0) return;
             const frescos = await fetchCardsFromServer();
@@ -3703,6 +3704,66 @@ function abrirTarefaDaReuniao(cardId) {
     location.href = `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}&tarefa=${encodeURIComponent(cardId)}&voltar=reunioes`;
 }
 
+// "+ Novo item": formulário curto no pé da coluna (título + coluna do quadro),
+// igual ao das Pendências por Pessoa. A tarefa é criada no backlog do quadro
+// (raia A Fazer) e já entra na aba, na coluna onde o botão foi clicado. O
+// resto (resumo, checklist, prazo) continua sendo editado no quadro.
+function abrirFormularioDeNovoItemDeReuniao(btn) {
+    const status = btn.dataset.reuNovo;
+    const colunaEl = btn.closest('.reu-coluna');
+    if (!colunaEl || colunaEl.querySelector('.pend-novo-form')) return;
+
+    const pessoas = (state.people || []).filter(p => !p.isDone && p.id !== 'suggestions');
+    if (pessoas.length === 0) {
+        showToast('Crie uma coluna de pessoa no quadro antes de adicionar itens.');
+        return;
+    }
+
+    const form = document.createElement('div');
+    form.className = 'pend-novo-form';
+    form.innerHTML = `
+        <input type="text" class="pend-novo-titulo" placeholder="Título da tarefa" maxlength="200">
+        <select class="pend-novo-pessoa">
+            ${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === reunioesFiltroPessoa ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+        <div class="pend-novo-acoes">
+            <button type="button" class="pend-novo-cancelar">Cancelar</button>
+            <button type="button" class="pend-novo-criar">Criar</button>
+        </div>
+    `;
+    btn.before(form);
+
+    const input = form.querySelector('.pend-novo-titulo');
+    input.focus();
+
+    const criar = () => {
+        const titulo = input.value.trim();
+        if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
+
+        const novoId = addCard({
+            personId: form.querySelector('.pend-novo-pessoa').value,
+            title: titulo,
+            lines: [],
+            color: 'yellow',
+            priority: 'media',
+            dueDate: '',
+            author: currentUserName || 'Desconhecido',
+            attachments: []
+        });
+        if (novoId) marcarReuniao(novoId, status);
+
+        redesenharReunioes();
+        showToast('Item criado.', 'success');
+    };
+
+    form.querySelector('.pend-novo-criar').addEventListener('click', criar);
+    form.querySelector('.pend-novo-cancelar').addEventListener('click', () => form.remove());
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); criar(); }
+        if (e.key === 'Escape') { e.preventDefault(); form.remove(); }
+    });
+}
+
 function abrirNovoItemDeReuniao(status) {
     if (document.getElementById('cardModal')) { openCardModalForCreate({ reuniaoStatus: status }); return; }
     location.href = `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}&novaReuniao=${encodeURIComponent(status)}&voltar=reunioes`;
@@ -3868,7 +3929,7 @@ function renderReunioesView(container) {
     });
 
     container.querySelectorAll('[data-reu-novo]').forEach(btn => {
-        btn.addEventListener('click', () => abrirNovoItemDeReuniao(btn.dataset.reuNovo));
+        btn.addEventListener('click', () => abrirFormularioDeNovoItemDeReuniao(btn));
     });
 
     container.querySelectorAll('.reu-card').forEach(el => {
