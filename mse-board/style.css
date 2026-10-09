@@ -6350,3 +6350,19 @@ body.dashboard-only-mode .dashboard-modal-content {
 .float-launcher-email:hover { background: #2b2b2b; }
 .resumo-handle-actions button { color: var(--text-muted); }
 .resumo-handle-actions button:hover { background: rgba(0, 0, 0, 0.08); }
+
+
+/* Botões que abrem Resumo e E-mail: dentro do post-it, na linha do
+   "Automático (pelo checklist)", logo depois dele */
+.progress-launchers {
+    display: inline-flex;
+    gap: 0.4rem;
+    margin-left: 0.3rem;
+}
+
+.progress-launchers .float-launcher {
+    width: 34px;
+    height: 34px;
+    box-shadow: none;
+    font-size: 0.85rem;
+}
