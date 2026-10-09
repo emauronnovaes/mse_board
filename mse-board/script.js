@@ -2955,9 +2955,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             openPersonModalForCreate();
         });
 
-        const reunioesBtnEl = document.getElementById('reunioesBtn');
-        if (reunioesBtnEl) reunioesBtnEl.addEventListener('click', () => { location.href = urlDeReunioes(); });
-
         document.getElementById('closePersonModalBtn').addEventListener('click', () => {
             personModal.style.display = 'none';
         });
