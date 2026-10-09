@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estatísticas de Entregas — MSE Board</title>
-<link rel="icon" type="image/png" href="https://mseboard.portalmse.com.br/mse-board/logo-mse-circle.png">
+<title>Reuniões — MSE Board</title>
+<link rel="icon" type="image/png" href="logo-mse-circle.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<!-- Reaproveita o MESMO CSS do MSE Board, pra ficar visualmente idêntico -->
-<link rel="stylesheet" href="https://mseboard.portalmse.com.br/mse-board/style.css">
+<!-- Caminho relativo de propósito: as outras páginas soltas apontam pro
+     servidor de produção e por isso não dá pra testá-las no localhost. -->
+<link rel="stylesheet" href="style.css?v=202610091201">
 <style>
-    /* Esse arquivo vive fora do MSE Board — não é um modal, é a própria página */
     body { background-color: var(--bg); min-height: 100vh; }
     html, body { margin: 0; padding: 0; width: 100%; height: auto; min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
     .standalone-page-wrap { width: 100%; margin: 0; padding: 1.2rem 1.5rem 2.5rem; box-sizing: border-box; }
@@ -45,19 +45,19 @@
     #standaloneViewerLabel { font-size: 0.76rem; color: rgba(255, 255, 255, 0.75); }
 </style>
 </head>
-<body data-standalone-dashboard="true">
+<body data-standalone-reunioes="true">
 
     <div class="standalone-topbar">
         <div class="standalone-topbar-brand">
             <a href="https://portalmse.com.br/" title="Voltar ao Portal MSE" class="standalone-logo-link">MSE</a>
-            <span>Estatísticas de Entregas</span>
+            <span>Reuniões</span>
         </div>
         <div class="standalone-nav-links">
             <a href="pendencias.html">Pendências por Pessoa</a>
             <a href="dashboard-entregas.html">Dashboard de Entregas</a>
-            <a href="estatisticas-entregas.html" class="is-current">Estatísticas de Entregas</a>
+            <a href="estatisticas-entregas.html">Estatísticas de Entregas</a>
             <a href="relatorio.html">Relatório</a>
-            <a href="reunioes.html">Reuniões</a>
+            <a href="reunioes.html" class="is-current">Reuniões</a>
         </div>
         <span id="standaloneViewerLabel"></span>
     </div>
@@ -113,94 +113,7 @@
 
 
     <div class="standalone-page-wrap">
-        <div class="dashboard-section">
-            <!-- 1. A manchete primeiro: três números e acabou. -->
-            <div class="est-kpis">
-                <div class="est-kpi">
-                    <span class="est-kpi-label">Entregas concluídas</span>
-                    <span class="est-kpi-value" id="reportTotalDone">0</span>
-                </div>
-                <div class="est-kpi">
-                    <span class="est-kpi-label"><i class="est-key est-key-ontime"></i> No prazo</span>
-                    <span class="est-kpi-value" id="reportOnTimePct">0%</span>
-                </div>
-                <div class="est-kpi">
-                    <span class="est-kpi-label"><i class="est-key est-key-late"></i> Atrasadas</span>
-                    <span class="est-kpi-value" id="reportLatePct">0%</span>
-                </div>
-            </div>
-
-            <!-- 2. Um destaque de cada lado. O ranking completo é a tabela. -->
-            <div class="est-destaques">
-                <div class="est-destaque">
-                    <span class="est-destaque-label">Melhor desempenho</span>
-                    <div id="reportPodiumBest"></div>
-                </div>
-                <div class="est-destaque">
-                    <span class="est-destaque-label">Mais atrasos</span>
-                    <div id="reportPodiumWorst"></div>
-                </div>
-            </div>
-
-            <!-- 3. Filtro logo acima do que ele filtra. -->
-            <div class="dashboard-filter-bar">
-                <div class="dashboard-filter-field">
-                    <label>De</label>
-                    <input type="date" id="reportDateFrom">
-                </div>
-                <div class="dashboard-filter-field">
-                    <label>Até</label>
-                    <input type="date" id="reportDateTo">
-                </div>
-                <button type="button" id="reportClearPeriodBtn" class="dashboard-clear-btn">Limpar período</button>
-                <span class="dashboard-filter-note" id="reportPeriodNote">Todas as entregas registradas</span>
-            </div>
-
-            <!-- 4. Ranking. A legenda existe porque a barra tem duas séries:
-                 identidade nunca pode depender só da cor. -->
-            <div class="est-sec">
-                <span class="est-sec-title">Ranking por responsável</span>
-                <span class="est-legend">
-                    <span class="est-legend-item"><i class="est-key est-key-ontime"></i> No prazo</span>
-                    <span class="est-legend-item"><i class="est-key est-key-late"></i> Atrasadas</span>
-                </span>
-            </div>
-
-            <div id="dashPessoasOcultas" class="dash-ocultos" style="display:none;"></div>
-
-                <div class="dashboard-table-wrap">
-                <table class="dashboard-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Responsável</th>
-                            <th>No prazo</th>
-                            <th>Atrasadas</th>
-                            <th>Total</th>
-                            <th class="est-th-bar">Proporção</th>
-                            <th>% no prazo</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reportByPerson"></tbody>
-                </table>
-            </div>
-
-            <div class="est-sec est-sec-solo">
-                <span class="est-sec-title">Entregas concluídas por período</span>
-                <div class="corner-options">
-                    <button type="button" class="report-period-btn is-current" data-period="day">Dia</button>
-                    <button type="button" class="report-period-btn" data-period="week">Semana</button>
-                    <button type="button" class="report-period-btn" data-period="month">Mês</button>
-                </div>
-            </div>
-
-            <div id="reportChart" class="chart-section"></div>
-
-            <div class="est-acoes">
-                <button type="button" id="exportReportCsvBtn" class="btn-secondary"><i class="fa-solid fa-download"></i> Exportar Excel (CSV)</button>
-            </div>
-
-        </div>
+        <div id="reuPagina"></div>
     </div>
 
     <div id="confirmModal" class="modal">
@@ -217,10 +130,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Configuração da API (mesma do MSE Board) -->
-    <script src="https://mseboard.portalmse.com.br/mse-board/config.js.php"></script>
-    <!-- Mesmo script.js do MSE Board — ele detecta data-standalone-dashboard
-         no <body> acima e só roda a parte de buscar dados + montar o relatório. -->
-    <script src="https://mseboard.portalmse.com.br/mse-board/script.js"></script>
+    <script src="config.js.php"></script>
+    <script src="script.js?v=202610091201"></script>
 </body>
 </html>

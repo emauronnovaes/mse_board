@@ -6569,3 +6569,9 @@ body.dashboard-only-mode .dashboard-modal-content {
 }
 .postit-reuniao-btn:hover { color: var(--accent); }
 .postit-reuniao-btn.is-on { color: var(--accent); }
+
+
+/* Quadro aberto a partir da página de Reuniões (?voltar=reunioes): mostra só
+   a janela pedida, sem o quadro ao fundo */
+body.modo-so-modal > *:not(.modal):not(script):not(.toast-container) { visibility: hidden; }
+body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; }

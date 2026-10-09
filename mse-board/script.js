@@ -1644,6 +1644,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // PÁGINA SOLTA: REUNIÕES
+    // Fora do quadro: herda o login do Portal, busca os dados e desenha só
+    // esta tela. Abrir uma tarefa ou criar um item leva ao quadro e volta.
+    if (document.body.dataset.standaloneReunioes) {
+        await tryInheritLoginFromSso();
+        await loadState();
+
+        let viewerEmail = null;
+        try {
+            const stored = JSON.parse(localStorage.getItem('mse_user'));
+            viewerEmail = stored && stored.name;
+        } catch (e) { /* sem sessão — entra como visitante, só lendo */ }
+        currentUserName = viewerEmail;
+
+        // Só edita quem está cadastrado no quadro e não é Observador
+        const membro = !!(viewerEmail && state.members && state.members[viewerEmail]);
+        isObserver = !membro || getMemberRole(viewerEmail) === 'Observador';
+
+        const viewerLabelEl = document.getElementById('standaloneViewerLabel');
+        if (viewerLabelEl) {
+            viewerLabelEl.textContent = viewerEmail
+                ? `${viewerEmail}${isObserver ? ' (somente leitura)' : ''}`
+                : 'Visitante (somente leitura)';
+        }
+
+        ajustarCabecalhoDoDashboardSolto();
+        redesenharReunioes();
+
+        // Mantém a tela em dia com quem mexe no quadro ao mesmo tempo, sem
+        // puxar o card da mão de quem está arrastando ou digitando.
+        setInterval(async () => {
+            if (document.querySelector('.reu-card.is-dragging')) return;
+            if (document.querySelector('[contenteditable="true"]')) return;
+            if (pendingCardSaves.size > 0) return;
+            const frescos = await fetchCardsFromServer();
+            const pessoas = await fetchPeopleFromServer();
+            if (frescos === null || pessoas === null) return;
+            if (JSON.stringify(frescos) === JSON.stringify(state.cards)
+                && JSON.stringify(pessoas) === JSON.stringify(state.people)) return;
+            state.cards = frescos;
+            state.people = pessoas;
+            redesenharReunioes();
+        }, 8000);
+
+        return;
+    }
+
     // PÁGINA SOLTA: PENDÊNCIAS POR PESSOA
     // Mesmo caminho das outras páginas soltas: herda o login do Portal,
     // busca os dados e desenha só esta tela — sem quadro, sem chat.
@@ -2733,6 +2780,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderGradientPresets();
         renderBoard();
         startAutoRefresh();
+        abrirPedidoDaUrlDeReunioes();
 
         updateDueAlertsBadge();
         const dueAlerts = computeDueAlerts();
@@ -2907,7 +2955,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const reunioesBtnEl = document.getElementById('reunioesBtn');
-        if (reunioesBtnEl) reunioesBtnEl.addEventListener('click', alternarTelaDeReunioes);
+        if (reunioesBtnEl) reunioesBtnEl.addEventListener('click', () => { location.href = urlDeReunioes(); });
 
         document.getElementById('closePersonModalBtn').addEventListener('click', () => {
             personModal.style.display = 'none';
@@ -2923,6 +2971,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // e um botão pra descartar de propósito.
             salvarRascunhoDaTarefa();
             cardModal.style.display = 'none';
+            if (voltarParaReunioes()) location.href = urlDeReunioes();
         });
 
         // Clicar fora fecha o modal de PESSOA (formulário curto, pouco a perder),
@@ -3009,6 +3058,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Salvou de verdade: o rascunho não serve mais pra nada
             descartarRascunhoDaTarefa(editingId);
 
+            if (voltarParaReunioes()) { location.href = urlDeReunioes(); return; }
+
             renderBoard();
             document.getElementById('newCardForm').reset();
             limparAnexosPendentes(); // salvou: o que estava na fila já virou anexo
@@ -3032,6 +3083,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('closeViewModalBtn').addEventListener('click', () => {
             viewCardModal.style.display = 'none';
+            if (voltarParaReunioes()) location.href = urlDeReunioes();
         });
 
         // De propósito NÃO fecha ao clicar fora do post-it: só o X fecha
@@ -3560,7 +3612,7 @@ function renderChatMessages() {
 // ==========================================
 // REUNIÕES (aba do quadro)
 // ==========================================
-// Tela de acompanhamento das pendências de reunião, no formato de quatro
+// Página própria (reunioes.html) de acompanhamento das pendências de reunião, no formato de quatro
 // colunas: Pendente, Backlog, Em Andamento e Concluído. Cada item é uma
 // tarefa NORMAL do quadro marcada como "reunião" (card.reuniao) e com um
 // status só da reunião (card.reuniaoStatus) — mexer no status aqui não muda a
@@ -3581,7 +3633,6 @@ const REUNIAO_COLUNAS = [
 
 let reunioesFiltroPessoa = '';
 let criandoParaReuniao = null;   // status da coluna onde clicaram em "+ Novo item"
-let viewAntesDeReunioes = 'kanban';
 
 function statusDaReuniao(card) {
     return REUNIAO_COLUNAS.some(c => c.key === card.reuniaoStatus) ? card.reuniaoStatus : 'pendente';
@@ -3610,7 +3661,7 @@ function enviarParaReunioes(cardId) {
     marcarReuniao(cardId, 'pendente');
     logAudit(`Enviou a tarefa "${card.title}" para Reuniões`);
     showToast(`"${card.title}" foi para a aba Reuniões (Pendente).`, 'success');
-    renderBoard();
+    redesenharReunioes();
 }
 
 function tirarDasReunioes(cardId) {
@@ -3620,7 +3671,7 @@ function tirarDasReunioes(cardId) {
     persistCard(card);
     logAudit(`Tirou a tarefa "${card.title}" de Reuniões`);
     showToast(`"${card.title}" saiu das Reuniões (continua no quadro).`, 'success');
-    renderBoard();
+    redesenharReunioes();
 }
 
 // Botão de cada tarefa do quadro: manda pra Reuniões ou tira de lá
@@ -3630,25 +3681,47 @@ function alternarReuniao(cardId) {
     if (card.reuniao) tirarDasReunioes(cardId); else enviarParaReunioes(cardId);
 }
 
-function alternarTelaDeReunioes() {
-    if (currentView === 'reunioes') {
-        currentView = viewAntesDeReunioes || 'kanban';
-    } else {
-        viewAntesDeReunioes = currentView;
-        currentView = 'reunioes';
-    }
-    renderBoard();
+// A tela de Reuniões é uma página própria (reunioes.html), fora do quadro.
+function urlDeReunioes() {
+    return `reunioes.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}`;
 }
 
-// Texto/botão do topo conforme a tela atual
-function atualizarBotaoDeReunioes() {
-    const btn = document.getElementById('reunioesBtn');
-    if (!btn) return;
-    const aberta = currentView === 'reunioes';
-    btn.classList.toggle('is-active', aberta);
-    btn.innerHTML = aberta
-        ? '<i class="fa-solid fa-arrow-left"></i> Voltar ao quadro'
-        : '<i class="fa-solid fa-users"></i> Reuniões';
+// Quem chamou pelo quadro redesenha o quadro; na página própria, a tela.
+function redesenharReunioes() {
+    if (document.body.dataset.standaloneReunioes) {
+        renderReunioesView(document.getElementById('reuPagina'));
+    } else {
+        redesenharReunioes();
+    }
+}
+
+// Na página de Reuniões não existem os modais do quadro: abrir uma tarefa ou
+// criar um item leva ao quadro, que abre direto a tela certa e volta pra cá
+// quando termina (?voltar=reunioes).
+function abrirTarefaDaReuniao(cardId) {
+    if (document.getElementById('viewCardModal')) { openViewModal(cardId); return; }
+    location.href = `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}&tarefa=${encodeURIComponent(cardId)}&voltar=reunioes`;
+}
+
+function abrirNovoItemDeReuniao(status) {
+    if (document.getElementById('cardModal')) { openCardModalForCreate({ reuniaoStatus: status }); return; }
+    location.href = `board.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}&novaReuniao=${encodeURIComponent(status)}&voltar=reunioes`;
+}
+
+function voltarParaReunioes() {
+    return new URLSearchParams(location.search).get('voltar') === 'reunioes';
+}
+
+// Quadro aberto a partir da página de Reuniões: abre a tela pedida na URL
+function abrirPedidoDaUrlDeReunioes() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('voltar') !== 'reunioes') return;
+    document.body.classList.add('modo-so-modal');
+    const nova = params.get('novaReuniao');
+    const tarefa = params.get('tarefa');
+    if (nova && REUNIAO_COLUNAS.some(col => col.key === nova)) openCardModalForCreate({ reuniaoStatus: nova });
+    else if (tarefa && (state.cards || []).some(c => c.id === tarefa)) openViewModal(tarefa);
+    else location.href = urlDeReunioes(); // pedido que não existe mais
 }
 
 // Edição no próprio lugar (clique no texto). Enter salva o título; nos
@@ -3675,7 +3748,7 @@ function editarTextoDaReuniao(el, valorAtual, aoSalvar, multilinha) {
             const novo = el.innerText.replace(/ /g, ' ').trim();
             if (novo !== (valorAtual || '')) aoSalvar(novo);
         }
-        renderBoard();
+        redesenharReunioes();
     };
     const aoSair = () => terminar(true);
     const aoTecla = (e) => {
@@ -3692,8 +3765,6 @@ function editarTextoDaReuniao(el, valorAtual, aoSalvar, multilinha) {
 }
 
 function renderReunioesView(container) {
-    atualizarBotaoDeReunioes();
-
     const todos = cardsDeReuniao();
     const nomeDaPessoa = (id) => ((state.people || []).find(p => p.id === id) || {}).name || '—';
 
@@ -3793,11 +3864,11 @@ function renderReunioesView(container) {
 
     container.querySelector('#reuFiltro').addEventListener('change', (e) => {
         reunioesFiltroPessoa = e.target.value;
-        renderBoard();
+        redesenharReunioes();
     });
 
     container.querySelectorAll('[data-reu-novo]').forEach(btn => {
-        btn.addEventListener('click', () => openCardModalForCreate({ reuniaoStatus: btn.dataset.reuNovo }));
+        btn.addEventListener('click', () => abrirNovoItemDeReuniao(btn.dataset.reuNovo));
     });
 
     container.querySelectorAll('.reu-card').forEach(el => {
@@ -3805,7 +3876,7 @@ function renderReunioesView(container) {
         const card = state.cards.find(c => c.id === id);
         if (!card) return;
 
-        el.querySelector('[data-reu-abrir]').addEventListener('click', () => openViewModal(id));
+        el.querySelector('[data-reu-abrir]').addEventListener('click', () => abrirTarefaDaReuniao(id));
         const tirar = el.querySelector('[data-reu-tirar]');
         if (tirar) tirar.addEventListener('click', () => tirarDasReunioes(id));
 
@@ -3813,7 +3884,7 @@ function renderReunioesView(container) {
             card.reuniaoStatus = e.target.value;
             persistCard(card);
             logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === e.target.value).label}`);
-            renderBoard();
+            redesenharReunioes();
         });
 
         const campos = {
@@ -3849,7 +3920,7 @@ function renderReunioesView(container) {
                 card.reuniaoStatus = colEl.dataset.status;
                 persistCard(card);
                 logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === colEl.dataset.status).label}`);
-                renderBoard();
+                redesenharReunioes();
             });
         });
     }
@@ -7876,7 +7947,6 @@ function buildColunaDeRaia(person, lane) {
 
 function renderBoard() {
     populateAssigneeFilter();
-    atualizarBotaoDeReunioes();
     const grid = document.getElementById('peopleGrid');
     const altContainer = document.getElementById('alternateViewContainer');
 
@@ -7887,7 +7957,6 @@ function renderBoard() {
         if (currentView === 'table') renderTableView(altContainer);
         else if (currentView === 'timeline') renderTimelineView(altContainer);
         else if (currentView === 'calendar') renderCalendarView(altContainer);
-        else if (currentView === 'reunioes') renderReunioesView(altContainer);
 
         updateArchivedCount();
         return;
