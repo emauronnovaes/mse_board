@@ -2906,6 +2906,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             openPersonModalForCreate();
         });
 
+        const reunioesBtnEl = document.getElementById('reunioesBtn');
+        if (reunioesBtnEl) reunioesBtnEl.addEventListener('click', alternarTelaDeReunioes);
+
         document.getElementById('closePersonModalBtn').addEventListener('click', () => {
             personModal.style.display = 'none';
         });
@@ -2998,7 +3001,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (editingId) {
                 await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
             } else {
-                await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                if (criandoParaReuniao && novoCardId) marcarReuniao(novoCardId, criandoParaReuniao);
+                criandoParaReuniao = null;
             }
 
             // Salvou de verdade: o rascunho não serve mais pra nada
@@ -3550,6 +3555,304 @@ function renderChatMessages() {
     }).join('');
 
     container.scrollTop = container.scrollHeight;
+}
+
+// ==========================================
+// REUNIÕES (aba do quadro)
+// ==========================================
+// Tela de acompanhamento das pendências de reunião, no formato de quatro
+// colunas: Pendente, Backlog, Em Andamento e Concluído. Cada item é uma
+// tarefa NORMAL do quadro marcada como "reunião" (card.reuniao) e com um
+// status só da reunião (card.reuniaoStatus) — mexer no status aqui não muda a
+// raia da tarefa no quadro, e vice-versa.
+//
+//  - "+ Novo item" abre a mesma tela de criar tarefa do quadro; a tarefa
+//    nasce no backlog do quadro e já entra nesta aba, na coluna escolhida.
+//  - O botão de pessoas em cada tarefa do quadro manda ela pra esta aba
+//    (entra como Pendente); clicar de novo tira.
+//  - Tirar das reuniões NÃO apaga a tarefa.
+
+const REUNIAO_COLUNAS = [
+    { key: 'pendente', label: 'Pendente', cor: '#d23b3b' },
+    { key: 'backlog', label: 'Backlog', cor: '#b8860b' },
+    { key: 'andamento', label: 'Em Andamento', cor: '#2563eb' },
+    { key: 'concluido', label: 'Concluído', cor: '#1f9d57' }
+];
+
+let reunioesFiltroPessoa = '';
+let criandoParaReuniao = null;   // status da coluna onde clicaram em "+ Novo item"
+let viewAntesDeReunioes = 'kanban';
+
+function statusDaReuniao(card) {
+    return REUNIAO_COLUNAS.some(c => c.key === card.reuniaoStatus) ? card.reuniaoStatus : 'pendente';
+}
+
+function cardsDeReuniao() {
+    return (state.cards || []).filter(c => c.reuniao && !c.archived && c.personId !== 'suggestions');
+}
+
+function proximoNumeroDeReuniao() {
+    return (state.cards || []).reduce((max, c) => Math.max(max, c.reuniaoNum || 0), 0) + 1;
+}
+
+function marcarReuniao(cardId, status) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+    card.reuniao = true;
+    card.reuniaoStatus = status || 'pendente';
+    if (!card.reuniaoNum) card.reuniaoNum = proximoNumeroDeReuniao();
+    persistCard(card);
+}
+
+function enviarParaReunioes(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+    marcarReuniao(cardId, 'pendente');
+    logAudit(`Enviou a tarefa "${card.title}" para Reuniões`);
+    showToast(`"${card.title}" foi para a aba Reuniões (Pendente).`, 'success');
+    renderBoard();
+}
+
+function tirarDasReunioes(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+    card.reuniao = false;
+    persistCard(card);
+    logAudit(`Tirou a tarefa "${card.title}" de Reuniões`);
+    showToast(`"${card.title}" saiu das Reuniões (continua no quadro).`, 'success');
+    renderBoard();
+}
+
+// Botão de cada tarefa do quadro: manda pra Reuniões ou tira de lá
+function alternarReuniao(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+    if (card.reuniao) tirarDasReunioes(cardId); else enviarParaReunioes(cardId);
+}
+
+function alternarTelaDeReunioes() {
+    if (currentView === 'reunioes') {
+        currentView = viewAntesDeReunioes || 'kanban';
+    } else {
+        viewAntesDeReunioes = currentView;
+        currentView = 'reunioes';
+    }
+    renderBoard();
+}
+
+// Texto/botão do topo conforme a tela atual
+function atualizarBotaoDeReunioes() {
+    const btn = document.getElementById('reunioesBtn');
+    if (!btn) return;
+    const aberta = currentView === 'reunioes';
+    btn.classList.toggle('is-active', aberta);
+    btn.innerHTML = aberta
+        ? '<i class="fa-solid fa-arrow-left"></i> Voltar ao quadro'
+        : '<i class="fa-solid fa-users"></i> Reuniões';
+}
+
+// Edição no próprio lugar (clique no texto). Enter salva o título; nos
+// campos de várias linhas, Enter quebra linha e clicar fora salva. Esc cancela.
+function editarTextoDaReuniao(el, valorAtual, aoSalvar, multilinha) {
+    if (isObserver || el.isContentEditable) return;
+    el.textContent = valorAtual || '';
+    el.contentEditable = 'true';
+    el.classList.add('is-editing');
+    el.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const terminar = (salvar) => {
+        el.removeEventListener('blur', aoSair);
+        el.removeEventListener('keydown', aoTecla);
+        el.removeEventListener('paste', aoColar);
+        el.contentEditable = 'false';
+        el.classList.remove('is-editing');
+        if (salvar) {
+            const novo = el.innerText.replace(/ /g, ' ').trim();
+            if (novo !== (valorAtual || '')) aoSalvar(novo);
+        }
+        renderBoard();
+    };
+    const aoSair = () => terminar(true);
+    const aoTecla = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); terminar(false); }
+        else if (e.key === 'Enter' && !multilinha) { e.preventDefault(); terminar(true); }
+    };
+    const aoColar = (e) => {
+        e.preventDefault();
+        document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+    };
+    el.addEventListener('blur', aoSair);
+    el.addEventListener('keydown', aoTecla);
+    el.addEventListener('paste', aoColar);
+}
+
+function renderReunioesView(container) {
+    atualizarBotaoDeReunioes();
+
+    const todos = cardsDeReuniao();
+    const nomeDaPessoa = (id) => ((state.people || []).find(p => p.id === id) || {}).name || '—';
+
+    // Colunas (pessoas) que têm item de reunião — alimentam o filtro e o gráfico
+    const pessoasIds = [];
+    todos.forEach(c => { if (!pessoasIds.includes(c.personId)) pessoasIds.push(c.personId); });
+    if (reunioesFiltroPessoa && !pessoasIds.includes(reunioesFiltroPessoa)) reunioesFiltroPessoa = '';
+
+    const visiveis = reunioesFiltroPessoa ? todos.filter(c => c.personId === reunioesFiltroPessoa) : todos;
+    const porStatus = {};
+    REUNIAO_COLUNAS.forEach(col => { porStatus[col.key] = visiveis.filter(c => statusDaReuniao(c) === col.key); });
+
+    const total = visiveis.length;
+    const concl = porStatus.concluido.length;
+    const pct = total ? Math.round((concl / total) * 100) : 0;
+
+    const kpis = [
+        { rotulo: 'Total', valor: total, cor: '#16243c' },
+        { rotulo: 'Concluído', valor: concl, cor: '#1f9d57' },
+        { rotulo: 'Backlog', valor: porStatus.backlog.length, cor: '#b8860b' },
+        { rotulo: 'Em andamento', valor: porStatus.andamento.length, cor: '#2563eb' },
+        { rotulo: 'Pendente', valor: porStatus.pendente.length, cor: '#d23b3b' },
+        { rotulo: '% Concluído', valor: pct + '%', cor: '#1f3a63' }
+    ].map(k => `
+        <div class="reu-kpi" style="border-left-color:${k.cor}">
+            <span class="reu-kpi-rotulo">${k.rotulo}</span>
+            <span class="reu-kpi-valor" style="color:${k.cor}">${k.valor}</span>
+        </div>`).join('');
+
+    // Evolução por coluna do quadro
+    const linhasGrafico = pessoasIds.map(pid => {
+        const cs = todos.filter(c => c.personId === pid);
+        const n = cs.length;
+        const cont = key => cs.filter(c => statusDaReuniao(c) === key).length;
+        const p = Math.round((cont('concluido') / n) * 100);
+        const seg = key => `<span class="reu-seg reu-seg-${key}" style="width:${(cont(key) / n) * 100}%" title="${REUNIAO_COLUNAS.find(c => c.key === key).label}: ${cont(key)}"></span>`;
+        return `
+            <div class="reu-grafico-linha">
+                <span class="reu-grafico-nome">${escapeHtml(nomeDaPessoa(pid))}</span>
+                <span class="reu-grafico-pct">${p}%</span>
+                <span class="reu-grafico-barra">${seg('concluido')}${seg('andamento')}${seg('backlog')}${seg('pendente')}</span>
+            </div>`;
+    }).join('');
+
+    const legenda = [['concluido', 'Concluído'], ['andamento', 'Em Andamento'], ['backlog', 'Backlog'], ['pendente', 'Pendente']]
+        .map(([k, l]) => `<span class="reu-legenda-item"><i class="reu-seg-${k}"></i> ${l}</span>`).join('');
+
+    const opcoesFiltro = ['<option value="">Todas as colunas</option>']
+        .concat(pessoasIds.map(pid => `<option value="${escapeHtml(pid)}" ${pid === reunioesFiltroPessoa ? 'selected' : ''}>${escapeHtml(nomeDaPessoa(pid))}</option>`)).join('');
+
+    const colunasHtml = REUNIAO_COLUNAS.map(col => {
+        const itens = porStatus[col.key].slice().sort((a, b) => (a.reuniaoNum || 0) - (b.reuniaoNum || 0));
+        const cards = itens.map(c => {
+            const opcoes = REUNIAO_COLUNAS.map(o => `<option value="${o.key}" ${o.key === col.key ? 'selected' : ''}>${o.label}</option>`).join('');
+            return `
+            <div class="reu-card reu-card-${col.key}" data-card-id="${escapeHtml(c.id)}" ${isObserver ? '' : 'draggable="true"'}>
+                <div class="reu-card-topo">
+                    <span class="reu-card-num">#${c.reuniaoNum || '?'} · ${escapeHtml(nomeDaPessoa(c.personId))}</span>
+                    <span class="reu-card-acoes">
+                        <button type="button" class="reu-icone" data-reu-abrir title="Abrir a tarefa"><i class="fa-solid fa-up-right-from-square"></i></button>
+                        ${isObserver ? '' : '<button type="button" class="reu-icone" data-reu-tirar title="Tirar das reuniões (a tarefa continua no quadro)">&times;</button>'}
+                    </span>
+                </div>
+                <div class="reu-card-titulo" data-reu-campo="titulo">${escapeHtml(c.title)}</div>
+                <div class="reu-card-detalhe ${(c.resumo || '').trim() ? '' : 'is-vazio'}" data-reu-campo="resumo">${(c.resumo || '').trim() ? escapeHtml(c.resumo) : 'Adicionar detalhe...'}</div>
+                <div class="reu-card-obs"><b>Obs:</b> <span class="${(c.observacao || '').trim() ? '' : 'is-vazio'}" data-reu-campo="observacao">${(c.observacao || '').trim() ? escapeHtml(c.observacao) : 'adicionar observação...'}</span></div>
+                <div class="reu-card-rodape">
+                    <select class="reu-status" ${isObserver ? 'disabled' : ''}>${opcoes}</select>
+                </div>
+            </div>`;
+        }).join('');
+        return `
+        <section class="reu-coluna reu-coluna-${col.key}" data-status="${col.key}">
+            <header class="reu-coluna-cab"><span><i class="reu-ponto" style="background:${col.cor}"></i> ${col.label}</span><span class="reu-contagem">${itens.length}</span></header>
+            <div class="reu-coluna-lista">${cards}</div>
+            ${isObserver ? '' : `<button type="button" class="reu-novo" data-reu-novo="${col.key}">+ Novo item</button>`}
+        </section>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="reu-wrap">
+            <div class="reu-topo">
+                <div>
+                    <h2><i class="fa-solid fa-users"></i> Reuniões — Pendências</h2>
+                    <p>${total} item(ns) · clique em qualquer texto para editar, arraste os cards entre colunas</p>
+                </div>
+                <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
+            </div>
+            <div class="reu-kpis">${kpis}</div>
+            <div class="reu-grafico">
+                <h3>Evolução por coluna</h3>
+                <div class="reu-legenda">${legenda}</div>
+                ${linhasGrafico || '<p class="reu-vazio">Nenhum item nas reuniões ainda. Use "+ Novo item" ou o botão de pessoas numa tarefa do quadro.</p>'}
+            </div>
+            <div class="reu-colunas">${colunasHtml}</div>
+        </div>`;
+
+    container.querySelector('#reuFiltro').addEventListener('change', (e) => {
+        reunioesFiltroPessoa = e.target.value;
+        renderBoard();
+    });
+
+    container.querySelectorAll('[data-reu-novo]').forEach(btn => {
+        btn.addEventListener('click', () => openCardModalForCreate({ reuniaoStatus: btn.dataset.reuNovo }));
+    });
+
+    container.querySelectorAll('.reu-card').forEach(el => {
+        const id = el.dataset.cardId;
+        const card = state.cards.find(c => c.id === id);
+        if (!card) return;
+
+        el.querySelector('[data-reu-abrir]').addEventListener('click', () => openViewModal(id));
+        const tirar = el.querySelector('[data-reu-tirar]');
+        if (tirar) tirar.addEventListener('click', () => tirarDasReunioes(id));
+
+        el.querySelector('.reu-status').addEventListener('change', (e) => {
+            card.reuniaoStatus = e.target.value;
+            persistCard(card);
+            logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === e.target.value).label}`);
+            renderBoard();
+        });
+
+        const campos = {
+            titulo: [card.title, (v) => { if (v) { card.title = v; persistCard(card); logAudit(`Reuniões: renomeou a tarefa "${v}"`); } }, false],
+            resumo: [card.resumo, (v) => { card.resumo = v; persistCard(card); }, true],
+            observacao: [card.observacao, (v) => { card.observacao = v; persistCard(card); }, true]
+        };
+        el.querySelectorAll('[data-reu-campo]').forEach(campo => {
+            const [valor, salvar, multi] = campos[campo.dataset.reuCampo];
+            campo.addEventListener('click', () => editarTextoDaReuniao(campo, valor, salvar, multi));
+        });
+
+        if (!isObserver) {
+            el.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', 'reu:' + id);
+                el.classList.add('is-dragging');
+            });
+            el.addEventListener('dragend', () => el.classList.remove('is-dragging'));
+        }
+    });
+
+    if (!isObserver) {
+        container.querySelectorAll('.reu-coluna').forEach(colEl => {
+            colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.classList.add('is-drop'); });
+            colEl.addEventListener('dragleave', (e) => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove('is-drop'); });
+            colEl.addEventListener('drop', (e) => {
+                e.preventDefault();
+                colEl.classList.remove('is-drop');
+                const dado = e.dataTransfer.getData('text/plain') || '';
+                if (!dado.startsWith('reu:')) return;
+                const card = state.cards.find(c => c.id === dado.slice(4));
+                if (!card || statusDaReuniao(card) === colEl.dataset.status) return;
+                card.reuniaoStatus = colEl.dataset.status;
+                persistCard(card);
+                logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === colEl.dataset.status).label}`);
+                renderBoard();
+            });
+        });
+    }
 }
 
 // ==========================================
@@ -7573,6 +7876,7 @@ function buildColunaDeRaia(person, lane) {
 
 function renderBoard() {
     populateAssigneeFilter();
+    atualizarBotaoDeReunioes();
     const grid = document.getElementById('peopleGrid');
     const altContainer = document.getElementById('alternateViewContainer');
 
@@ -7583,6 +7887,7 @@ function renderBoard() {
         if (currentView === 'table') renderTableView(altContainer);
         else if (currentView === 'timeline') renderTimelineView(altContainer);
         else if (currentView === 'calendar') renderCalendarView(altContainer);
+        else if (currentView === 'reunioes') renderReunioesView(altContainer);
 
         updateArchivedCount();
         return;
@@ -8617,6 +8922,7 @@ function buildPostItElement(card) {
                 <h4 class="inline-editable" onclick="event.stopPropagation();" ${isObserver ? '' : `ondblclick="startInlineEditCardTitle(event, '${card.id}')"`}>${escapeHtml(card.title)}</h4>
             </div>
             <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
+                ${isObserver ? '' : `<button class="postit-reuniao-btn ${card.reuniao ? 'is-on' : ''}" title="${card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões'}" onclick="event.stopPropagation(); alternarReuniao('${card.id}')"><i class="fa-solid fa-users"></i></button>`}
                 <button class="postit-star-btn ${card.starred ? 'is-starred' : ''}" title="Favoritar" onclick="event.stopPropagation(); handleToggleStar('${card.id}')"><i class="fa-solid fa-star"></i></button>
                 <button class="delete-card-btn" onclick="event.stopPropagation(); handleDeleteCard('${card.id}')">&times;</button>
             </div>
@@ -9712,8 +10018,13 @@ function ligarRascunhoAutomatico() {
     }
 }
 
-function openCardModalForCreate() {
-    document.getElementById('cardModalTitle').innerHTML = '<i class="fa-solid fa-thumbtack"></i> Criar Nova Tarefa';
+function openCardModalForCreate(opcoes) {
+    // Aberto pelo "+ Novo item" da aba Reuniões: a tarefa criada entra lá, na coluna clicada
+    criandoParaReuniao = (opcoes && opcoes.reuniaoStatus) || null;
+    const colunaReuniao = REUNIAO_COLUNAS.find(col => col.key === criandoParaReuniao);
+    document.getElementById('cardModalTitle').innerHTML = colunaReuniao
+        ? `<i class="fa-solid fa-users"></i> Novo item de Reunião (${colunaReuniao.label})`
+        : '<i class="fa-solid fa-thumbtack"></i> Criar Nova Tarefa';
     document.getElementById('cardFormSubmitBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar Tarefa';
     document.getElementById('editingCardId').value = '';
     document.getElementById('newCardForm').reset();
@@ -9805,6 +10116,14 @@ function openViewModal(cardId) {
         starBtn.classList.toggle('is-starred');
         renderBoard();
     };
+
+    const reuBtn = document.getElementById('viewReuniaoBtn');
+    if (reuBtn) {
+        reuBtn.style.display = isObserver ? 'none' : '';
+        reuBtn.classList.toggle('is-on', !!card.reuniao);
+        reuBtn.title = card.reuniao ? 'Tirar das Reuniões' : 'Enviar para Reuniões';
+        reuBtn.onclick = () => { alternarReuniao(card.id); openViewModal(card.id); };
+    }
 
     const cardLabels = (card.labelIds || []).map(id => state.labels.find(l => l.id === id)).filter(Boolean);
     document.getElementById('viewCardLabels').innerHTML = cardLabels.map(l =>
