@@ -6567,8 +6567,8 @@ body.dashboard-only-mode .dashboard-modal-content {
     font-size: 0.82rem;
     padding: 0 0.15rem;
 }
-.postit-reuniao-btn:hover { color: var(--accent); }
-.postit-reuniao-btn.is-on { color: var(--accent); }
+.postit-reuniao-btn:hover { color: var(--red); }
+.postit-reuniao-btn.is-on { color: var(--red); }
 
 
 /* Quadro aberto a partir da página de Reuniões (?voltar=reunioes): mostra só
