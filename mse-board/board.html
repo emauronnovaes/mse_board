@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=202610091128">
+    <link rel="stylesheet" href="style.css?v=202610091152">
     <link rel="stylesheet" href="sidebar.css">
 </head>
 <body class="board-body">
@@ -288,6 +288,7 @@
         <section class="board-actions board-actions-compact" id="boardActionsContent">
             <div class="action-buttons-group">
                 <button id="addPersonBtn" class="btn-secondary"><i class="fa-solid fa-user-plus"></i> Adicionar Pessoa</button>
+                <button id="reunioesBtn" class="btn-secondary" title="Pendências de reunião: Pendente, Backlog, Em Andamento e Concluído"><i class="fa-solid fa-users"></i> Reuniões</button>
                 <button id="addMembersBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-users"></i> Adicionar Membros</button>
                 <button id="deletedHistoryBtn" class="btn-secondary" style="display:none;" title="Tarefas excluídas — dá pra restaurar"><i class="fa-solid fa-clock-rotate-left"></i> Excluídos</button>
                 <!-- Só aparece no quadro de Planejamento (ver setupTarefasRecorrentes),
@@ -538,6 +539,7 @@
                     <h2 id="viewCardTitle">Título da Tarefa</h2>
                     <span id="viewCardSticker" class="view-sticker-badge" style="display:none;"></span>
                     <button type="button" id="viewStarBtn" class="postit-star-btn" title="Favoritar" style="font-size:1.3rem;"><i class="fa-solid fa-star"></i></button>
+                    <button type="button" id="viewReuniaoBtn" class="postit-reuniao-btn" title="Enviar para Reuniões" style="font-size:1.15rem;"><i class="fa-solid fa-users"></i></button>
                 </div>
             </div>
 
@@ -1285,6 +1287,6 @@
     <a href="#" class="matheus-admin-access-btn voltar-perfil-btn" id="voltarPerfilBtn" style="display:none;"><i class="fa-solid fa-rotate-left"></i> Voltar</a>
 
     <script src="config.js.php"></script>
-    <script src="script.js?v=202610091128"></script>
+    <script src="script.js?v=202610091152"></script>
 </body>
 </html>

@@ -75,6 +75,9 @@ try {
             'labelIds' => json_decode($r['label_ids'] ?? '[]', true) ?? [],
             'customValues' => json_decode($r['custom_values'] ?? '{}', true) ?? (object)[],
             'emailDraft' => !empty($r['email_draft']) ? json_decode($r['email_draft'], true) : null,
+            'reuniao' => !empty($r['reuniao']),
+            'reuniaoStatus' => $r['reuniao_status'] ?? null,
+            'reuniaoNum' => isset($r['reuniao_num']) ? (int) $r['reuniao_num'] : null,
             'createdAt' => $r['created_at'] !== null ? (int) $r['created_at'] : null,
             'completedAt' => $r['completed_at'] !== null ? (int) $r['completed_at'] : null,
             'enteredLaneAt' => $enteredLaneAt[$laneKey] ?? null

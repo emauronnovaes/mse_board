@@ -47,14 +47,22 @@ try {
         'Field'
     );
 
-    // Rascunho de e-mail da tarefa (destinatário + texto): coluna nova. Se o
-    // banco ainda não tem, cria agora (ALTER faz commit implícito, por isso
-    // vem antes de qualquer transação).
-    if (!in_array('email_draft', $existingColumns, true)) {
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN email_draft TEXT NULL");
-            $existingColumns[] = 'email_draft';
-        } catch (Throwable $e) { /* sem a coluna, o rascunho só não é gravado */ }
+    // Colunas novas (rascunho de e-mail e aba de Reuniões). Se o banco ainda
+    // não tem, cria agora — o ALTER faz commit implícito, por isso vem antes
+    // de qualquer transação. Sem a coluna, o campo só deixa de ser gravado.
+    $colunasNovas = [
+        'email_draft'    => 'TEXT NULL',
+        'reuniao'        => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'reuniao_status' => 'VARCHAR(20) NULL',
+        'reuniao_num'    => 'INT NULL'
+    ];
+    foreach ($colunasNovas as $nomeCol => $definicao) {
+        if (!in_array($nomeCol, $existingColumns, true)) {
+            try {
+                $pdo->exec("ALTER TABLE cards ADD COLUMN $nomeCol $definicao");
+                $existingColumns[] = $nomeCol;
+            } catch (Throwable $e) { /* segue sem a coluna */ }
+        }
     }
 
     // Candidatos: nome_da_coluna => valor a gravar. Cobre tanto os campos
@@ -88,6 +96,9 @@ try {
         'label_ids'       => json_encode($c['labelIds'] ?? []),
         'custom_values'   => json_encode($c['customValues'] ?? (object)[]),
         'email_draft'     => !empty($c['emailDraft']) ? json_encode($c['emailDraft'], JSON_UNESCAPED_UNICODE) : null,
+        'reuniao'         => !empty($c['reuniao']) ? 1 : 0,
+        'reuniao_status'  => $c['reuniaoStatus'] ?? null,
+        'reuniao_num'     => isset($c['reuniaoNum']) ? (int) $c['reuniaoNum'] : null,
         'created_at'      => $c['createdAt'] ?? round(microtime(true) * 1000),
         'completed_at'    => $c['completedAt'] ?? null
     ];
