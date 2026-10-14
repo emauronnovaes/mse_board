@@ -6672,3 +6672,34 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 .reu-edit-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .reu-edit-deptos { max-height: 170px; overflow-y: auto; }
 .reu-card-edit .pend-novo-acoes { margin-top: 0.5rem; }
+
+/* Reuniões: filtros por departamento e por atribuição */
+.reu-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+}
+.reu-filtro-campo { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.72rem; font-weight: 600; opacity: 0.9; }
+.reu-filtro-campo select {
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.18));
+    font-size: 0.85rem;
+    min-width: 230px;
+    background: #fff;
+    color: inherit;
+}
+.reu-filtro-limpar {
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.18));
+    background: transparent;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.reu-filtro-limpar:hover { background: rgba(0, 0, 0, 0.06); }
+.reu-card-atrib { font-size: 0.74rem; margin: 0.25rem 0; opacity: 0.85; }
+.reu-card-atrib i { margin-right: 0.25rem; }

@@ -3641,6 +3641,7 @@ const DEPARTAMENTOS_REUNIAO = [
 ];
 
 let reunioesFiltroDepto = '';        // '' = Todos
+let reunioesFiltroAtribuido = '';    // '' = Todos | '__sem__' = sem atribuição | nome de quem está atribuído
 let reunioesEditando = null;         // id do card em edição completa na aba Reuniões
 let reunioesDeptoAberto = null;      // id do card com o seletor de departamentos aberto
 
@@ -3962,10 +3963,23 @@ function ligarEdicaoDoCard(el, card) {
 
 function renderReunioesView(container) {
     const todosSemFiltro = cardsDeReuniao();
-    // Só departamentos que aparecem em algum item entram na linha de filtro
-    const deptosEmUso = DEPARTAMENTOS_REUNIAO.filter(d => todosSemFiltro.some(c => (c.departamentos || []).includes(d)));
-    if (reunioesFiltroDepto && !deptosEmUso.includes(reunioesFiltroDepto)) reunioesFiltroDepto = '';
-    const todos = reunioesFiltroDepto ? todosSemFiltro.filter(c => (c.departamentos || []).includes(reunioesFiltroDepto)) : todosSemFiltro;
+    // Atribuições: quem está atribuído (responsáveis) nos itens de reunião.
+    const atribuidos = [];
+    todosSemFiltro.forEach(c => (c.assignees || []).forEach(n => { if (n && !atribuidos.includes(n)) atribuidos.push(n); }));
+    atribuidos.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const semAtribuicao = todosSemFiltro.filter(c => !(c.assignees || []).length).length;
+    if (reunioesFiltroAtribuido && reunioesFiltroAtribuido !== '__sem__' && !atribuidos.includes(reunioesFiltroAtribuido)) reunioesFiltroAtribuido = '';
+    if (reunioesFiltroAtribuido === '__sem__' && !semAtribuicao) reunioesFiltroAtribuido = '';
+
+    const contaDepto = (d) => todosSemFiltro.filter(c => (c.departamentos || []).includes(d)).length;
+    const deptosEmUso = DEPARTAMENTOS_REUNIAO.filter(d => contaDepto(d) > 0);
+    // Todos os departamentos ficam na lista, com quantos itens cada um tem; o filtro nunca "some".
+    const filtroDeptoValido = !reunioesFiltroDepto || DEPARTAMENTOS_REUNIAO.includes(reunioesFiltroDepto);
+    if (!filtroDeptoValido) reunioesFiltroDepto = '';
+    let todos = todosSemFiltro;
+    if (reunioesFiltroDepto) todos = todos.filter(c => (c.departamentos || []).includes(reunioesFiltroDepto));
+    if (reunioesFiltroAtribuido === '__sem__') todos = todos.filter(c => !(c.assignees || []).length);
+    else if (reunioesFiltroAtribuido) todos = todos.filter(c => (c.assignees || []).includes(reunioesFiltroAtribuido));
     const nomeDaPessoa = (id) => ((state.people || []).find(p => p.id === id) || {}).name || '—';
 
     // Colunas (pessoas) que têm item de reunião — alimentam o filtro e o gráfico
@@ -4030,6 +4044,7 @@ function renderReunioesView(container) {
                     </span>
                 </div>
                 <div class="reu-card-titulo" data-reu-campo="titulo">${escapeHtml(c.title)}</div>
+                ${(c.assignees || []).length ? `<div class="reu-card-atrib"><i class="fa-solid fa-user-check"></i> ${(c.assignees || []).map(n => escapeHtml(n)).join(', ')}</div>` : ''}
                 <div class="reu-card-deptos">
                     ${(c.departamentos || []).map(d => `<span class="depto-tag">${escapeHtml(d)}</span>`).join('')}
                     ${isObserver ? '' : `<button type="button" class="depto-editar" data-reu-deptos-toggle title="Escolher os departamentos">${(c.departamentos || []).length ? '<i class="fa-solid fa-pen"></i>' : '+ Departamentos'}</button>`}
@@ -4060,10 +4075,22 @@ function renderReunioesView(container) {
                 <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
             </div>
             <div class="reu-kpis">${kpis}</div>
-            ${deptosEmUso.length ? `<div class="depto-grid depto-filtro">
-                <button type="button" class="depto-chip depto-todos${reunioesFiltroDepto ? '' : ' is-on'}" data-filtro-depto="">${reunioesFiltroDepto ? '' : '✓ '}Todos</button>
-                ${deptosEmUso.map(d => `<button type="button" class="depto-chip${d === reunioesFiltroDepto ? ' is-on' : ''}" data-filtro-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`).join('')}
-            </div>` : ''}
+            <div class="reu-filtros">
+                <label class="reu-filtro-campo"><span>Departamento</span>
+                    <select id="reuFiltroDepto">
+                        <option value="">Todos os departamentos</option>
+                        ${DEPARTAMENTOS_REUNIAO.map(d => `<option value="${escapeHtml(d)}" ${d === reunioesFiltroDepto ? 'selected' : ''}>${escapeHtml(d)} (${contaDepto(d)})</option>`).join('')}
+                    </select>
+                </label>
+                <label class="reu-filtro-campo"><span>Atribuído a</span>
+                    <select id="reuFiltroAtribuido">
+                        <option value="">Todas as atribuições</option>
+                        ${atribuidos.map(n => `<option value="${escapeHtml(n)}" ${n === reunioesFiltroAtribuido ? 'selected' : ''}>${escapeHtml(n)} (${todosSemFiltro.filter(c => (c.assignees || []).includes(n)).length})</option>`).join('')}
+                        <option value="__sem__" ${reunioesFiltroAtribuido === '__sem__' ? 'selected' : ''}>Sem atribuição (${semAtribuicao})</option>
+                    </select>
+                </label>
+                ${(reunioesFiltroDepto || reunioesFiltroAtribuido || reunioesFiltroPessoa) ? '<button type="button" class="reu-filtro-limpar" id="reuFiltroLimpar">Limpar filtros</button>' : ''}
+            </div>
             <div class="reu-grafico">
                 <h3>Evolução por coluna</h3>
                 <div class="reu-legenda">${legenda}</div>
@@ -4077,11 +4104,20 @@ function renderReunioesView(container) {
         redesenharReunioes();
     });
 
-    container.querySelectorAll('[data-filtro-depto]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            reunioesFiltroDepto = btn.dataset.filtroDepto;
-            redesenharReunioes();
-        });
+    container.querySelector('#reuFiltroDepto').addEventListener('change', (e) => {
+        reunioesFiltroDepto = e.target.value;
+        redesenharReunioes();
+    });
+    container.querySelector('#reuFiltroAtribuido').addEventListener('change', (e) => {
+        reunioesFiltroAtribuido = e.target.value;
+        redesenharReunioes();
+    });
+    const limpar = container.querySelector('#reuFiltroLimpar');
+    if (limpar) limpar.addEventListener('click', () => {
+        reunioesFiltroDepto = '';
+        reunioesFiltroAtribuido = '';
+        reunioesFiltroPessoa = '';
+        redesenharReunioes();
     });
 
     container.querySelectorAll('[data-reu-novo]').forEach(btn => {
