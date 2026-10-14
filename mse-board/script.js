@@ -3043,13 +3043,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const lines = desc.split('\n').map(l => l.trim()).filter(l => l !== '');
             const customValues = readCustomFieldValues();
             const labelIds = readSelectedLabelIds();
+            const departamentos = readSelectedDeptos();
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
             if (editingId) {
-                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
             } else {
-                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
                 if (criandoParaReuniao && novoCardId) marcarReuniao(novoCardId, criandoParaReuniao);
                 criandoParaReuniao = null;
             }
@@ -4650,6 +4651,28 @@ function getStickerById(id) {
     return STICKERS.find(s => s.id === id) || null;
 }
 
+// Departamentos da tarefa, no formulário de criar/editar do quadro (backlog).
+// Os mesmos departamentos da aba Reuniões; aparecem no post-it e lá também.
+function renderDeptoPicker(selecionados) {
+    const container = document.getElementById('deptoPickerContainer');
+    if (!container) return;
+    const marcados = selecionados || [];
+    container.innerHTML = `
+        <div class="input-group">
+            <label>Departamentos</label>
+            <div class="depto-grid" id="deptoPickerGrid">${DEPARTAMENTOS_REUNIAO.map(d =>
+                `<button type="button" class="depto-chip${marcados.includes(d) ? ' is-on' : ''}" data-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+            ).join('')}</div>
+        </div>`;
+    container.querySelectorAll('.depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => chip.classList.toggle('is-on'));
+    });
+}
+
+function readSelectedDeptos() {
+    return [...document.querySelectorAll('#deptoPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.depto);
+}
+
 function renderLabelPicker(selectedIds) {
     const container = document.getElementById('labelPickerContainer');
     if (!container) return;
@@ -6241,7 +6264,7 @@ function deletePerson(personId) {
 // CRUD: POST-ITS (CARDS)
 // ==========================================
 
-function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
+function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
     const id = generateUniqueId('c');
 
     const card = {
@@ -6253,6 +6276,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         // post-it. Não é a mesma coisa que "observacao", que é a anotação do
         // Dashboard de Entregas.
         resumo: resumo || '',
+        departamentos: departamentos || [],
         author,
         status: 'afazer',
         checklist: lines.map(text => ({ text, checked: false })),
@@ -6276,7 +6300,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     return id;
 }
 
-async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
+async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -6299,6 +6323,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     card.attachments = [...card.attachments, ...newAttachments];
     if (customValues) card.customValues = customValues;
     if (labelIds) card.labelIds = labelIds;
+    if (Array.isArray(departamentos)) card.departamentos = departamentos;
     card.stickerId = stickerId || null;
     card.coverImage = coverImage || null;
 
@@ -10383,6 +10408,7 @@ function openCardModalForCreate(opcoes) {
     populatePersonSelect(null);
     renderCustomFieldsInputs();
     renderLabelPicker();
+    renderDeptoPicker();
     renderStickerPicker();
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
@@ -10414,6 +10440,7 @@ function openCardModalForEdit(cardId) {
     renderExistingAttachments(card);
     renderCustomFieldsInputs(card.customValues);
     renderLabelPicker(card.labelIds);
+    renderDeptoPicker(card.departamentos);
     renderStickerPicker(card.stickerId);
     document.getElementById('cardCoverInput').value = '';
     renderCoverPreview(card.coverImage);
