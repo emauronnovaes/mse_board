@@ -1677,6 +1677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setInterval(async () => {
             if (document.querySelector('.reu-card.is-dragging')) return;
             if (document.querySelector('.pend-novo-form')) return;
+            if (reunioesDeptoAberto) return;
             if (document.querySelector('[contenteditable="true"]')) return;
             if (pendingCardSaves.size > 0) return;
             const frescos = await fetchCardsFromServer();
@@ -3629,6 +3630,33 @@ const REUNIAO_COLUNAS = [
     { key: 'concluido', label: 'Concluído', cor: '#1f9d57' }
 ];
 
+// Departamentos que podem ser marcados num item de reunião. Aparecem também
+// no post-it do quadro (backlog) e no post-it aberto.
+const DEPARTAMENTOS_REUNIAO = [
+    'ADMCT', 'ADMINISTRATIVO', 'AFASTADOS', 'ALMOXARIFADO', 'CERTIFICAÇÕES', 'COMERCIAL',
+    'CONTRATOS', 'DEPTO. PESSOAL', 'DTE', 'ESCOPO E CUSTOS', 'FINANCEIRO', 'FISCAL',
+    'GARANTIA', 'GESTÃO DE MATERIAIS', 'HITACHI', 'HSE', 'JURÍDICO', 'LMS',
+    'LOGÍSTICA', 'MANUTENÇÃO -SEDE', 'MARKETING', 'ORÇAMENTOS', 'P&D', 'PLANEJAMENTO',
+    'PROGRAMAÇÃO', 'PROJETOS', 'QUALIDADE', 'RH', 'STI', 'SUPRIMENTOS', 'T.I'
+];
+
+let reunioesFiltroDepto = '';        // '' = Todos
+let reunioesDeptoAberto = null;      // id do card com o seletor de departamentos aberto
+
+// Bolinhas de departamento mostradas no post-it do quadro
+function deptosDoCardHtml(card) {
+    const lista = card.departamentos || [];
+    if (lista.length === 0) return '';
+    return `<div class="postit-deptos">${lista.map(d => `<span class="depto-tag">${escapeHtml(d)}</span>`).join('')}</div>`;
+}
+
+// Grade de departamentos pra marcar/desmarcar
+function gradeDeDepartamentosHtml(selecionados) {
+    return `<div class="depto-grid">${DEPARTAMENTOS_REUNIAO.map(d =>
+        `<button type="button" class="depto-chip${selecionados.includes(d) ? ' is-on' : ''}" data-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+    ).join('')}</div>`;
+}
+
 let reunioesFiltroPessoa = '';
 let criandoParaReuniao = null;   // status da coluna onde clicaram em "+ Novo item"
 
@@ -3748,6 +3776,8 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
         <select class="pend-novo-pessoa">
             ${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === reunioesFiltroPessoa ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select>
+        <button type="button" class="depto-editar reu-form-deptos-btn">+ Departamentos</button>
+        <div class="reu-form-deptos" style="display:none;">${gradeDeDepartamentosHtml([])}</div>
         <div class="pend-novo-acoes">
             <button type="button" class="pend-novo-cancelar">Cancelar</button>
             <button type="button" class="pend-novo-criar">Criar</button>
@@ -3757,6 +3787,23 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
 
     const input = form.querySelector('.pend-novo-titulo');
     input.focus();
+
+    // Departamentos escolhidos neste formulário
+    const escolhidos = [];
+    const deptosBtn = form.querySelector('.reu-form-deptos-btn');
+    const deptosBox = form.querySelector('.reu-form-deptos');
+    deptosBtn.addEventListener('click', () => {
+        deptosBox.style.display = deptosBox.style.display === 'none' ? 'block' : 'none';
+    });
+    form.querySelectorAll('.reu-form-deptos .depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const nome = chip.dataset.depto;
+            const i = escolhidos.indexOf(nome);
+            if (i >= 0) escolhidos.splice(i, 1); else escolhidos.push(nome);
+            chip.classList.toggle('is-on', i < 0);
+            deptosBtn.textContent = escolhidos.length ? `Departamentos (${escolhidos.length})` : '+ Departamentos';
+        });
+    });
 
     const criar = () => {
         const titulo = input.value.trim();
@@ -3772,7 +3819,11 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
             author: currentUserName || 'Desconhecido',
             attachments: []
         });
-        if (novoId) marcarReuniao(novoId, status);
+        if (novoId) {
+            const novoCard = state.cards.find(cd => cd.id === novoId);
+            if (novoCard) novoCard.departamentos = [...escolhidos];
+            marcarReuniao(novoId, status);
+        }
 
         redesenharReunioes();
         showToast('Item criado.', 'success');
@@ -3848,7 +3899,11 @@ function editarTextoDaReuniao(el, valorAtual, aoSalvar, multilinha) {
 }
 
 function renderReunioesView(container) {
-    const todos = cardsDeReuniao();
+    const todosSemFiltro = cardsDeReuniao();
+    // Só departamentos que aparecem em algum item entram na linha de filtro
+    const deptosEmUso = DEPARTAMENTOS_REUNIAO.filter(d => todosSemFiltro.some(c => (c.departamentos || []).includes(d)));
+    if (reunioesFiltroDepto && !deptosEmUso.includes(reunioesFiltroDepto)) reunioesFiltroDepto = '';
+    const todos = reunioesFiltroDepto ? todosSemFiltro.filter(c => (c.departamentos || []).includes(reunioesFiltroDepto)) : todosSemFiltro;
     const nomeDaPessoa = (id) => ((state.people || []).find(p => p.id === id) || {}).name || '—';
 
     // Colunas (pessoas) que têm item de reunião — alimentam o filtro e o gráfico
@@ -3912,6 +3967,11 @@ function renderReunioesView(container) {
                     </span>
                 </div>
                 <div class="reu-card-titulo" data-reu-campo="titulo">${escapeHtml(c.title)}</div>
+                <div class="reu-card-deptos">
+                    ${(c.departamentos || []).map(d => `<span class="depto-tag">${escapeHtml(d)}</span>`).join('')}
+                    ${isObserver ? '' : `<button type="button" class="depto-editar" data-reu-deptos-toggle title="Escolher os departamentos">${(c.departamentos || []).length ? '<i class="fa-solid fa-pen"></i>' : '+ Departamentos'}</button>`}
+                </div>
+                ${reunioesDeptoAberto === c.id && !isObserver ? `<div class="reu-deptos-picker">${gradeDeDepartamentosHtml(c.departamentos || [])}<button type="button" class="depto-fechar" data-reu-deptos-fechar>Pronto</button></div>` : ''}
                 <div class="reu-card-detalhe ${(c.resumo || '').trim() ? '' : 'is-vazio'}" data-reu-campo="resumo">${(c.resumo || '').trim() ? escapeHtml(c.resumo) : 'Adicionar detalhe...'}</div>
                 <div class="reu-card-obs"><b>Obs:</b> <span class="${(c.observacao || '').trim() ? '' : 'is-vazio'}" data-reu-campo="observacao">${(c.observacao || '').trim() ? escapeHtml(c.observacao) : 'adicionar observação...'}</span></div>
                 <div class="reu-card-rodape">
@@ -3937,6 +3997,10 @@ function renderReunioesView(container) {
                 <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
             </div>
             <div class="reu-kpis">${kpis}</div>
+            ${deptosEmUso.length ? `<div class="depto-grid depto-filtro">
+                <button type="button" class="depto-chip depto-todos${reunioesFiltroDepto ? '' : ' is-on'}" data-filtro-depto="">${reunioesFiltroDepto ? '' : '✓ '}Todos</button>
+                ${deptosEmUso.map(d => `<button type="button" class="depto-chip${d === reunioesFiltroDepto ? ' is-on' : ''}" data-filtro-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`).join('')}
+            </div>` : ''}
             <div class="reu-grafico">
                 <h3>Evolução por coluna</h3>
                 <div class="reu-legenda">${legenda}</div>
@@ -3948,6 +4012,13 @@ function renderReunioesView(container) {
     container.querySelector('#reuFiltro').addEventListener('change', (e) => {
         reunioesFiltroPessoa = e.target.value;
         redesenharReunioes();
+    });
+
+    container.querySelectorAll('[data-filtro-depto]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            reunioesFiltroDepto = btn.dataset.filtroDepto;
+            redesenharReunioes();
+        });
     });
 
     container.querySelectorAll('[data-reu-novo]').forEach(btn => {
@@ -3962,6 +4033,27 @@ function renderReunioesView(container) {
         el.querySelector('[data-reu-abrir]').addEventListener('click', () => abrirTarefaDaReuniao(id));
         const tirar = el.querySelector('[data-reu-tirar]');
         if (tirar) tirar.addEventListener('click', () => tirarDasReunioes(id));
+
+        const alternarSeletor = el.querySelector('[data-reu-deptos-toggle]');
+        if (alternarSeletor) {
+            alternarSeletor.addEventListener('click', () => {
+                reunioesDeptoAberto = reunioesDeptoAberto === id ? null : id;
+                redesenharReunioes();
+            });
+        }
+        const fecharSeletor = el.querySelector('[data-reu-deptos-fechar]');
+        if (fecharSeletor) {
+            fecharSeletor.addEventListener('click', () => { reunioesDeptoAberto = null; redesenharReunioes(); });
+        }
+        el.querySelectorAll('.reu-deptos-picker .depto-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const nome = chip.dataset.depto;
+                const atual = card.departamentos || [];
+                card.departamentos = atual.includes(nome) ? atual.filter(d => d !== nome) : [...atual, nome];
+                persistCard(card);
+                redesenharReunioes();
+            });
+        });
 
         el.querySelector('.reu-status').addEventListener('change', (e) => {
             card.reuniaoStatus = e.target.value;
@@ -9081,6 +9173,7 @@ function buildPostItElement(card) {
         </div>
         ${labelsHtml}
         ${datesHtml}
+        ${deptosDoCardHtml(card)}
         ${card.emailDraft && card.emailDraft.to ? `<div class="postit-email-para" title="E-mail previsto para: ${escapeHtml(card.emailDraft.to)}"><i class="fa-solid fa-envelope"></i> ${escapeHtml(card.emailDraft.to)}</div>` : ''}
         <div class="postit-compact-meta">
             <span class="tag tag-priority-${card.priority}">${priorityLabel}</span>
@@ -10299,6 +10392,7 @@ function openViewModal(cardId) {
         const [ys, ms, ds] = card.startDate.split('-');
         tagsHtml += `<span class="tag" style="background:var(--bg); color:var(--text-primary);"><i class="fa-solid fa-circle-dot" style="color:#22c55e;"></i> Início: ${ds}/${ms}/${ys}</span>`;
     }
+    tagsHtml += (card.departamentos || []).map(d => `<span class="tag tag-depto">${escapeHtml(d)}</span>`).join('');
     document.getElementById('viewCardTags').innerHTML = tagsHtml;
 
     document.getElementById('viewCardProgress').innerHTML = buildProgressBarHtml(getProgress(card), card);

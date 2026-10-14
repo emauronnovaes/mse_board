@@ -54,7 +54,8 @@ try {
         'email_draft'    => 'TEXT NULL',
         'reuniao'        => 'TINYINT(1) NOT NULL DEFAULT 0',
         'reuniao_status' => 'VARCHAR(20) NULL',
-        'reuniao_num'    => 'INT NULL'
+        'reuniao_num'    => 'INT NULL',
+        'departamentos'  => 'TEXT NULL'
     ];
     foreach ($colunasNovas as $nomeCol => $definicao) {
         if (!in_array($nomeCol, $existingColumns, true)) {
@@ -96,6 +97,7 @@ try {
         'label_ids'       => json_encode($c['labelIds'] ?? []),
         'custom_values'   => json_encode($c['customValues'] ?? (object)[]),
         'email_draft'     => !empty($c['emailDraft']) ? json_encode($c['emailDraft'], JSON_UNESCAPED_UNICODE) : null,
+        'departamentos'   => json_encode($c['departamentos'] ?? [], JSON_UNESCAPED_UNICODE),
         'reuniao'         => !empty($c['reuniao']) ? 1 : 0,
         'reuniao_status'  => $c['reuniaoStatus'] ?? null,
         'reuniao_num'     => isset($c['reuniaoNum']) ? (int) $c['reuniaoNum'] : null,
