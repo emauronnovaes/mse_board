@@ -4027,8 +4027,10 @@ function renderReunioesView(container) {
     const legenda = [['concluido', 'Concluído'], ['andamento', 'Em Andamento'], ['backlog', 'Backlog'], ['pendente', 'Pendente']]
         .map(([k, l]) => `<span class="reu-legenda-item"><i class="reu-seg-${k}"></i> ${l}</span>`).join('');
 
-    const opcoesFiltro = ['<option value="">Todas as colunas</option>']
-        .concat(pessoasIds.map(pid => `<option value="${escapeHtml(pid)}" ${pid === reunioesFiltroPessoa ? 'selected' : ''}>${escapeHtml(nomeDaPessoa(pid))}</option>`)).join('');
+    // Um filtro só: colunas do quadro e departamentos (valor "p:<id>" ou "d:<nome>")
+    const opcoesFiltro = '<option value="">Todas as colunas</option>'
+        + `<optgroup label="Colunas">${[...new Set(todosSemFiltro.map(c => c.personId))].map(pid => `<option value="p:${escapeHtml(pid)}" ${pid === reunioesFiltroPessoa ? 'selected' : ''}>${escapeHtml(nomeDaPessoa(pid))}</option>`).join('')}</optgroup>`
+        + `<optgroup label="Departamentos">${DEPARTAMENTOS_REUNIAO.map(d => `<option value="d:${escapeHtml(d)}" ${d === reunioesFiltroDepto ? 'selected' : ''}>${escapeHtml(d)} (${contaDepto(d)})</option>`).join('')}</optgroup>`;
 
     const colunasHtml = REUNIAO_COLUNAS.map(col => {
         const itens = porStatus[col.key].slice().sort((a, b) => (a.reuniaoNum || 0) - (b.reuniaoNum || 0));
@@ -4076,10 +4078,6 @@ function renderReunioesView(container) {
                 <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
             </div>
             <div class="reu-kpis">${kpis}</div>
-            <div class="depto-grid depto-filtro">
-                <button type="button" class="depto-chip depto-todos${reunioesFiltroDepto ? '' : ' is-on'}" data-filtro-depto="">${reunioesFiltroDepto ? '' : '✓ '}Todos</button>
-                ${DEPARTAMENTOS_REUNIAO.map(d => `<button type="button" class="depto-chip${d === reunioesFiltroDepto ? ' is-on' : ''}" data-filtro-depto="${escapeHtml(d)}" title="${contaDepto(d)} item(ns)">${escapeHtml(d)}</button>`).join('')}
-            </div>
             <div class="reu-filtros">
                 <label class="reu-filtro-campo"><span>Atribuído a</span>
                     <select id="reuFiltroAtribuido">
@@ -4099,15 +4097,10 @@ function renderReunioesView(container) {
         </div>`;
 
     container.querySelector('#reuFiltro').addEventListener('change', (e) => {
-        reunioesFiltroPessoa = e.target.value;
+        const v = e.target.value;
+        reunioesFiltroPessoa = v.startsWith('p:') ? v.slice(2) : '';
+        reunioesFiltroDepto = v.startsWith('d:') ? v.slice(2) : '';
         redesenharReunioes();
-    });
-
-    container.querySelectorAll('[data-filtro-depto]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            reunioesFiltroDepto = btn.dataset.filtroDepto;
-            redesenharReunioes();
-        });
     });
     container.querySelector('#reuFiltroAtribuido').addEventListener('change', (e) => {
         reunioesFiltroAtribuido = e.target.value;
