@@ -3043,13 +3043,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const lines = desc.split('\n').map(l => l.trim()).filter(l => l !== '');
             const customValues = readCustomFieldValues();
             const labelIds = readSelectedLabelIds();
+            const departamentos = readSelectedDeptos();
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
             if (editingId) {
-                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
             } else {
-                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo });
+                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
                 if (criandoParaReuniao && novoCardId) marcarReuniao(novoCardId, criandoParaReuniao);
                 criandoParaReuniao = null;
             }
@@ -3641,6 +3642,7 @@ const DEPARTAMENTOS_REUNIAO = [
 ];
 
 let reunioesFiltroDepto = '';        // '' = Todos
+let reunioesFiltroAtribuido = '';    // '' = Todos | '__sem__' = sem atribuição | nome de quem está atribuído
 let reunioesEditando = null;         // id do card em edição completa na aba Reuniões
 let reunioesDeptoAberto = null;      // id do card com o seletor de departamentos aberto
 
@@ -3962,10 +3964,23 @@ function ligarEdicaoDoCard(el, card) {
 
 function renderReunioesView(container) {
     const todosSemFiltro = cardsDeReuniao();
-    // Só departamentos que aparecem em algum item entram na linha de filtro
-    const deptosEmUso = DEPARTAMENTOS_REUNIAO.filter(d => todosSemFiltro.some(c => (c.departamentos || []).includes(d)));
-    if (reunioesFiltroDepto && !deptosEmUso.includes(reunioesFiltroDepto)) reunioesFiltroDepto = '';
-    const todos = reunioesFiltroDepto ? todosSemFiltro.filter(c => (c.departamentos || []).includes(reunioesFiltroDepto)) : todosSemFiltro;
+    // Atribuições: quem está atribuído (responsáveis) nos itens de reunião.
+    const atribuidos = [];
+    todosSemFiltro.forEach(c => (c.assignees || []).forEach(n => { if (n && !atribuidos.includes(n)) atribuidos.push(n); }));
+    atribuidos.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const semAtribuicao = todosSemFiltro.filter(c => !(c.assignees || []).length).length;
+    if (reunioesFiltroAtribuido && reunioesFiltroAtribuido !== '__sem__' && !atribuidos.includes(reunioesFiltroAtribuido)) reunioesFiltroAtribuido = '';
+    if (reunioesFiltroAtribuido === '__sem__' && !semAtribuicao) reunioesFiltroAtribuido = '';
+
+    const contaDepto = (d) => todosSemFiltro.filter(c => (c.departamentos || []).includes(d)).length;
+    const deptosEmUso = DEPARTAMENTOS_REUNIAO.filter(d => contaDepto(d) > 0);
+    // Todos os departamentos ficam na lista, com quantos itens cada um tem; o filtro nunca "some".
+    const filtroDeptoValido = !reunioesFiltroDepto || DEPARTAMENTOS_REUNIAO.includes(reunioesFiltroDepto);
+    if (!filtroDeptoValido) reunioesFiltroDepto = '';
+    let todos = todosSemFiltro;
+    if (reunioesFiltroDepto) todos = todos.filter(c => (c.departamentos || []).includes(reunioesFiltroDepto));
+    if (reunioesFiltroAtribuido === '__sem__') todos = todos.filter(c => !(c.assignees || []).length);
+    else if (reunioesFiltroAtribuido) todos = todos.filter(c => (c.assignees || []).includes(reunioesFiltroAtribuido));
     const nomeDaPessoa = (id) => ((state.people || []).find(p => p.id === id) || {}).name || '—';
 
     // Colunas (pessoas) que têm item de reunião — alimentam o filtro e o gráfico
@@ -4030,6 +4045,7 @@ function renderReunioesView(container) {
                     </span>
                 </div>
                 <div class="reu-card-titulo" data-reu-campo="titulo">${escapeHtml(c.title)}</div>
+                ${(c.assignees || []).length ? `<div class="reu-card-atrib"><i class="fa-solid fa-user-check"></i> ${(c.assignees || []).map(n => escapeHtml(n)).join(', ')}</div>` : ''}
                 <div class="reu-card-deptos">
                     ${(c.departamentos || []).map(d => `<span class="depto-tag">${escapeHtml(d)}</span>`).join('')}
                     ${isObserver ? '' : `<button type="button" class="depto-editar" data-reu-deptos-toggle title="Escolher os departamentos">${(c.departamentos || []).length ? '<i class="fa-solid fa-pen"></i>' : '+ Departamentos'}</button>`}
@@ -4060,10 +4076,22 @@ function renderReunioesView(container) {
                 <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
             </div>
             <div class="reu-kpis">${kpis}</div>
-            ${deptosEmUso.length ? `<div class="depto-grid depto-filtro">
-                <button type="button" class="depto-chip depto-todos${reunioesFiltroDepto ? '' : ' is-on'}" data-filtro-depto="">${reunioesFiltroDepto ? '' : '✓ '}Todos</button>
-                ${deptosEmUso.map(d => `<button type="button" class="depto-chip${d === reunioesFiltroDepto ? ' is-on' : ''}" data-filtro-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`).join('')}
-            </div>` : ''}
+            <div class="reu-filtros">
+                <label class="reu-filtro-campo"><span>Departamento</span>
+                    <select id="reuFiltroDepto">
+                        <option value="">Todos os departamentos</option>
+                        ${DEPARTAMENTOS_REUNIAO.map(d => `<option value="${escapeHtml(d)}" ${d === reunioesFiltroDepto ? 'selected' : ''}>${escapeHtml(d)} (${contaDepto(d)})</option>`).join('')}
+                    </select>
+                </label>
+                <label class="reu-filtro-campo"><span>Atribuído a</span>
+                    <select id="reuFiltroAtribuido">
+                        <option value="">Todas as atribuições</option>
+                        ${atribuidos.map(n => `<option value="${escapeHtml(n)}" ${n === reunioesFiltroAtribuido ? 'selected' : ''}>${escapeHtml(n)} (${todosSemFiltro.filter(c => (c.assignees || []).includes(n)).length})</option>`).join('')}
+                        <option value="__sem__" ${reunioesFiltroAtribuido === '__sem__' ? 'selected' : ''}>Sem atribuição (${semAtribuicao})</option>
+                    </select>
+                </label>
+                ${(reunioesFiltroDepto || reunioesFiltroAtribuido || reunioesFiltroPessoa) ? '<button type="button" class="reu-filtro-limpar" id="reuFiltroLimpar">Limpar filtros</button>' : ''}
+            </div>
             <div class="reu-grafico">
                 <h3>Evolução por coluna</h3>
                 <div class="reu-legenda">${legenda}</div>
@@ -4077,11 +4105,20 @@ function renderReunioesView(container) {
         redesenharReunioes();
     });
 
-    container.querySelectorAll('[data-filtro-depto]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            reunioesFiltroDepto = btn.dataset.filtroDepto;
-            redesenharReunioes();
-        });
+    container.querySelector('#reuFiltroDepto').addEventListener('change', (e) => {
+        reunioesFiltroDepto = e.target.value;
+        redesenharReunioes();
+    });
+    container.querySelector('#reuFiltroAtribuido').addEventListener('change', (e) => {
+        reunioesFiltroAtribuido = e.target.value;
+        redesenharReunioes();
+    });
+    const limpar = container.querySelector('#reuFiltroLimpar');
+    if (limpar) limpar.addEventListener('click', () => {
+        reunioesFiltroDepto = '';
+        reunioesFiltroAtribuido = '';
+        reunioesFiltroPessoa = '';
+        redesenharReunioes();
     });
 
     container.querySelectorAll('[data-reu-novo]').forEach(btn => {
@@ -4612,6 +4649,28 @@ function renderStickerPicker(currentStickerId) {
 
 function getStickerById(id) {
     return STICKERS.find(s => s.id === id) || null;
+}
+
+// Departamentos da tarefa, no formulário de criar/editar do quadro (backlog).
+// Os mesmos departamentos da aba Reuniões; aparecem no post-it e lá também.
+function renderDeptoPicker(selecionados) {
+    const container = document.getElementById('deptoPickerContainer');
+    if (!container) return;
+    const marcados = selecionados || [];
+    container.innerHTML = `
+        <div class="input-group">
+            <label>Departamentos</label>
+            <div class="depto-grid" id="deptoPickerGrid">${DEPARTAMENTOS_REUNIAO.map(d =>
+                `<button type="button" class="depto-chip${marcados.includes(d) ? ' is-on' : ''}" data-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+            ).join('')}</div>
+        </div>`;
+    container.querySelectorAll('.depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => chip.classList.toggle('is-on'));
+    });
+}
+
+function readSelectedDeptos() {
+    return [...document.querySelectorAll('#deptoPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.depto);
 }
 
 function renderLabelPicker(selectedIds) {
@@ -6205,7 +6264,7 @@ function deletePerson(personId) {
 // CRUD: POST-ITS (CARDS)
 // ==========================================
 
-function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
+function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
     const id = generateUniqueId('c');
 
     const card = {
@@ -6217,6 +6276,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         // post-it. Não é a mesma coisa que "observacao", que é a anotação do
         // Dashboard de Entregas.
         resumo: resumo || '',
+        departamentos: departamentos || [],
         author,
         status: 'afazer',
         checklist: lines.map(text => ({ text, checked: false })),
@@ -6240,7 +6300,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     return id;
 }
 
-async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo }) {
+async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -6263,6 +6323,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     card.attachments = [...card.attachments, ...newAttachments];
     if (customValues) card.customValues = customValues;
     if (labelIds) card.labelIds = labelIds;
+    if (Array.isArray(departamentos)) card.departamentos = departamentos;
     card.stickerId = stickerId || null;
     card.coverImage = coverImage || null;
 
@@ -10347,6 +10408,7 @@ function openCardModalForCreate(opcoes) {
     populatePersonSelect(null);
     renderCustomFieldsInputs();
     renderLabelPicker();
+    renderDeptoPicker();
     renderStickerPicker();
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
@@ -10378,6 +10440,7 @@ function openCardModalForEdit(cardId) {
     renderExistingAttachments(card);
     renderCustomFieldsInputs(card.customValues);
     renderLabelPicker(card.labelIds);
+    renderDeptoPicker(card.departamentos);
     renderStickerPicker(card.stickerId);
     document.getElementById('cardCoverInput').value = '';
     renderCoverPreview(card.coverImage);
