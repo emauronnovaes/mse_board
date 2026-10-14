@@ -1677,7 +1677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setInterval(async () => {
             if (document.querySelector('.reu-card.is-dragging')) return;
             if (document.querySelector('.pend-novo-form')) return;
-            if (reunioesDeptoAberto) return;
+            if (reunioesDeptoAberto || reunioesEditando) return;
             if (document.querySelector('[contenteditable="true"]')) return;
             if (pendingCardSaves.size > 0) return;
             const frescos = await fetchCardsFromServer();
@@ -3641,6 +3641,7 @@ const DEPARTAMENTOS_REUNIAO = [
 ];
 
 let reunioesFiltroDepto = '';        // '' = Todos
+let reunioesEditando = null;         // id do card em edição completa na aba Reuniões
 let reunioesDeptoAberto = null;      // id do card com o seletor de departamentos aberto
 
 // Bolinhas de departamento mostradas no post-it do quadro
@@ -3898,6 +3899,67 @@ function editarTextoDaReuniao(el, valorAtual, aoSalvar, multilinha) {
     el.addEventListener('paste', aoColar);
 }
 
+// Edição completa do item, dentro da própria aba (sem ir pro quadro): título,
+// detalhe, observação, coluna do quadro, status da reunião e departamentos.
+function htmlDeEdicaoDoCard(c) {
+    const pessoas = (state.people || []).filter(p => (!p.isDone && p.id !== 'suggestions') || p.id === c.personId);
+    const colunaAtual = statusDaReuniao(c);
+    return `
+    <div class="reu-card reu-card-edit reu-card-${colunaAtual}" data-card-id="${escapeHtml(c.id)}">
+        <div class="reu-card-topo"><span class="reu-card-num">Editando #${c.reuniaoNum || '?'}</span></div>
+        <label class="reu-edit-rotulo">Título</label>
+        <input type="text" class="reu-edit-titulo" maxlength="200" value="${escapeHtml(c.title)}">
+        <label class="reu-edit-rotulo">Detalhe</label>
+        <textarea class="reu-edit-resumo" rows="3">${escapeHtml(c.resumo || '')}</textarea>
+        <label class="reu-edit-rotulo">Observação</label>
+        <textarea class="reu-edit-obs" rows="2">${escapeHtml(c.observacao || '')}</textarea>
+        <div class="reu-edit-linha">
+            <div><label class="reu-edit-rotulo">Coluna</label>
+                <select class="reu-edit-pessoa">${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === c.personId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></div>
+            <div><label class="reu-edit-rotulo">Status</label>
+                <select class="reu-edit-status">${REUNIAO_COLUNAS.map(o => `<option value="${o.key}" ${o.key === colunaAtual ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
+        </div>
+        <label class="reu-edit-rotulo">Departamentos</label>
+        <div class="reu-edit-deptos">${gradeDeDepartamentosHtml(c.departamentos || [])}</div>
+        <div class="pend-novo-acoes">
+            <button type="button" class="pend-novo-cancelar" data-reu-edit-cancelar>Cancelar</button>
+            <button type="button" class="pend-novo-criar" data-reu-edit-salvar>Salvar</button>
+        </div>
+    </div>`;
+}
+
+function ligarEdicaoDoCard(el, card) {
+    const marcados = [...(card.departamentos || [])];
+    el.querySelectorAll('.reu-edit-deptos .depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const nome = chip.dataset.depto;
+            const i = marcados.indexOf(nome);
+            if (i >= 0) marcados.splice(i, 1); else marcados.push(nome);
+            chip.classList.toggle('is-on', i < 0);
+        });
+    });
+
+    const fechar = () => { reunioesEditando = null; redesenharReunioes(); };
+    el.querySelector('[data-reu-edit-cancelar]').addEventListener('click', fechar);
+    el.querySelector('[data-reu-edit-salvar]').addEventListener('click', () => {
+        const titulo = el.querySelector('.reu-edit-titulo').value.trim();
+        if (!titulo) { showToast('Escreva um título.'); el.querySelector('.reu-edit-titulo').focus(); return; }
+
+        card.title = titulo;
+        card.resumo = el.querySelector('.reu-edit-resumo').value.trim();
+        card.observacao = el.querySelector('.reu-edit-obs').value.trim();
+        card.personId = el.querySelector('.reu-edit-pessoa').value;
+        card.reuniaoStatus = el.querySelector('.reu-edit-status').value;
+        card.departamentos = marcados;
+        persistCard(card);
+        setTimeout(() => logAudit(`Reuniões: editou o item "${card.title}"`), 0);
+        showToast('Item atualizado.', 'success');
+        fechar();
+    });
+    el.querySelector('.reu-edit-titulo').focus();
+    el.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
+}
+
 function renderReunioesView(container) {
     const todosSemFiltro = cardsDeReuniao();
     // Só departamentos que aparecem em algum item entram na linha de filtro
@@ -3956,13 +4018,14 @@ function renderReunioesView(container) {
     const colunasHtml = REUNIAO_COLUNAS.map(col => {
         const itens = porStatus[col.key].slice().sort((a, b) => (a.reuniaoNum || 0) - (b.reuniaoNum || 0));
         const cards = itens.map(c => {
+            if (reunioesEditando === c.id && !isObserver) return htmlDeEdicaoDoCard(c);
             const opcoes = REUNIAO_COLUNAS.map(o => `<option value="${o.key}" ${o.key === col.key ? 'selected' : ''}>${o.label}</option>`).join('');
             return `
             <div class="reu-card reu-card-${col.key}" data-card-id="${escapeHtml(c.id)}" ${isObserver ? '' : 'draggable="true"'}>
                 <div class="reu-card-topo">
                     <span class="reu-card-num">#${c.reuniaoNum || '?'} · ${escapeHtml(nomeDaPessoa(c.personId))}</span>
                     <span class="reu-card-acoes">
-                        <button type="button" class="reu-icone" data-reu-abrir title="Abrir a tarefa"><i class="fa-solid fa-up-right-from-square"></i></button>
+                        ${isObserver ? '' : '<button type="button" class="reu-icone" data-reu-editar title="Editar este item"><i class="fa-solid fa-pen"></i></button>'}
                         ${isObserver ? '' : '<button type="button" class="reu-icone" data-reu-tirar title="Tirar das reuniões (a tarefa continua no quadro)">&times;</button>'}
                     </span>
                 </div>
@@ -4030,7 +4093,10 @@ function renderReunioesView(container) {
         const card = state.cards.find(c => c.id === id);
         if (!card) return;
 
-        el.querySelector('[data-reu-abrir]').addEventListener('click', () => abrirTarefaDaReuniao(id));
+        if (el.classList.contains('reu-card-edit')) { ligarEdicaoDoCard(el, card); return; }
+
+        const editar = el.querySelector('[data-reu-editar]');
+        if (editar) editar.addEventListener('click', () => { reunioesEditando = id; reunioesDeptoAberto = null; redesenharReunioes(); });
         const tirar = el.querySelector('[data-reu-tirar]');
         if (tirar) tirar.addEventListener('click', () => tirarDasReunioes(id));
 

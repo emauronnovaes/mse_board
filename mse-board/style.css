@@ -6653,3 +6653,22 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 
 .reu-form-deptos { max-height: 170px; overflow-y: auto; margin-bottom: 0.4rem; }
 .reu-form-deptos-btn { align-self: flex-start; margin-bottom: 0.4rem; }
+
+
+/* Edição completa do item dentro da aba Reuniões */
+.reu-card-edit { display: flex; flex-direction: column; gap: 0.3rem; }
+.reu-edit-rotulo { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 0.3rem; }
+.reu-card-edit input, .reu-card-edit textarea, .reu-card-edit select {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-family: inherit;
+}
+.reu-card-edit textarea { resize: vertical; }
+.reu-edit-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.reu-edit-deptos { max-height: 170px; overflow-y: auto; }
+.reu-card-edit .pend-novo-acoes { margin-top: 0.5rem; }
