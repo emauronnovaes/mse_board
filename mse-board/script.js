@@ -4076,13 +4076,11 @@ function renderReunioesView(container) {
                 <select id="reuFiltro" class="reu-filtro">${opcoesFiltro}</select>
             </div>
             <div class="reu-kpis">${kpis}</div>
+            <div class="depto-grid depto-filtro">
+                <button type="button" class="depto-chip depto-todos${reunioesFiltroDepto ? '' : ' is-on'}" data-filtro-depto="">${reunioesFiltroDepto ? '' : '✓ '}Todos</button>
+                ${DEPARTAMENTOS_REUNIAO.map(d => `<button type="button" class="depto-chip${d === reunioesFiltroDepto ? ' is-on' : ''}" data-filtro-depto="${escapeHtml(d)}" title="${contaDepto(d)} item(ns)">${escapeHtml(d)}</button>`).join('')}
+            </div>
             <div class="reu-filtros">
-                <label class="reu-filtro-campo"><span>Departamento</span>
-                    <select id="reuFiltroDepto">
-                        <option value="">Todos os departamentos</option>
-                        ${DEPARTAMENTOS_REUNIAO.map(d => `<option value="${escapeHtml(d)}" ${d === reunioesFiltroDepto ? 'selected' : ''}>${escapeHtml(d)} (${contaDepto(d)})</option>`).join('')}
-                    </select>
-                </label>
                 <label class="reu-filtro-campo"><span>Atribuído a</span>
                     <select id="reuFiltroAtribuido">
                         <option value="">Todas as atribuições</option>
@@ -4105,9 +4103,11 @@ function renderReunioesView(container) {
         redesenharReunioes();
     });
 
-    container.querySelector('#reuFiltroDepto').addEventListener('change', (e) => {
-        reunioesFiltroDepto = e.target.value;
-        redesenharReunioes();
+    container.querySelectorAll('[data-filtro-depto]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            reunioesFiltroDepto = btn.dataset.filtroDepto;
+            redesenharReunioes();
+        });
     });
     container.querySelector('#reuFiltroAtribuido').addEventListener('change', (e) => {
         reunioesFiltroAtribuido = e.target.value;
