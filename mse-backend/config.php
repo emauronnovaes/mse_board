@@ -59,7 +59,46 @@ define('DEFAULT_DEPARTMENT', 'programacao');
 // Departamentos conhecidos — pra adicionar um novo no futuro, só
 // acrescenta o nome aqui (nada de banco novo: a separação é pela coluna
 // "department" das tabelas).
-$GLOBALS['KNOWN_DEPARTMENTS'] = ['programacao', 'planejamento'];
+$GLOBALS['KNOWN_DEPARTMENTS'] = ['programacao', 'planejamento', 'escopos_custos'];
+
+// Quadro novo que nasce a partir de outro (molde): na primeira vez que é
+// aberto, recebe os ADMINS do molde (com as senhas), pra alguém conseguir
+// entrar e cadastrar o time em "Membros e Permissões". Sem isso, com a lista
+// de membros vazia, ninguém entraria (nem o Admin).
+$GLOBALS['DEPARTMENT_TEMPLATES'] = ['escopos_custos' => ['molde' => 'planejamento', 'nome' => 'Escopos e Custos']];
+
+// Cria a linha do quadro em board_state, se ainda não existir, já com os
+// Admins do molde. Só age uma vez (quando a linha não existe).
+function garantirQuadroDoDepartamento(PDO $pdo, string $dept): void {
+    $modelo = $GLOBALS['DEPARTMENT_TEMPLATES'][$dept] ?? null;
+    if ($modelo === null) return;
+    $molde = $modelo['molde'];
+    $existe = $pdo->prepare("SELECT COUNT(*) FROM board_state WHERE department = :dept");
+    $existe->execute(['dept' => $dept]);
+    if ((int) $existe->fetchColumn() > 0) return;
+
+    $stmt = $pdo->prepare("SELECT data FROM board_state WHERE department = :dept");
+    $stmt->execute(['dept' => $molde]);
+    $origem = json_decode((string) $stmt->fetchColumn(), true);
+    $novo = ['members' => [], 'userPasswords' => []];
+    if (is_array($origem) && isset($origem['members']) && is_array($origem['members'])) {
+        foreach ($origem['members'] as $email => $papel) {
+            if ($papel !== 'Admin') continue;
+            $novo['members'][$email] = 'Admin';
+            if (isset($origem['userPasswords'][$email])) {
+                $novo['userPasswords'][$email] = $origem['userPasswords'][$email];
+            }
+        }
+    }
+    // Objetos vazios saem como {} (e não []), igual ao que o script.js grava.
+    $json = json_encode([
+        'boardInfo' => ['name' => $modelo['nome']],
+        'members' => (object) $novo['members'],
+        'userPasswords' => (object) $novo['userPasswords'],
+    ], JSON_UNESCAPED_UNICODE);
+    $pdo->prepare("INSERT IGNORE INTO board_state (department, data) VALUES (:dept, :data)")
+        ->execute(['dept' => $dept, 'data' => $json]);
+}
 
 // Descobre qual departamento foi pedido nessa chamada — sempre pela query
 // string (?dept=x). Importante: NÃO lemos o corpo da requisição aqui, já

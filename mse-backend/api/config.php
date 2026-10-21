@@ -42,7 +42,7 @@ define('DEFAULT_DEPARTMENT', 'programacao');
 
 // Departamentos conhecidos — pra adicionar um novo no futuro, só
 // acrescenta o nome aqui.
-$GLOBALS['KNOWN_DEPARTMENTS'] = ['programacao', 'planejamento'];
+$GLOBALS['KNOWN_DEPARTMENTS'] = ['programacao', 'planejamento', 'escopos_custos'];
 
 // Descobre qual departamento foi pedido nessa chamada — sempre pela query
 // string (?dept=x). Só aceita departamentos conhecidos, pra evitar alguém
