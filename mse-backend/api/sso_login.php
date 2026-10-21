@@ -56,6 +56,7 @@ $email = strtolower(trim((string) $payload['email']));
 // usuário no "dashboard-only-mode".
 $pdo = getDbConnection();
 $dept = getCurrentDepartment();
+garantirQuadroDoDepartamento($pdo, $dept); // quadro novo: nasce com os Admins do molde
 $stmt = $pdo->prepare("SELECT data FROM board_state WHERE department = :dept");
 $stmt->execute(['dept' => $dept]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);

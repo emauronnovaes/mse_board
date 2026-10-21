@@ -16,7 +16,14 @@ const CURRENT_DEPARTMENT = new URLSearchParams(window.location.search).get('dept
 const DEPARTMENT_LABELS = {
     programacao: 'Programação',
     planejamento: 'Planejamento',
+    escopos_custos: 'Escopos e Custos',
 };
+
+// Quadros que funcionam igual ao de Planejamento: coluna "Particular",
+// comentários particulares, tarefas recorrentes etc. Escopos e Custos é uma
+// cópia do Planejamento (dados separados, mesmas funções).
+const DEPARTAMENTOS_COMO_PLANEJAMENTO = ['planejamento', 'escopos_custos'];
+const QUADRO_COMO_PLANEJAMENTO = DEPARTAMENTOS_COMO_PLANEJAMENTO.includes(CURRENT_DEPARTMENT);
 
 // ==========================================
 // CONEXÃO COM O BACKEND (PHP + MySQL)
@@ -384,6 +391,7 @@ const BOOTSTRAP_ADMIN_EMAIL = 'admin@mse.com.br';
 // permissões) — só não entram na contagem de gente online.
 const PERFIS_OCULTOS_NO_ONLINE = {
     planejamento: ['matheus.batista@mse.com.br'],
+    escopos_custos: ['matheus.batista@mse.com.br'],
 };
 const BOOTSTRAP_ADMIN_PASSWORD_HASH = 'e8eda0d35f19623f:b087c63fcb3b0a7b5c32e7ce04ff85f58df14c514cf1068392cb92e007b3bf82';
 
@@ -5351,7 +5359,7 @@ function renderDeliveryReport() {
     // A coluna "Particular" só existe no quadro de Planejamento. Nos outros,
     // ela é escondida por inteiro (cabeçalho + células) pra não sobrar uma
     // coluna vazia na planilha.
-    const mostrarColunaParticular = CURRENT_DEPARTMENT === 'planejamento';
+    const mostrarColunaParticular = QUADRO_COMO_PLANEJAMENTO;
     const totalColunas = mostrarColunaParticular ? 9 : 8;
     const cabecalhoParticular = document.getElementById('dashPrivateHeader');
     if (cabecalhoParticular) cabecalhoParticular.style.display = mostrarColunaParticular ? '' : 'none';
@@ -5583,7 +5591,7 @@ function redesenharTelaAtual() {
 //     tarefa — aí é leitura, sem poder responder nem ver o dos outros.
 // Fora do Planejamento a célula fica vazia.
 function buildPrivateCommentCell(card) {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return '';
+    if (!QUADRO_COMO_PLANEJAMENTO) return '';
 
     const visiveis = getComentariosParticularesVisiveis(card.id);
     const podeEscrever = podeEscreverComentarioParticular();
@@ -6478,12 +6486,12 @@ function ehAdminDoQuadro(user) {
 // (Responder num assunto existente é liberado pra pessoa dele — ver
 // podeResponderNoAssunto.)
 function podeEscreverComentarioParticular() {
-    return CURRENT_DEPARTMENT === 'planejamento' && ehAdminDoQuadro(currentUserName);
+    return QUADRO_COMO_PLANEJAMENTO && ehAdminDoQuadro(currentUserName);
 }
 
 // Eu participo deste fio?
 function participoDoAssunto(threadUser) {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return false;
+    if (!QUADRO_COMO_PLANEJAMENTO) return false;
     return threadUser === currentUserName || ehAdminDoQuadro(currentUserName);
 }
 
@@ -6977,7 +6985,7 @@ function irParaComentarioParticular(pc) {
 let privateCommentsPollTimer = null;
 
 async function pollPrivateComments() {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!QUADRO_COMO_PLANEJAMENTO) return;
     if (!currentUserName) return;
 
     const blob = await fetchBoardStateFromServer();
@@ -7018,7 +7026,7 @@ async function pollPrivateComments() {
 // (dashboard-entregas.html). Cada elemento é ligado só se existir naquela
 // página — a página do Dashboard, por exemplo, não tem o sino do cabeçalho.
 function setupComentariosParticulares() {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!QUADRO_COMO_PLANEJAMENTO) return;
 
     const sino = document.getElementById('privateNotesBtn');
     if (sino) {
@@ -7316,7 +7324,7 @@ function toggleRecurringCard(cardId, ligado) {
 
 // Roda o reinício diário, se já estiver na hora e ainda não tiver rodado hoje.
 function runRecurringResetIfDue() {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!QUADRO_COMO_PLANEJAMENTO) return;
     if (carregamentoIncompleto) return; // cópia local velha — espera o servidor
     if (!state || !Array.isArray(state.cards) || !Array.isArray(state.people)) return;
     // Quem só observa não escreve no servidor — o reinício acontece assim que
@@ -7823,7 +7831,7 @@ function renderRecurringCardsDaPessoa(list, pessoa, termo) {
 // Liga o botão e o modal. Só no Planejamento — nos outros quadros o botão
 // continua escondido (é como ele nasce no HTML).
 function setupTarefasRecorrentes() {
-    if (CURRENT_DEPARTMENT !== 'planejamento') return;
+    if (!QUADRO_COMO_PLANEJAMENTO) return;
 
     const btn = document.getElementById('recurringTasksBtn');
     const modal = document.getElementById('recurringTasksModal');
