@@ -4017,16 +4017,18 @@ function renderReunioesView(container) {
             <span class="reu-kpi-valor" style="color:${k.cor}">${k.valor}</span>
         </div>`).join('');
 
-    // Evolução por coluna do quadro
-    const linhasGrafico = pessoasIds.map(pid => {
-        const cs = todos.filter(c => c.personId === pid);
+    // Evolução por departamento (item com vários departamentos conta em cada um)
+    const gruposGrafico = DEPARTAMENTOS_REUNIAO
+        .map(d => ({ nome: d, cs: visiveis.filter(c => (c.departamentos || []).includes(d)) }));
+    gruposGrafico.push({ nome: 'Sem departamento', cs: visiveis.filter(c => !(c.departamentos || []).length) });
+    const linhasGrafico = gruposGrafico.filter(g => g.cs.length).map(({ nome, cs }) => {
         const n = cs.length;
         const cont = key => cs.filter(c => statusDaReuniao(c) === key).length;
         const p = Math.round((cont('concluido') / n) * 100);
         const seg = key => `<span class="reu-seg reu-seg-${key}" style="width:${(cont(key) / n) * 100}%" title="${REUNIAO_COLUNAS.find(c => c.key === key).label}: ${cont(key)}"></span>`;
         return `
             <div class="reu-grafico-linha">
-                <span class="reu-grafico-nome">${escapeHtml(nomeDaPessoa(pid))}</span>
+                <span class="reu-grafico-nome">${escapeHtml(nome)}</span>
                 <span class="reu-grafico-pct">${p}%</span>
                 <span class="reu-grafico-barra">${seg('concluido')}${seg('andamento')}${seg('backlog')}${seg('pendente')}</span>
             </div>`;
@@ -4097,7 +4099,7 @@ function renderReunioesView(container) {
                 ${(reunioesFiltroDepto || reunioesFiltroAtribuido || reunioesFiltroPessoa) ? '<button type="button" class="reu-filtro-limpar" id="reuFiltroLimpar">Limpar filtros</button>' : ''}
             </div>
             <div class="reu-grafico">
-                <h3>Evolução por coluna</h3>
+                <h3>Evolução por departamento</h3>
                 <div class="reu-legenda">${legenda}</div>
                 ${linhasGrafico || '<p class="reu-vazio">Nenhum item nas reuniões ainda. Use "+ Novo item" ou o botão de pessoas numa tarefa do quadro.</p>'}
             </div>
