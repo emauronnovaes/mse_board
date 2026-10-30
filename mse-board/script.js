@@ -4793,16 +4793,47 @@ function renderPessoasTagPicker(selecionados) {
     if (!container) return;
     if (!quadroTemTagsDePessoas()) { container.innerHTML = ''; return; }
     const marcados = selecionados || [];
+    const pessoas = pessoasParaTag(marcados);
     container.innerHTML = `
         <div class="input-group">
             <label>Pessoas (tags)</label>
-            <div class="depto-grid" id="pessoasTagPickerGrid">${pessoasParaTag(marcados).map(u =>
+            <div class="depto-grid" id="pessoasTagPickerGrid">${pessoas.map(u =>
                 `<button type="button" class="depto-chip${marcados.includes(u) ? ' is-on' : ''}" data-pessoa-tag="${escapeHtml(u)}" title="${escapeHtml(u)}">${escapeHtml(nomeDaTagDePessoa(u))}</button>`
             ).join('')}</div>
+            ${pessoas.length ? '' : `<small class="tags-vazio">${AVISO_SEM_PESSOAS_DE_TAG}</small>`}
         </div>`;
     container.querySelectorAll('.depto-chip').forEach(chip => {
         chip.addEventListener('click', () => chip.classList.toggle('is-on'));
     });
+}
+
+const AVISO_SEM_PESSOAS_DE_TAG = 'Pedro, Helena e Daniela aparecem aqui depois que entrarem no board pela primeira vez.';
+
+// Tags no post-it aberto: clicar marca/desmarca e já grava. Quem está
+// atribuído por outro caminho (atalho "atribuir a mim") não é mexido.
+function renderTagsDoCardAberto(card) {
+    const secao = document.getElementById('viewTagsSection');
+    const grid = document.getElementById('viewTagsGrid');
+    if (!secao || !grid) return;
+    if (!quadroTemTagsDePessoas()) { secao.style.display = 'none'; return; }
+    secao.style.display = '';
+
+    const marcados = card.assignees || [];
+    const pessoas = isObserver ? marcados.filter(ehPessoaDeTag) : pessoasParaTag(marcados);
+    grid.innerHTML = pessoas.length
+        ? pessoas.map(u => `<button type="button" class="depto-chip${marcados.includes(u) ? ' is-on' : ''}" data-pessoa-tag="${escapeHtml(u)}" title="${escapeHtml(u)}" ${isObserver ? 'disabled' : ''}>${escapeHtml(nomeDaTagDePessoa(u))}</button>`).join('')
+        : `<small class="tags-vazio">${isObserver ? 'Nenhuma tag.' : AVISO_SEM_PESSOAS_DE_TAG}</small>`;
+    if (isObserver) return;
+
+    grid.querySelectorAll('[data-pessoa-tag]').forEach(chip => chip.addEventListener('click', () => {
+        const u = chip.dataset.pessoaTag;
+        if (!card.assignees) card.assignees = [];
+        const i = card.assignees.indexOf(u);
+        if (i === -1) card.assignees.push(u); else card.assignees.splice(i, 1);
+        chip.classList.toggle('is-on', i === -1);
+        persistCard(card);
+        logAudit(`${i === -1 ? 'Marcou' : 'Tirou'} a tag "${nomeDaTagDePessoa(u)}" na tarefa "${card.title}"`);
+    }));
 }
 
 // Tags marcadas no formulário. Quem já estava atribuído por outro caminho
@@ -10881,6 +10912,7 @@ function openViewModal(cardId) {
 
     renderViewCommentsList(cardId);
     preencherMoverPara(card);
+    renderTagsDoCardAberto(card);
     prepararPainelEmail(card);
 
     modal.style.display = 'flex';
