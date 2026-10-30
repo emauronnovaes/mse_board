@@ -405,6 +405,15 @@
                     </select>
                 </div>
 
+                <!-- Só ao criar: em que posição a tarefa nova entra no "A Fazer" da pessoa -->
+                <div class="input-group" id="cardPosicaoGroup">
+                    <label for="cardPosicaoSelect">Posição no A Fazer</label>
+                    <div class="card-posicao-linha">
+                        <select id="cardPosicaoSelect"></select>
+                        <button type="button" class="btn-secondary" id="cardPosicaoVerLista">Ver lista</button>
+                    </div>
+                </div>
+
                 <div class="input-group">
                     <label for="cardTitle">Título da Tarefa</label>
                     <input type="text" id="cardTitle" placeholder="Ex: Montagem do Hangar A" required>
@@ -1290,6 +1299,6 @@
     <a href="#" class="matheus-admin-access-btn voltar-perfil-btn" id="voltarPerfilBtn" style="display:none;"><i class="fa-solid fa-rotate-left"></i> Voltar</a>
 
     <script src="config.js.php"></script>
-    <script src="script.js?v=202610301200"></script>
+    <script src="script.js?v=202610301600"></script>
 </body>
 </html>

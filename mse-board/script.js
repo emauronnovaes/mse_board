@@ -643,8 +643,8 @@ function relLinha(card, hoje, comResponsavel) {
     return `
         <tr>
             ${comResponsavel ? `<td class="rel-resp${filaSemDono ? ' rel-fila' : ''}">${relEscapa(nomeDoResponsavel(card.personId))}</td>` : ''}
-            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}${(card.assignees || []).length
-                ? `<div class="rel-tags">${card.assignees.map(u => `<span class="rel-tag">${relEscapa(nomeDaTagDePessoa(u))}</span>`).join('')}</div>`
+            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}${tagsDoRelatorio(card).length
+                ? `<div class="rel-tags">${tagsDoRelatorio(card).map(u => `<span class="rel-tag">${relEscapa(nomeDaTagDePessoa(u))}</span>`).join('')}</div>`
                 : ''}</td>
             <td class="rel-data">${relData(card.startDate || (card.createdAt ? new Date(card.createdAt).toISOString().slice(0, 10) : null))}</td>
             <td class="rel-data">${relData(card.dueDate)}${sit ? ` <span class="rel-sit ${sit.classe}">${sit.texto}</span>` : ''}</td>
@@ -690,7 +690,7 @@ function passaNosFiltrosDoRelatorio(card, hoje) {
     }
 
     if (relFiltro.busca) {
-        const alvo = `${card.title || ''} ${nomeDoResponsavel(card.personId)} ${(card.assignees || []).map(nomeDaTagDePessoa).join(' ')}`.toLowerCase();
+        const alvo = `${card.title || ''} ${nomeDoResponsavel(card.personId)} ${tagsDoRelatorio(card).map(nomeDaTagDePessoa).join(' ')}`.toLowerCase();
         if (!alvo.includes(relFiltro.busca)) return false;
     }
     return true;
@@ -897,11 +897,22 @@ function renderSeletorDePessoasDoRelatorio() {
         pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === guardado ? 'selected' : ''}>${escapeHtml(p.nome)}</option>`).join('');
 }
 
-// Filtro de tags: todos os nomes que já entraram no board, mais quem estiver
-// setado em alguma atividade (mesmo que ainda não tenha entrado).
+// Tags de pessoas que aparecem na atividade do relatório (só em Programação)
+function tagsDoRelatorio(card) {
+    if (!quadroTemTagsDePessoas()) return [];
+    return (card.assignees || []).filter(ehPessoaDeTag);
+}
+
+// Filtro de tags: as pessoas de tag que já entraram no board, mais quem
+// estiver setado em alguma atividade. Fora de Programação o filtro some.
 function renderSeletorDeTagsDoRelatorio() {
     const sel = document.getElementById('relFiltroTag');
     if (!sel) return;
+    const campo = sel.closest('.rel-filtro-campo');
+    if (!quadroTemTagsDePessoas()) {
+        if (campo) campo.style.display = 'none';
+        return;
+    }
     const usados = [];
     (state.cards || []).forEach(c => (c.assignees || []).forEach(u => { if (!usados.includes(u)) usados.push(u); }));
     sel.innerHTML = '<option value="">Todos</option>' +
@@ -3049,6 +3060,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('cardDescLineNumbers').scrollTop = e.target.scrollTop;
         });
 
+        document.getElementById('targetPersonSelect').addEventListener('change', preencherPosicaoDoFormulario);
+        document.getElementById('cardPosicaoSelect').addEventListener('change', () => { posicaoEscolhidaNoFormulario = true; });
+        document.getElementById('cardPosicaoVerLista').addEventListener('click', () => {
+            const sel = document.getElementById('cardPosicaoSelect');
+            abrirListaDePosicao({
+                titulo: document.getElementById('cardTitle').value.trim(),
+                personId: document.getElementById('targetPersonSelect').value,
+                inicial: parseInt(sel.value, 10),
+                aoSalvar: (escolhida) => {
+                    sel.value = String(escolhida);
+                    posicaoEscolhidaNoFormulario = true;
+                }
+            });
+        });
+
         document.getElementById('newCardForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -3068,7 +3094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const customValues = readCustomFieldValues();
             const labelIds = readSelectedLabelIds();
             const departamentos = readSelectedDeptos();
-            const assignees = readSelectedPessoasTag();
+            const assignees = readSelectedPessoasTag(editingId);
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
@@ -3077,8 +3103,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees });
                 if (criandoParaReuniao && novoCardId) marcarReuniao(novoCardId, criandoParaReuniao);
-                // Tarefa criada no quadro: pergunta em que posição ela entra no "A Fazer" da pessoa
-                else if (novoCardId) perguntarPosicaoAposSalvar = novoCardId;
+                // Posição no "A Fazer": a escolhida no formulário, ou pergunta no popup depois
+                else if (novoCardId) {
+                    const novo = state.cards.find(c => c.id === novoCardId);
+                    const posSel = document.getElementById('cardPosicaoSelect');
+                    const posicao = posSel ? parseInt(posSel.value, 10) : 0;
+                    const ultima = posSel ? posSel.options.length : 0;
+                    if (posicaoEscolhidaNoFormulario) {
+                        if (novo && posicao && posicao < ultima) colocarNaPosicao(novo, posicao);
+                    } else {
+                        perguntarPosicaoAposSalvar = novoCardId;
+                    }
+                }
                 criandoParaReuniao = null;
             }
 
@@ -4701,21 +4737,38 @@ function readSelectedDeptos() {
     return [...document.querySelectorAll('#deptoPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.depto);
 }
 
-// Tags de pessoas: todo mundo que já entrou no board (state.knownUsers).
-// Ficam em card.assignees — o mesmo campo do "Atribuído a" das Reuniões.
+// Tags de pessoas: só no quadro de Programação, e só destas pessoas (pelo
+// primeiro nome de quem já entrou no board — state.knownUsers). Ficam em
+// card.assignees — o mesmo campo do "Atribuído a" das Reuniões.
+const TAGS_DE_PESSOAS_POR_DEPTO = {
+    programacao: ['pedro', 'helena', 'daniela']
+};
+
 function nomeDaTagDePessoa(usuario) {
     return String(usuario).includes('@') ? deriveNameFromEmail(usuario) : String(usuario);
 }
 
+function quadroTemTagsDePessoas() {
+    return !!TAGS_DE_PESSOAS_POR_DEPTO[CURRENT_DEPARTMENT];
+}
+
+function ehPessoaDeTag(usuario) {
+    const permitidos = TAGS_DE_PESSOAS_POR_DEPTO[CURRENT_DEPARTMENT] || [];
+    const primeiro = nomeDaTagDePessoa(usuario).split(' ')[0]
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    return permitidos.includes(primeiro);
+}
+
 function pessoasParaTag(incluir) {
-    const lista = (state.knownUsers || []).filter(u => u && u !== BOOTSTRAP_ADMIN_EMAIL);
-    (incluir || []).forEach(u => { if (u && !lista.includes(u)) lista.push(u); });
+    const lista = (state.knownUsers || []).filter(u => u && u !== BOOTSTRAP_ADMIN_EMAIL && ehPessoaDeTag(u));
+    (incluir || []).forEach(u => { if (u && ehPessoaDeTag(u) && !lista.includes(u)) lista.push(u); });
     return lista.sort((a, b) => nomeDaTagDePessoa(a).localeCompare(nomeDaTagDePessoa(b), 'pt-BR'));
 }
 
 function renderPessoasTagPicker(selecionados) {
     const container = document.getElementById('pessoasTagPickerContainer');
     if (!container) return;
+    if (!quadroTemTagsDePessoas()) { container.innerHTML = ''; return; }
     const marcados = selecionados || [];
     container.innerHTML = `
         <div class="input-group">
@@ -4729,8 +4782,15 @@ function renderPessoasTagPicker(selecionados) {
     });
 }
 
-function readSelectedPessoasTag() {
-    return [...document.querySelectorAll('#pessoasTagPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.pessoaTag);
+// Tags marcadas no formulário. Quem já estava atribuído por outro caminho
+// (atalho "atribuir a mim") e não aparece como tag continua atribuído.
+// Fora de Programação devolve null: o campo não existe e nada muda.
+function readSelectedPessoasTag(cardId) {
+    if (!quadroTemTagsDePessoas() || !document.getElementById('pessoasTagPickerGrid')) return null;
+    const marcadas = [...document.querySelectorAll('#pessoasTagPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.pessoaTag);
+    const card = cardId ? (state.cards || []).find(c => c.id === cardId) : null;
+    const outros = ((card && card.assignees) || []).filter(u => !ehPessoaDeTag(u));
+    return [...outros, ...marcadas];
 }
 
 function renderLabelPicker(selectedIds) {
@@ -9307,19 +9367,48 @@ function colocarNaPosicao(card, numero) {
     persistCard(card);
 }
 
-// Logo depois de criar uma tarefa: mostra o "A Fazer" da pessoa, em ordem, e
-// deixa escolher onde a tarefa nova entra. Sem escolher, ela fica no fim.
+// Posição da tarefa nova no "A Fazer" da pessoa. Dá pra escolher no próprio
+// formulário (campo "Posição no A Fazer" / botão "Ver lista"); quem não
+// escolheu lá vê o popup com a lista logo depois de salvar. Sem escolher em
+// nenhum dos dois, ela fica no fim.
 let perguntarPosicaoAposSalvar = null;
+let posicaoEscolhidaNoFormulario = false;
 
-function abrirEscolhaDePosicao(cardId) {
-    const card = (state.cards || []).find(c => c.id === cardId);
-    if (!card || isObserver) return;
-    const outros = cardsDaRaiaEmOrdem(card.personId, card.status).filter(c => c.id !== card.id);
-    if (!outros.length) return; // é a única da raia: não há o que escolher
+function preencherPosicaoDoFormulario() {
+    const grupo = document.getElementById('cardPosicaoGroup');
+    const sel = document.getElementById('cardPosicaoSelect');
+    const verLista = document.getElementById('cardPosicaoVerLista');
+    if (!grupo || !sel) return;
+    const editando = !!document.getElementById('editingCardId').value;
+    if (editando || isObserver) { grupo.style.display = 'none'; return; }
+    grupo.style.display = '';
 
-    const pessoa = (state.people || []).find(p => p.id === card.personId);
+    const personId = document.getElementById('targetPersonSelect').value;
+    const outros = cardsDaRaiaEmOrdem(personId, 'afazer');
     const total = outros.length + 1;
-    let escolhida = total;
+    let opcoes = '';
+    for (let i = 1; i <= total; i++) {
+        const rotulo = i === total
+            ? `${i}º — no fim${total > 1 ? '' : ' (única tarefa)'}`
+            : `${i}º — antes de "${outros[i - 1].title}"`;
+        opcoes += `<option value="${i}" ${i === total ? 'selected' : ''}>${escapeHtml(rotulo)}</option>`;
+    }
+    sel.innerHTML = opcoes;
+    sel.disabled = total === 1;
+    if (verLista) verLista.style.display = total > 1 ? '' : 'none';
+    posicaoEscolhidaNoFormulario = false;
+}
+
+// Popup com o "A Fazer" da pessoa em ordem e a tarefa nova destacada.
+// aoSalvar(posicao) recebe a posição escolhida (1 = primeira).
+function abrirListaDePosicao({ titulo, personId, ignorarId, inicial, aoSalvar }) {
+    const outros = cardsDaRaiaEmOrdem(personId, 'afazer').filter(c => c.id !== ignorarId);
+    if (!outros.length) return false; // é a única da raia: não há o que escolher
+
+    const card = { title: titulo || '(sem título)' };
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    const total = outros.length + 1;
+    let escolhida = Math.min(total, Math.max(1, inicial || total));
 
     const modal = document.createElement('div');
     modal.className = 'modal pos-nova-modal';
@@ -9356,16 +9445,30 @@ function abrirEscolhaDePosicao(cardId) {
         }));
         modal.querySelector('[data-pos-cancelar]').addEventListener('click', fechar);
         modal.querySelector('[data-pos-salvar]').addEventListener('click', () => {
-            if (escolhida !== total) {
-                colocarNaPosicao(card, escolhida);
-                renderBoard();
-                showToast(`"${escapeHtml(card.title)}" ficou na ${escolhida}ª posição`, 'success');
-            }
             fechar();
+            aoSalvar(escolhida, total);
         });
     };
     const fechar = () => modal.remove();
     desenhar();
+    return true;
+}
+
+// Depois de salvar uma tarefa nova sem ter escolhido a posição no formulário
+function abrirEscolhaDePosicao(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+    abrirListaDePosicao({
+        titulo: card.title,
+        personId: card.personId,
+        ignorarId: card.id,
+        aoSalvar: (escolhida, total) => {
+            if (escolhida === total) return;
+            colocarNaPosicao(card, escolhida);
+            renderBoard();
+            showToast(`"${escapeHtml(card.title)}" ficou na ${escolhida}ª posição`, 'success');
+        }
+    });
 }
 
 function buildPostItElement(card) {
@@ -10536,6 +10639,7 @@ function openCardModalForCreate(opcoes) {
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
     restaurarRascunhoDaTarefa('');
+    preencherPosicaoDoFormulario(); // depois do rascunho: ele pode trocar a pessoa
     limparAnexosPendentes();
     document.getElementById('cardModal').style.display = 'flex';
 }
@@ -10573,6 +10677,7 @@ function openCardModalForEdit(cardId) {
     renderCommentsList(card.id);
 
     restaurarRascunhoDaTarefa(card.id);
+    preencherPosicaoDoFormulario(); // editando: o campo some (a posição muda pelo post-it aberto)
     limparAnexosPendentes();
     document.getElementById('cardModal').style.display = 'flex';
 }
