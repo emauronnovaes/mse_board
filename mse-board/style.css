@@ -6739,3 +6739,11 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 .rel-abrir-card { cursor: pointer; }
 .rel-abrir-card:hover { color: #2563eb; text-decoration: underline; }
 @media print { .rel-abrir-card { text-decoration: none !important; color: inherit !important; } }
+
+/* --- Departamentos do formulário: recolhidos em duas linhas, setinha abre --- */
+.depto-recolher { display: flex; align-items: center; gap: 0.4rem; width: auto; margin-bottom: 0.4rem; padding: 0; background: none; border: none; font: inherit; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; color: var(--text-muted); cursor: pointer; }
+.depto-recolher small { font-weight: 500; color: var(--text-muted); }
+.depto-recolher i { font-size: 0.75rem; color: var(--text-muted); transition: transform 0.15s ease; }
+.depto-recolher[aria-expanded="true"] i { transform: rotate(180deg); }
+#deptoPickerGrid .depto-chip { line-height: 1.4; }
+#deptoPickerGrid.is-recolhido { max-height: calc(3.08rem + 4px); overflow: hidden; }
