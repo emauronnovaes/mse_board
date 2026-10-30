@@ -3064,6 +3064,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('cardDescLineNumbers').scrollTop = e.target.scrollTop;
         });
 
+        // A cor do post-it segue a prioridade (o campo de cor fica escondido)
+        document.getElementById('cardPriority').addEventListener('change', (e) => {
+            document.getElementById('cardColor').value = corDaPrioridade(e.target.value);
+        });
         document.getElementById('targetPersonSelect').addEventListener('change', preencherPosicaoDoFormulario);
         document.getElementById('cardPosicaoSelect').addEventListener('change', () => { posicaoEscolhidaNoFormulario = true; });
         document.getElementById('cardPosicaoVerLista').addEventListener('click', () => {
@@ -3086,8 +3090,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const targetPersonId = document.getElementById('targetPersonSelect').value;
             const title = document.getElementById('cardTitle').value;
             const desc = document.getElementById('cardDesc').value;
-            const color = document.getElementById('cardColor').value;
             const priority = document.getElementById('cardPriority').value;
+            const color = corDaPrioridade(priority);
             const dueDate = document.getElementById('cardDueDate').value;
             const startDate = document.getElementById('cardStartDate').value;
             const resumo = document.getElementById('cardResumo').value.trim();
@@ -9384,6 +9388,12 @@ function colocarNaPosicao(card, numero) {
         card.position = nova;
     }
     persistCard(card);
+}
+
+// Cor do post-it pela prioridade: alta = vermelho, média = amarelo, baixa = verde.
+const COR_POR_PRIORIDADE = { alta: 'red', media: 'yellow', baixa: 'green' };
+function corDaPrioridade(prioridade) {
+    return COR_POR_PRIORIDADE[prioridade] || 'yellow';
 }
 
 // Posição da tarefa nova no "A Fazer" da pessoa. Dá pra escolher no próprio
