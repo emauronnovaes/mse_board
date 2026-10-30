@@ -6715,3 +6715,6 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 .pos-nova-num { flex: 0 0 auto; min-width: 2rem; font-weight: 700; color: var(--text-muted); }
 .pos-nova-slot { display: block; width: 100%; margin: 0.25rem 0; padding: 0.2rem; border: 1px dashed transparent; border-radius: 6px; background: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; opacity: 0.55; }
 .pos-nova-slot:hover { opacity: 1; border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
+.card-posicao-linha { display: flex; gap: 0.5rem; align-items: center; }
+.card-posicao-linha select { flex: 1; min-width: 0; }
+.card-posicao-linha .btn-secondary { flex: 0 0 auto; width: auto; white-space: nowrap; }
