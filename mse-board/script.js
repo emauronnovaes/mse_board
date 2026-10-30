@@ -643,7 +643,9 @@ function relLinha(card, hoje, comResponsavel) {
     return `
         <tr>
             ${comResponsavel ? `<td class="rel-resp${filaSemDono ? ' rel-fila' : ''}">${relEscapa(nomeDoResponsavel(card.personId))}</td>` : ''}
-            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}</td>
+            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}${(card.assignees || []).length
+                ? `<div class="rel-tags">${card.assignees.map(u => `<span class="rel-tag">${relEscapa(nomeDaTagDePessoa(u))}</span>`).join('')}</div>`
+                : ''}</td>
             <td class="rel-data">${relData(card.startDate || (card.createdAt ? new Date(card.createdAt).toISOString().slice(0, 10) : null))}</td>
             <td class="rel-data">${relData(card.dueDate)}${sit ? ` <span class="rel-sit ${sit.classe}">${sit.texto}</span>` : ''}</td>
             <td class="rel-avanco">
@@ -660,13 +662,14 @@ function relLinha(card, hoje, comResponsavel) {
 // Ficam só na tela: o documento gerado sai com o que estiver filtrado, que é
 // justamente a graça — dá pra emitir "só o que está atrasado" ou "só as
 // tarefas do Alexandre" sem mexer em nada do quadro.
-let relFiltro = { busca: '', pessoa: '', status: '', prazo: '' };
+let relFiltro = { busca: '', pessoa: '', tag: '', status: '', prazo: '' };
 
 function lerFiltrosDoRelatorio() {
     const v = id => (document.getElementById(id) || {}).value || '';
     relFiltro = {
         busca: v('relBusca').trim().toLowerCase(),
         pessoa: v('relFiltroPessoa'),
+        tag: v('relFiltroTag'),
         status: v('relFiltroStatus'),
         prazo: v('relFiltroPrazo')
     };
@@ -675,6 +678,7 @@ function lerFiltrosDoRelatorio() {
 // A atividade passa pelos filtros escolhidos?
 function passaNosFiltrosDoRelatorio(card, hoje) {
     if (relFiltro.pessoa && card.personId !== relFiltro.pessoa) return false;
+    if (relFiltro.tag && !(card.assignees || []).includes(relFiltro.tag)) return false;
     if (relFiltro.status && (card.status || 'todo') !== relFiltro.status) return false;
 
     if (relFiltro.prazo === 'semprazo' && card.dueDate) return false;
@@ -686,7 +690,7 @@ function passaNosFiltrosDoRelatorio(card, hoje) {
     }
 
     if (relFiltro.busca) {
-        const alvo = `${card.title || ''} ${nomeDoResponsavel(card.personId)}`.toLowerCase();
+        const alvo = `${card.title || ''} ${nomeDoResponsavel(card.personId)} ${(card.assignees || []).map(nomeDaTagDePessoa).join(' ')}`.toLowerCase();
         if (!alvo.includes(relFiltro.busca)) return false;
     }
     return true;
@@ -870,6 +874,7 @@ function renderPaginaDoRelatorio() {
 
     renderFaixaDeAtividadesFora();
     renderSeletorDePessoasDoRelatorio();
+    renderSeletorDeTagsDoRelatorio();
 }
 
 // Lista de responsáveis do seletor. Monta a partir de TODAS as atividades em
@@ -892,10 +897,21 @@ function renderSeletorDePessoasDoRelatorio() {
         pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === guardado ? 'selected' : ''}>${escapeHtml(p.nome)}</option>`).join('');
 }
 
+// Filtro de tags: todos os nomes que já entraram no board, mais quem estiver
+// setado em alguma atividade (mesmo que ainda não tenha entrado).
+function renderSeletorDeTagsDoRelatorio() {
+    const sel = document.getElementById('relFiltroTag');
+    if (!sel) return;
+    const usados = [];
+    (state.cards || []).forEach(c => (c.assignees || []).forEach(u => { if (!usados.includes(u)) usados.push(u); }));
+    sel.innerHTML = '<option value="">Todos</option>' +
+        pessoasParaTag(usados).map(u => `<option value="${escapeHtml(u)}" ${u === relFiltro.tag ? 'selected' : ''}>${escapeHtml(nomeDaTagDePessoa(u))}</option>`).join('');
+}
+
 function ligarFiltrosDoRelatorio() {
     const aplicar = () => { lerFiltrosDoRelatorio(); renderPaginaDoRelatorio(); };
 
-    ['relBusca', 'relFiltroPessoa', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
+    ['relBusca', 'relFiltroPessoa', 'relFiltroTag', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', aplicar);
@@ -904,7 +920,7 @@ function ligarFiltrosDoRelatorio() {
     const limpar = document.getElementById('relLimparFiltros');
     if (limpar) {
         limpar.addEventListener('click', () => {
-            ['relBusca', 'relFiltroPessoa', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
+            ['relBusca', 'relFiltroPessoa', 'relFiltroTag', 'relFiltroStatus', 'relFiltroPrazo'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
@@ -3052,14 +3068,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const customValues = readCustomFieldValues();
             const labelIds = readSelectedLabelIds();
             const departamentos = readSelectedDeptos();
+            const assignees = readSelectedPessoasTag();
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
             if (editingId) {
-                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
+                await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees });
             } else {
-                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos });
+                const novoCardId = await addCard({ personId: targetPersonId, title, lines, color, priority, dueDate, author: userData.name, attachments: newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees });
                 if (criandoParaReuniao && novoCardId) marcarReuniao(novoCardId, criandoParaReuniao);
+                // Tarefa criada no quadro: pergunta em que posição ela entra no "A Fazer" da pessoa
+                else if (novoCardId) perguntarPosicaoAposSalvar = novoCardId;
                 criandoParaReuniao = null;
             }
 
@@ -3073,6 +3092,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             limparAnexosPendentes(); // salvou: o que estava na fila já virou anexo
             renderCoverPreview(null);
             cardModal.style.display = 'none';
+
+            if (perguntarPosicaoAposSalvar) {
+                const id = perguntarPosicaoAposSalvar;
+                perguntarPosicaoAposSalvar = null;
+                abrirEscolhaDePosicao(id);
+            }
         });
 
         document.getElementById('addCommentBtn').addEventListener('click', () => {
@@ -4676,6 +4701,38 @@ function readSelectedDeptos() {
     return [...document.querySelectorAll('#deptoPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.depto);
 }
 
+// Tags de pessoas: todo mundo que já entrou no board (state.knownUsers).
+// Ficam em card.assignees — o mesmo campo do "Atribuído a" das Reuniões.
+function nomeDaTagDePessoa(usuario) {
+    return String(usuario).includes('@') ? deriveNameFromEmail(usuario) : String(usuario);
+}
+
+function pessoasParaTag(incluir) {
+    const lista = (state.knownUsers || []).filter(u => u && u !== BOOTSTRAP_ADMIN_EMAIL);
+    (incluir || []).forEach(u => { if (u && !lista.includes(u)) lista.push(u); });
+    return lista.sort((a, b) => nomeDaTagDePessoa(a).localeCompare(nomeDaTagDePessoa(b), 'pt-BR'));
+}
+
+function renderPessoasTagPicker(selecionados) {
+    const container = document.getElementById('pessoasTagPickerContainer');
+    if (!container) return;
+    const marcados = selecionados || [];
+    container.innerHTML = `
+        <div class="input-group">
+            <label>Pessoas (tags)</label>
+            <div class="depto-grid" id="pessoasTagPickerGrid">${pessoasParaTag(marcados).map(u =>
+                `<button type="button" class="depto-chip${marcados.includes(u) ? ' is-on' : ''}" data-pessoa-tag="${escapeHtml(u)}" title="${escapeHtml(u)}">${escapeHtml(nomeDaTagDePessoa(u))}</button>`
+            ).join('')}</div>
+        </div>`;
+    container.querySelectorAll('.depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => chip.classList.toggle('is-on'));
+    });
+}
+
+function readSelectedPessoasTag() {
+    return [...document.querySelectorAll('#pessoasTagPickerGrid .depto-chip.is-on')].map(ch => ch.dataset.pessoaTag);
+}
+
 function renderLabelPicker(selectedIds) {
     const container = document.getElementById('labelPickerContainer');
     if (!container) return;
@@ -6267,7 +6324,7 @@ function deletePerson(personId) {
 // CRUD: POST-ITS (CARDS)
 // ==========================================
 
-function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
+function addCard({ personId, title, lines, color, priority, dueDate, author, attachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees }) {
     const id = generateUniqueId('c');
 
     const card = {
@@ -6285,7 +6342,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
         checklist: lines.map(text => ({ text, checked: false })),
         attachments: attachments || [],
         comments: [],
-        assignees: [],
+        assignees: assignees || [],
         archived: false,
         starred: false,
         labelIds: labelIds || [],
@@ -6303,7 +6360,7 @@ function addCard({ personId, title, lines, color, priority, dueDate, author, att
     return id;
 }
 
-async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos }) {
+async function updateCard(cardId, { personId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees }) {
     const card = state.cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -6327,6 +6384,7 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     if (customValues) card.customValues = customValues;
     if (labelIds) card.labelIds = labelIds;
     if (Array.isArray(departamentos)) card.departamentos = departamentos;
+    if (Array.isArray(assignees)) card.assignees = assignees;
     card.stickerId = stickerId || null;
     card.coverImage = coverImage || null;
 
@@ -9249,6 +9307,67 @@ function colocarNaPosicao(card, numero) {
     persistCard(card);
 }
 
+// Logo depois de criar uma tarefa: mostra o "A Fazer" da pessoa, em ordem, e
+// deixa escolher onde a tarefa nova entra. Sem escolher, ela fica no fim.
+let perguntarPosicaoAposSalvar = null;
+
+function abrirEscolhaDePosicao(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card || isObserver) return;
+    const outros = cardsDaRaiaEmOrdem(card.personId, card.status).filter(c => c.id !== card.id);
+    if (!outros.length) return; // é a única da raia: não há o que escolher
+
+    const pessoa = (state.people || []).find(p => p.id === card.personId);
+    const total = outros.length + 1;
+    let escolhida = total;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal pos-nova-modal';
+    modal.style.display = 'flex';
+    document.body.appendChild(modal);
+
+    const desenhar = () => {
+        const linhas = [];
+        for (let i = 1; i <= total; i++) {
+            if (i === escolhida) {
+                linhas.push(`<li class="pos-nova-item is-nova"><span class="pos-nova-num">${i}º</span> ${escapeHtml(card.title)} <em>(nova)</em></li>`);
+            } else {
+                linhas.push(`<li><button type="button" class="pos-nova-slot" data-pos="${i}">Colocar aqui (${i}º)</button></li>`);
+            }
+            const existente = outros[i - 1];
+            if (existente) {
+                const numero = i < escolhida ? i : i + 1;
+                linhas.push(`<li class="pos-nova-item"><span class="pos-nova-num">${numero}º</span> ${escapeHtml(existente.title)}</li>`);
+            }
+        }
+        modal.innerHTML = `
+            <div class="modal-content pos-nova-conteudo">
+                <h3>Posição da nova tarefa</h3>
+                <p class="pos-nova-sub">A Fazer de <b>${escapeHtml(pessoa ? pessoa.name : '')}</b> · clique em "Colocar aqui" para escolher</p>
+                <ol class="pos-nova-lista">${linhas.join('')}</ol>
+                <div class="confirm-actions">
+                    <button type="button" class="btn-secondary" data-pos-cancelar>Deixar no fim</button>
+                    <button type="button" class="btn-primary" data-pos-salvar>Salvar posição</button>
+                </div>
+            </div>`;
+        modal.querySelectorAll('.pos-nova-slot').forEach(b => b.addEventListener('click', () => {
+            escolhida = parseInt(b.dataset.pos, 10);
+            desenhar();
+        }));
+        modal.querySelector('[data-pos-cancelar]').addEventListener('click', fechar);
+        modal.querySelector('[data-pos-salvar]').addEventListener('click', () => {
+            if (escolhida !== total) {
+                colocarNaPosicao(card, escolhida);
+                renderBoard();
+                showToast(`"${escapeHtml(card.title)}" ficou na ${escolhida}ª posição`, 'success');
+            }
+            fechar();
+        });
+    };
+    const fechar = () => modal.remove();
+    desenhar();
+}
+
 function buildPostItElement(card) {
     const el = document.createElement('div');
     el.className = `postit ${card.color}`;
@@ -10412,6 +10531,7 @@ function openCardModalForCreate(opcoes) {
     renderCustomFieldsInputs();
     renderLabelPicker();
     renderDeptoPicker();
+    renderPessoasTagPicker();
     renderStickerPicker();
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
@@ -10444,6 +10564,7 @@ function openCardModalForEdit(cardId) {
     renderCustomFieldsInputs(card.customValues);
     renderLabelPicker(card.labelIds);
     renderDeptoPicker(card.departamentos);
+    renderPessoasTagPicker(card.assignees);
     renderStickerPicker(card.stickerId);
     document.getElementById('cardCoverInput').value = '';
     renderCoverPreview(card.coverImage);
