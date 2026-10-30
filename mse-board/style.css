@@ -6747,3 +6747,5 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 .depto-recolher[aria-expanded="true"] i { transform: rotate(180deg); }
 #deptoPickerGrid .depto-chip { line-height: 1.4; }
 #deptoPickerGrid.is-recolhido { max-height: calc(3.08rem + 4px); overflow: hidden; }
+.tags-vazio { display: block; color: var(--text-muted); font-size: 0.78rem; }
+#viewTagsGrid .depto-chip[disabled] { cursor: default; }
