@@ -4725,16 +4725,31 @@ function renderDeptoPicker(selecionados) {
     const container = document.getElementById('deptoPickerContainer');
     if (!container) return;
     const marcados = selecionados || [];
+    // Começa recolhida (só as duas primeiras linhas); a setinha abre o resto.
     container.innerHTML = `
         <div class="input-group">
-            <label>Departamentos</label>
-            <div class="depto-grid" id="deptoPickerGrid">${DEPARTAMENTOS_REUNIAO.map(d =>
+            <button type="button" class="depto-recolher" id="deptoPickerToggle" aria-expanded="false">
+                <span>Departamentos</span> <small id="deptoPickerQtd"></small>
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div class="depto-grid is-recolhido" id="deptoPickerGrid">${DEPARTAMENTOS_REUNIAO.map(d =>
                 `<button type="button" class="depto-chip${marcados.includes(d) ? ' is-on' : ''}" data-depto="${escapeHtml(d)}">${escapeHtml(d)}</button>`
             ).join('')}</div>
         </div>`;
-    container.querySelectorAll('.depto-chip').forEach(chip => {
-        chip.addEventListener('click', () => chip.classList.toggle('is-on'));
+    const grid = container.querySelector('#deptoPickerGrid');
+    const toggle = container.querySelector('#deptoPickerToggle');
+    const atualizarQtd = () => {
+        const n = grid.querySelectorAll('.depto-chip.is-on').length;
+        container.querySelector('#deptoPickerQtd').textContent = n ? `(${n} marcado${n > 1 ? 's' : ''})` : '';
+    };
+    toggle.addEventListener('click', () => {
+        const aberto = grid.classList.toggle('is-recolhido') === false;
+        toggle.setAttribute('aria-expanded', String(aberto));
     });
+    container.querySelectorAll('.depto-chip').forEach(chip => {
+        chip.addEventListener('click', () => { chip.classList.toggle('is-on'); atualizarQtd(); });
+    });
+    atualizarQtd();
 }
 
 function readSelectedDeptos() {
