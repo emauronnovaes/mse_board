@@ -45,6 +45,19 @@ try {
 
     // Nome de arquivo seguro e único (evita sobrescrever e evita caracteres perigosos)
     $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($p['filename']));
+
+    // Aceita qualquer tipo de arquivo (sql, zip, etc.), mas nada que o servidor
+    // possa EXECUTAR ao ser aberto pela URL. Confere todos os pedaços do nome
+    // (Apache executa "x.php.jpg" em algumas configurações) e, se achar um
+    // tipo executável, troca os pontos por "_" e salva como .txt.
+    // O nome original continua aparecendo no post-it.
+    $executaveis = ['php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phps', 'phar',
+        'cgi', 'pl', 'py', 'asp', 'aspx', 'jsp', 'sh', 'shtml', 'htaccess', 'htpasswd', 'ini', 'user'];
+    $pedacos = array_map('strtolower', array_slice(explode('.', $safeName), 1));
+    if (array_intersect($pedacos, $executaveis)) {
+        $safeName = str_replace('.', '_', $safeName) . '.txt';
+    }
+
     $uniqueName = uniqid() . '_' . $safeName;
     $fullPath = $uploadsDir . '/' . $uniqueName;
 
