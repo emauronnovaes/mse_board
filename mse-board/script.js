@@ -643,7 +643,7 @@ function relLinha(card, hoje, comResponsavel) {
     return `
         <tr>
             ${comResponsavel ? `<td class="rel-resp${filaSemDono ? ' rel-fila' : ''}">${relEscapa(nomeDoResponsavel(card.personId))}</td>` : ''}
-            <td class="rel-ativ">${relEscapa(card.title || '(sem título)')}${tagsDoRelatorio(card).length
+            <td class="rel-ativ"><span class="rel-abrir-card" data-ver-card="${relEscapa(card.id)}" title="Clique para ver o card">${relEscapa(card.title || '(sem título)')}</span>${tagsDoRelatorio(card).length
                 ? `<div class="rel-tags">${tagsDoRelatorio(card).map(u => `<span class="rel-tag">${relEscapa(nomeDaTagDePessoa(u))}</span>`).join('')}</div>`
                 : ''}</td>
             <td class="rel-data">${relData(card.startDate || (card.createdAt ? new Date(card.createdAt).toISOString().slice(0, 10) : null))}</td>
@@ -862,6 +862,10 @@ function renderPaginaDoRelatorio() {
 
     alvo.querySelectorAll('[data-tirar]').forEach(btn => {
         btn.addEventListener('click', () => tirarAtividadeDoRelatorio(btn.dataset.tirar));
+    });
+
+    alvo.querySelectorAll('[data-ver-card]').forEach(el => {
+        el.addEventListener('click', () => abrirResumoDoCard(el.dataset.verCard));
     });
 
     // Tirar a pessoa usa a MESMA lista das outras telas (pessoas escondidas):
@@ -9426,7 +9430,7 @@ function abrirListaDePosicao({ titulo, personId, ignorarId, inicial, aoSalvar })
             const existente = outros[i - 1];
             if (existente) {
                 const numero = i < escolhida ? i : i + 1;
-                linhas.push(`<li class="pos-nova-item"><span class="pos-nova-num">${numero}º</span> ${escapeHtml(existente.title)}</li>`);
+                linhas.push(`<li class="pos-nova-item is-clicavel" data-ver-card="${escapeHtml(existente.id)}" title="Clique para ver o card"><span class="pos-nova-num">${numero}º</span> ${escapeHtml(existente.title)} <i class="fa-regular fa-eye pos-nova-ver"></i></li>`);
             }
         }
         modal.innerHTML = `
@@ -9443,6 +9447,7 @@ function abrirListaDePosicao({ titulo, personId, ignorarId, inicial, aoSalvar })
             escolhida = parseInt(b.dataset.pos, 10);
             desenhar();
         }));
+        modal.querySelectorAll('[data-ver-card]').forEach(li => li.addEventListener('click', () => abrirResumoDoCard(li.dataset.verCard)));
         modal.querySelector('[data-pos-cancelar]').addEventListener('click', fechar);
         modal.querySelector('[data-pos-salvar]').addEventListener('click', () => {
             fechar();
@@ -9452,6 +9457,55 @@ function abrirListaDePosicao({ titulo, personId, ignorarId, inicial, aoSalvar })
     const fechar = () => modal.remove();
     desenhar();
     return true;
+}
+
+// Janela só de leitura com o conteúdo de um card. Serve pra consultar uma
+// tarefa sem sair de onde se está (lista de posição, Relatório de Backlog —
+// que não tem o post-it aberto do quadro). Fica por cima de qualquer modal.
+function abrirResumoDoCard(cardId) {
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+    const dataBR = iso => iso ? iso.split('-').reverse().join('/') : '—';
+    const pessoa = (state.people || []).find(p => p.id === card.personId);
+    const raia = (RAIAS_PARA_MOVER.find(r => r.key === (card.status || 'todo')) || {}).label || '';
+    const pct = getProgress(card).percent;
+    const inicio = card.startDate || (card.createdAt ? new Date(card.createdAt).toISOString().slice(0, 10) : '');
+    const checklist = card.checklist || [];
+    const anexos = card.attachments || [];
+    const comentarios = card.comments || [];
+    const chips = (lista, nome) => lista.map(x => `<span class="depto-tag">${escapeHtml(nome ? nome(x) : x)}</span>`).join('');
+
+    const modal = document.createElement('div');
+    modal.className = 'modal card-resumo-modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content card-resumo">
+            <button type="button" class="card-resumo-fechar" title="Fechar">&times;</button>
+            <h3>${escapeHtml(card.title || '(sem título)')}</h3>
+            <p class="card-resumo-meta">
+                ${escapeHtml(pessoa ? pessoa.name : 'Sem coluna')}${raia ? ` · ${escapeHtml(raia)}` : ''}
+                · Início ${dataBR(inicio)} · Prazo ${dataBR(card.dueDate)} · ${pct}%
+            </p>
+            ${(card.departamentos || []).length || (card.assignees || []).length ? `
+                <div class="card-resumo-chips">${chips(card.departamentos || [])}${chips(card.assignees || [], nomeDaTagDePessoa)}</div>` : ''}
+            <h4>Resumo</h4>
+            <p class="card-resumo-texto">${(card.resumo || '').trim() ? escapeHtml(card.resumo) : '<em>Sem resumo.</em>'}</p>
+            ${checklist.length ? `
+                <h4>Checklist</h4>
+                <ul class="card-resumo-check">${checklist.map(i => `<li class="${i.checked ? 'is-ok' : ''}"><i class="fa-${i.checked ? 'solid fa-square-check' : 'regular fa-square'}"></i> ${escapeHtml(i.text)}</li>`).join('')}</ul>` : ''}
+            ${anexos.length ? `
+                <h4>Anexos</h4>
+                <ul class="card-resumo-anexos">${anexos.map(a => `<li><a href="${escapeHtml(/^\s*javascript:/i.test(a.url || a.data || '') ? '#' : (a.url || a.data || '#'))}" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(a.name || 'anexo')}</a></li>`).join('')}</ul>` : ''}
+            ${comentarios.length ? `
+                <h4>Comentários</h4>
+                <ul class="card-resumo-coment">${comentarios.map(c => `<li><b>${escapeHtml(nomeDaTagDePessoa(c.author || ''))}</b> ${escapeHtml(c.text || '')}</li>`).join('')}</ul>` : ''}
+        </div>`;
+    document.body.appendChild(modal);
+    const fechar = () => { modal.remove(); document.removeEventListener('keydown', aoTeclar, true); };
+    const aoTeclar = (e) => { if (e.key === 'Escape') { e.stopPropagation(); fechar(); } };
+    modal.querySelector('.card-resumo-fechar').addEventListener('click', fechar);
+    modal.addEventListener('click', (e) => { if (e.target === modal) fechar(); });
+    document.addEventListener('keydown', aoTeclar, true);
 }
 
 // Depois de salvar uma tarefa nova sem ter escolhido a posição no formulário
