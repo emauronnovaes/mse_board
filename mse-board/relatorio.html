@@ -97,6 +97,8 @@
   .rel-resp { font-weight: 700; width: 17%; }
   .rel-fila { font-weight: 400; font-style: italic; color: #4d5868; }
   .rel-ativ { width: 40%; }
+  .rel-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+  .rel-tag { font-size: 0.68em; font-weight: 600; padding: 1px 6px; border-radius: 9px; background: #e8eefb; color: #1f3a63; white-space: nowrap; }
   .rel-data { width: 13%; color: #4d5868; white-space: nowrap; }
   .rel-avanco { width: 17%; white-space: nowrap; }
 
@@ -269,6 +271,10 @@
                 <select id="relFiltroPessoa"><option value="">Todos</option></select>
             </label>
             <label class="rel-filtro-campo">
+                <span>Pessoa (tag)</span>
+                <select id="relFiltroTag"><option value="">Todos</option></select>
+            </label>
+            <label class="rel-filtro-campo">
                 <span>Status</span>
                 <select id="relFiltroStatus">
                     <option value="">Todos</option>
@@ -304,6 +310,6 @@
          impressão. Vem de CDN como as outras dependências da página. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="config.js.php"></script>
-    <script src="script.js?v=202610291200"></script>
+    <script src="script.js?v=202610301200"></script>
 </body>
 </html>

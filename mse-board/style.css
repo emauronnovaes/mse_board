@@ -6703,3 +6703,15 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 .reu-filtro-limpar:hover { background: rgba(0, 0, 0, 0.06); }
 .reu-card-atrib { font-size: 0.74rem; margin: 0.25rem 0; opacity: 0.85; }
 .reu-card-atrib i { margin-right: 0.25rem; }
+
+/* --- POSIÇÃO DA NOVA TAREFA (popup logo após criar) --- */
+.pos-nova-conteudo { max-width: 520px; }
+.pos-nova-conteudo h3 { margin-bottom: 0.3rem; }
+.pos-nova-sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; }
+.pos-nova-lista { list-style: none; margin: 0 0 1.4rem; padding: 0; max-height: 55vh; overflow-y: auto; }
+.pos-nova-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
+.pos-nova-item.is-nova { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); font-weight: 600; }
+.pos-nova-item em { color: var(--accent); font-style: normal; font-weight: 500; }
+.pos-nova-num { flex: 0 0 auto; min-width: 2rem; font-weight: 700; color: var(--text-muted); }
+.pos-nova-slot { display: block; width: 100%; margin: 0.25rem 0; padding: 0.2rem; border: 1px dashed transparent; border-radius: 6px; background: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; opacity: 0.55; }
+.pos-nova-slot:hover { opacity: 1; border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
