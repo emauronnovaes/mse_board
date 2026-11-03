@@ -5532,7 +5532,7 @@ function renderDeliveryReport() {
     if (podiumWorstEl) podiumWorstEl.innerHTML = buildPodiumEntry(pior, true);
 
     if (byPerson.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS CONCLUÍDAS COM RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS CONCLUÍDAS COM RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
     } else {
         tableBody.innerHTML = byPerson.map((p, idx) => {
             const semDados = p.onTimePct === null;
@@ -5562,7 +5562,6 @@ function renderDeliveryReport() {
                     </td>
                     <td class="dash-num">${p.onTime}</td>
                     <td class="dash-num">${p.late}</td>
-                    <td class="dash-num dash-num-total">${p.total}</td>
                     <td>
                         <div class="dash-proportion-bar" title="${p.onTime} no prazo · ${p.late} atrasada(s)">
                             <div class="dash-proportion-ontime" style="width:${onTimeWidth}%;"></div>
