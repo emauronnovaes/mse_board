@@ -1576,6 +1576,10 @@ function abrirNovaPendencia(btn) {
         <select class="pend-novo-pessoa">
             ${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === pendenciasPersonFilter ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select>
+        <div class="pend-novo-datas" style="display:flex;gap:6px;">
+            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" style="width:100%;"></label>
+            <label style="flex:1;font-size:0.75rem;">Término<input type="date" class="pend-novo-fim" style="width:100%;"></label>
+        </div>
         <div class="pend-novo-acoes">
             <button type="button" class="pend-novo-cancelar">Cancelar</button>
             <button type="button" class="pend-novo-criar">Criar</button>
@@ -1589,6 +1593,10 @@ function abrirNovaPendencia(btn) {
     const criar = () => {
         const titulo = input.value.trim();
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
+        const inicioNovo = form.querySelector('.pend-novo-inicio').value;
+        const fimNovo = form.querySelector('.pend-novo-fim').value;
+        if (!inicioNovo || !fimNovo) { showToast('Preencha a data de início e a de término.', 'error'); return; }
+        if (fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -1596,7 +1604,8 @@ function abrirNovaPendencia(btn) {
             lines: [],
             color: 'yellow',
             priority: 'media',
-            dueDate: '',
+            startDate: inicioNovo,
+            dueDate: fimNovo,
             author: currentUserName || 'Desconhecido',
             attachments: []
         });
@@ -3124,6 +3133,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
+            // Criar tarefa exige início e término (a edição dessas datas é só do Admin)
+            if (!editingId) {
+                if (!startDate || !dueDate) {
+                    showToast('Para criar a tarefa, preencha a data de início e a de término.', 'error');
+                    return;
+                }
+                if (dueDate < startDate) {
+                    showToast('O término não pode ser antes do início.', 'error');
+                    return;
+                }
+            }
+
             // Tarefa em "Fazendo" não pode ficar sem início e término
             if (editingId) {
                 const cardEditado = state.cards.find(c => c.id === editingId);
@@ -3885,6 +3906,10 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
         </select>
         <button type="button" class="depto-editar reu-form-deptos-btn">+ Departamentos</button>
         <div class="reu-form-deptos" style="display:none;">${gradeDeDepartamentosHtml([])}</div>
+        <div class="pend-novo-datas" style="display:flex;gap:6px;">
+            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" style="width:100%;"></label>
+            <label style="flex:1;font-size:0.75rem;">Término<input type="date" class="pend-novo-fim" style="width:100%;"></label>
+        </div>
         <div class="pend-novo-acoes">
             <button type="button" class="pend-novo-cancelar">Cancelar</button>
             <button type="button" class="pend-novo-criar">Criar</button>
@@ -3915,6 +3940,10 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
     const criar = () => {
         const titulo = input.value.trim();
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
+        const inicioNovo = form.querySelector('.pend-novo-inicio').value;
+        const fimNovo = form.querySelector('.pend-novo-fim').value;
+        if (!inicioNovo || !fimNovo) { showToast('Preencha a data de início e a de término.', 'error'); return; }
+        if (fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -3922,7 +3951,8 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
             lines: [],
             color: 'yellow',
             priority: 'media',
-            dueDate: '',
+            startDate: inicioNovo,
+            dueDate: fimNovo,
             author: currentUserName || 'Desconhecido',
             attachments: []
         });
@@ -10771,6 +10801,8 @@ function openCardModalForCreate(opcoes) {
     // Tarefa nova: qualquer um preenche as datas (a trava vale só pra edição)
     document.getElementById('cardDueDate').disabled = false;
     document.getElementById('cardStartDate').disabled = false;
+    document.getElementById('cardDueDate').required = true;
+    document.getElementById('cardStartDate').required = true;
     updateChecklistLineNumbers();
     document.getElementById('existingAttachmentsList').innerHTML = '';
     document.getElementById('commentsSection').style.display = 'none';
@@ -10810,6 +10842,8 @@ function openCardModalForEdit(cardId) {
     // Datas já gravadas ficam travadas pra quem não é Admin
     document.getElementById('cardDueDate').disabled = !!card.dueDate && !podeEditarDatas();
     document.getElementById('cardStartDate').disabled = !!card.startDate && !podeEditarDatas();
+    document.getElementById('cardDueDate').required = false;
+    document.getElementById('cardStartDate').required = false;
     document.getElementById('cardResumo').value = card.resumo || '';
     document.getElementById('cardAttachments').value = '';
 
