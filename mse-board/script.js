@@ -1508,8 +1508,15 @@ function moverPendencia(cardId, novoStatus) {
     if (!card || !podeEditarPendencias()) return;
     if ((card.status || 'todo') === novoStatus) return;
 
+    // Entrar em "Fazendo" exige início e término; pede e refaz o movimento
+    if (exigeDatasParaFazendo(card, novoStatus)) {
+        pedirDatasParaFazendo(card, () => moverPendencia(cardId, novoStatus));
+        return;
+    }
+
     // Mantém a pessoa; aqui só o status muda
     moveCard(cardId, card.personId, novoStatus);
+    persistCard(card); // grava também as datas, se acabaram de ser preenchidas
 
     if (novoStatus === 'done') {
         showToast(`"${card.title}" concluída — saiu das pendências.`, 'success');
@@ -1594,7 +1601,18 @@ function abrirNovaPendencia(btn) {
             attachments: []
         });
         // addCard nasce em "A Fazer"; move pra coluna onde o botão foi clicado
-        if (novoId && lane !== 'afazer') moveCard(novoId, form.querySelector('.pend-novo-pessoa').value, lane);
+        if (novoId && lane !== 'afazer') {
+            const novoCard = state.cards.find(c => c.id === novoId);
+            const pessoaDoNovo = form.querySelector('.pend-novo-pessoa').value;
+            const irParaRaia = () => {
+                moveCard(novoId, pessoaDoNovo, lane);
+                persistCard(novoCard);
+                renderPendencias();
+            };
+            // "Fazendo" exige início e término; se cancelar, fica em "A Fazer"
+            if (novoCard && exigeDatasParaFazendo(novoCard, lane)) pedirDatasParaFazendo(novoCard, irParaRaia);
+            else moveCard(novoId, pessoaDoNovo, lane);
+        }
 
         renderPendencias();
         showToast('Tarefa criada.', 'success');
@@ -3105,6 +3123,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const assignees = readSelectedPessoasTag(editingId);
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
+
+            // Tarefa em "Fazendo" não pode ficar sem início e término
+            if (editingId) {
+                const cardEditado = state.cards.find(c => c.id === editingId);
+                if (cardEditado && (cardEditado.status || 'todo') === 'todo' && (!startDate || !dueDate)) {
+                    showToast('Tarefa em "Fazendo" precisa de data de início e de término.', 'error');
+                    return;
+                }
+            }
 
             if (editingId) {
                 await updateCard(editingId, { personId: targetPersonId, title, lines, color, priority, dueDate, newAttachments, customValues, labelIds, stickerId, coverImage, startDate, resumo, departamentos, assignees });
@@ -6490,8 +6517,14 @@ async function updateCard(cardId, { personId, title, lines, color, priority, due
     card.title = title;
     card.color = color;
     card.priority = priority;
-    card.dueDate = dueDate;
-    card.startDate = startDate || null;
+    // Datas já gravadas só Admin altera; os demais podem apenas preencher o que falta
+    if (podeEditarDatas()) {
+        card.dueDate = dueDate;
+        card.startDate = startDate || null;
+    } else {
+        if (!card.dueDate) card.dueDate = dueDate;
+        if (!card.startDate) card.startDate = startDate || null;
+    }
     card.resumo = resumo || '';
     card.checklist = newChecklist;
     card.attachments = [...card.attachments, ...newAttachments];
@@ -10735,6 +10768,9 @@ function openCardModalForCreate(opcoes) {
     document.getElementById('cardFormSubmitBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar Tarefa';
     document.getElementById('editingCardId').value = '';
     document.getElementById('newCardForm').reset();
+    // Tarefa nova: qualquer um preenche as datas (a trava vale só pra edição)
+    document.getElementById('cardDueDate').disabled = false;
+    document.getElementById('cardStartDate').disabled = false;
     updateChecklistLineNumbers();
     document.getElementById('existingAttachmentsList').innerHTML = '';
     document.getElementById('commentsSection').style.display = 'none';
@@ -10771,6 +10807,9 @@ function openCardModalForEdit(cardId) {
     document.getElementById('cardPriority').value = card.priority;
     document.getElementById('cardDueDate').value = card.dueDate || '';
     document.getElementById('cardStartDate').value = card.startDate || '';
+    // Datas já gravadas ficam travadas pra quem não é Admin
+    document.getElementById('cardDueDate').disabled = !!card.dueDate && !podeEditarDatas();
+    document.getElementById('cardStartDate').disabled = !!card.startDate && !podeEditarDatas();
     document.getElementById('cardResumo').value = card.resumo || '';
     document.getElementById('cardAttachments').value = '';
 
@@ -11416,6 +11455,66 @@ function preencherMoverPara(card) {
     ajustaRaia();
 }
 
+// ==========================================
+// DATAS OBRIGATÓRIAS NA RAIA "FAZENDO"
+// ==========================================
+// Pra tarefa entrar em "Fazendo" ela precisa de início e término. Qualquer
+// pessoa pode PREENCHER as datas, mas depois de gravadas só Admin altera
+// (ver podeEditarDatas e o formulário de edição).
+
+function podeEditarDatas() {
+    return getMemberRole(currentUserName) === 'Admin';
+}
+
+// Vai mudar de raia PARA "Fazendo" e falta alguma das duas datas?
+function exigeDatasParaFazendo(card, destinoRaia) {
+    if (destinoRaia !== 'todo') return false;
+    if ((card.status || 'todo') === 'todo') return false; // já está lá: só reordena
+    return !card.startDate || !card.dueDate;
+}
+
+// Pop-up pedindo início e término. Só segue (aoConfirmar) com as duas
+// preenchidas e término não anterior ao início; cancelar deixa tudo como está.
+// Data que já existe fica travada pra quem não é Admin.
+function pedirDatasParaFazendo(card, aoConfirmar) {
+    const admin = podeEditarDatas();
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '1100';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:420px;">
+            <h3><i class="fa-solid fa-calendar-days"></i> Datas para ir a "Fazendo"</h3>
+            <p style="margin:8px 0 14px;">Informe o início e o término de <strong>${escapeHtml(card.title)}</strong>. Depois de salvas, só Admin consegue alterar.</p>
+            <div class="input-group">
+                <label for="datasFazendoInicio">Data de Início</label>
+                <input type="date" id="datasFazendoInicio" value="${card.startDate || ''}" ${card.startDate && !admin ? 'disabled' : ''}>
+            </div>
+            <div class="input-group">
+                <label for="datasFazendoFim">Data de Término</label>
+                <input type="date" id="datasFazendoFim" value="${card.dueDate || ''}" ${card.dueDate && !admin ? 'disabled' : ''}>
+            </div>
+            <div class="confirm-actions">
+                <button type="button" class="btn-secondary" data-datas-cancelar>Cancelar</button>
+                <button type="button" class="btn-primary" data-datas-salvar>Salvar e mover</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    const fechar = () => modal.remove();
+    modal.querySelector('[data-datas-cancelar]').addEventListener('click', fechar);
+    modal.querySelector('[data-datas-salvar]').addEventListener('click', () => {
+        const inicio = modal.querySelector('#datasFazendoInicio').value;
+        const fim = modal.querySelector('#datasFazendoFim').value;
+        if (!inicio || !fim) { showToast('Preencha a data de início e a de término.', 'error'); return; }
+        if (fim < inicio) { showToast('O término não pode ser antes do início.', 'error'); return; }
+        card.startDate = inicio;
+        card.dueDate = fim;
+        fechar();
+        aoConfirmar();
+    });
+}
+
 // O destino escolhido é a raia onde o post-it já está? Numa aba de
 // "Concluído" a raia não importa (a aba inteira é uma lista só).
 function destinoMesmaRaia(card, destinoPessoa, destinoRaia) {
@@ -11442,6 +11541,12 @@ function moverPeloPostItAberto() {
 
     if (mesmaRaia && (!destinoPosicao || destinoPosicao === posicaoNaRaia(card))) {
         showToast('A tarefa já está aí.');
+        return;
+    }
+
+    // Entrar em "Fazendo" exige início e término; pede e refaz o movimento
+    if (!mesmaRaia && exigeDatasParaFazendo(card, destinoRaia)) {
+        pedirDatasParaFazendo(card, moverPeloPostItAberto);
         return;
     }
 
@@ -11523,6 +11628,7 @@ function drop(e) {
     }
 
     const card = state.cards.find(c => c.id === cardId);
+    const concluirDrop = () => {
     if (card) {
         const laneCards = sortByPosition(
             state.cards.filter(c => c.id !== cardId && c.personId === newPersonId && !c.archived &&
@@ -11555,6 +11661,11 @@ function drop(e) {
     moveCard(cardId, newPersonId, newStatus);
     if (card) persistCard(card);
     renderBoard();
+    };
+
+    // Entrar em "Fazendo" exige início e término: pede antes de mover
+    if (card && exigeDatasParaFazendo(card, newStatus)) pedirDatasParaFazendo(card, concluirDrop);
+    else concluirDrop();
 }
 
 function updateCardCounts() {
