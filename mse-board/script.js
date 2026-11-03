@@ -1595,8 +1595,8 @@ function abrirNovaPendencia(btn) {
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
         const inicioNovo = form.querySelector('.pend-novo-inicio').value;
         const fimNovo = form.querySelector('.pend-novo-fim').value;
-        if (!inicioNovo || !fimNovo) { showToast('Preencha a data de início e a de término.', 'error'); return; }
-        if (fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
+        if (!inicioNovo) { showToast('Preencha a data de início.', 'error'); return; }
+        if (fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -3133,13 +3133,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const stickerId = selectedStickerId;
             const coverImage = selectedCoverImage;
 
-            // Criar tarefa exige início e término (a edição dessas datas é só do Admin)
+            // Criar tarefa exige a data de início; o término é cobrado ao ir
+            // pra "Fazendo" (a edição dessas datas é só do Admin)
             if (!editingId) {
-                if (!startDate || !dueDate) {
-                    showToast('Para criar a tarefa, preencha a data de início e a de término.', 'error');
+                if (!startDate) {
+                    showToast('Para criar a tarefa, preencha a data de início.', 'error');
                     return;
                 }
-                if (dueDate < startDate) {
+                if (dueDate && dueDate < startDate) {
                     showToast('O término não pode ser antes do início.', 'error');
                     return;
                 }
@@ -3942,8 +3943,8 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
         const inicioNovo = form.querySelector('.pend-novo-inicio').value;
         const fimNovo = form.querySelector('.pend-novo-fim').value;
-        if (!inicioNovo || !fimNovo) { showToast('Preencha a data de início e a de término.', 'error'); return; }
-        if (fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
+        if (!inicioNovo) { showToast('Preencha a data de início.', 'error'); return; }
+        if (fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -5378,6 +5379,8 @@ function computeDeliveryStatsByPerson() {
         // Pessoa escondida não entra no ranking nem nos pódios
         if (pessoaEstaOculta(c.personId)) return;
         if (!entraNosDashboards(c)) return;
+        // Só conta entrega que tinha data final: sem prazo não dá pra dizer se foi no prazo
+        if (!c.dueDate) return;
 
         const person = state.people.find(p => p.id === c.personId);
         const personId = person ? person.id : '__sem_coluna__';
@@ -5532,7 +5535,7 @@ function renderDeliveryReport() {
     if (podiumWorstEl) podiumWorstEl.innerHTML = buildPodiumEntry(pior, true);
 
     if (byPerson.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS CONCLUÍDAS COM RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem; font-family:var(--font-mono);">AINDA NÃO HÁ ENTREGAS COM DATA FINAL E RESPONSÁVEL ATRIBUÍDO NESSE PERÍODO.</td></tr>`;
     } else {
         tableBody.innerHTML = byPerson.map((p, idx) => {
             const semDados = p.onTimePct === null;
@@ -5562,6 +5565,7 @@ function renderDeliveryReport() {
                     </td>
                     <td class="dash-num">${p.onTime}</td>
                     <td class="dash-num">${p.late}</td>
+                    <td class="dash-num dash-num-total">${p.total}</td>
                     <td>
                         <div class="dash-proportion-bar" title="${p.onTime} no prazo · ${p.late} atrasada(s)">
                             <div class="dash-proportion-ontime" style="width:${onTimeWidth}%;"></div>
@@ -10800,7 +10804,7 @@ function openCardModalForCreate(opcoes) {
     // Tarefa nova: qualquer um preenche as datas (a trava vale só pra edição)
     document.getElementById('cardDueDate').disabled = false;
     document.getElementById('cardStartDate').disabled = false;
-    document.getElementById('cardDueDate').required = true;
+    document.getElementById('cardDueDate').required = false;
     document.getElementById('cardStartDate').required = true;
     updateChecklistLineNumbers();
     document.getElementById('existingAttachmentsList').innerHTML = '';
