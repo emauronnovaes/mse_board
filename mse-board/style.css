@@ -6466,8 +6466,10 @@ body.dashboard-only-mode .dashboard-modal-content {
 
 .reu-colunas {
     display: grid;
-    grid-template-columns: repeat(4, minmax(240px, 1fr));
+    grid-template-columns: repeat(3, minmax(240px, 1fr));
     gap: 0.9rem;
+    max-width: 1400px;
+    margin: 0 auto;
     align-items: start;
     overflow-x: auto;
 }
