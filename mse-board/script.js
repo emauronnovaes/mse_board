@@ -3752,7 +3752,6 @@ function renderChatMessages() {
 
 const REUNIAO_COLUNAS = [
     { key: 'pendente', label: 'Pendente', cor: '#d23b3b' },
-    { key: 'backlog', label: 'Backlog', cor: '#b8860b' },
     { key: 'andamento', label: 'Em Andamento', cor: '#2563eb' },
     { key: 'concluido', label: 'Concluído', cor: '#1f9d57' }
 ];
@@ -4134,7 +4133,6 @@ function renderReunioesView(container) {
     const kpis = [
         { rotulo: 'Total', valor: total, cor: '#16243c' },
         { rotulo: 'Concluído', valor: concl, cor: '#1f9d57' },
-        { rotulo: 'Backlog', valor: porStatus.backlog.length, cor: '#b8860b' },
         { rotulo: 'Em andamento', valor: porStatus.andamento.length, cor: '#2563eb' },
         { rotulo: 'Pendente', valor: porStatus.pendente.length, cor: '#d23b3b' },
         { rotulo: '% Concluído', valor: pct + '%', cor: '#1f3a63' }
@@ -4157,11 +4155,11 @@ function renderReunioesView(container) {
             <div class="reu-grafico-linha">
                 <span class="reu-grafico-nome">${escapeHtml(nome)}</span>
                 <span class="reu-grafico-pct">${p}%</span>
-                <span class="reu-grafico-barra">${seg('concluido')}${seg('andamento')}${seg('backlog')}${seg('pendente')}</span>
+                <span class="reu-grafico-barra">${seg('concluido')}${seg('andamento')}${seg('pendente')}</span>
             </div>`;
     }).join('');
 
-    const legenda = [['concluido', 'Concluído'], ['andamento', 'Em Andamento'], ['backlog', 'Backlog'], ['pendente', 'Pendente']]
+    const legenda = [['concluido', 'Concluído'], ['andamento', 'Em Andamento'], ['pendente', 'Pendente']]
         .map(([k, l]) => `<span class="reu-legenda-item"><i class="reu-seg-${k}"></i> ${l}</span>`).join('');
 
     // Um filtro só: colunas do quadro e departamentos (valor "p:<id>" ou "d:<nome>")
