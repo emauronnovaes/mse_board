@@ -1595,8 +1595,8 @@ function abrirNovaPendencia(btn) {
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
         const inicioNovo = form.querySelector('.pend-novo-inicio').value;
         const fimNovo = form.querySelector('.pend-novo-fim').value;
-        if (!inicioNovo) { showToast('Preencha a data de início.', 'error'); return; }
-        if (fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
+        if (!inicioNovo && !ehColunaRadar(form.querySelector('.pend-novo-pessoa').value)) { showToast('Preencha a data de início.', 'error'); return; }
+        if (inicioNovo && fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -1619,7 +1619,7 @@ function abrirNovaPendencia(btn) {
                 renderPendencias();
             };
             // "Fazendo" exige início e término; se cancelar, fica em "A Fazer"
-            if (novoCard && exigeDatasParaFazendo(novoCard, lane)) pedirDatasParaFazendo(novoCard, irParaRaia);
+            if (novoCard && exigeDatasParaFazendo(novoCard, lane, pessoaDoNovo)) pedirDatasParaFazendo(novoCard, irParaRaia);
             else moveCard(novoId, pessoaDoNovo, lane);
         }
 
@@ -3136,11 +3136,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Criar tarefa exige a data de início; o término é cobrado ao ir
             // pra "Fazendo" (a edição dessas datas é só do Admin)
             if (!editingId) {
-                if (!startDate) {
+                if (!startDate && !ehColunaRadar(targetPersonId)) {
                     showToast('Para criar a tarefa, preencha a data de início.', 'error');
                     return;
                 }
-                if (dueDate && dueDate < startDate) {
+                if (startDate && dueDate && dueDate < startDate) {
                     showToast('O término não pode ser antes do início.', 'error');
                     return;
                 }
@@ -3149,7 +3149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Tarefa em "Fazendo" não pode ficar sem início e término
             if (editingId) {
                 const cardEditado = state.cards.find(c => c.id === editingId);
-                if (cardEditado && (cardEditado.status || 'todo') === 'todo' && (!startDate || !dueDate)) {
+                if (cardEditado && (cardEditado.status || 'todo') === 'todo' && !ehColunaRadar(targetPersonId) && (!startDate || !dueDate)) {
                     showToast('Tarefa em "Fazendo" precisa de data de início e de término.', 'error');
                     return;
                 }
@@ -3943,8 +3943,8 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
         if (!titulo) { showToast('Escreva um título.'); input.focus(); return; }
         const inicioNovo = form.querySelector('.pend-novo-inicio').value;
         const fimNovo = form.querySelector('.pend-novo-fim').value;
-        if (!inicioNovo) { showToast('Preencha a data de início.', 'error'); return; }
-        if (fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
+        if (!inicioNovo && !ehColunaRadar(form.querySelector('.pend-novo-pessoa').value)) { showToast('Preencha a data de início.', 'error'); return; }
+        if (inicioNovo && fimNovo && fimNovo < inicioNovo) { showToast('O término não pode ser antes do início.', 'error'); return; }
 
         const novoId = addCard({
             personId: form.querySelector('.pend-novo-pessoa').value,
@@ -11503,8 +11503,17 @@ function podeEditarDatas() {
     return getMemberRole(currentUserName) === 'Admin';
 }
 
+// A coluna "Radar" guarda itens que ainda não são de ninguém: não pede data.
+function ehColunaRadar(personId) {
+    const pessoa = (state.people || []).find(p => p.id === personId);
+    if (!pessoa || !pessoa.name) return false;
+    return pessoa.name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase() === 'radar';
+}
+
 // Vai mudar de raia PARA "Fazendo" e falta alguma das duas datas?
-function exigeDatasParaFazendo(card, destinoRaia) {
+// destinoPessoa: coluna de destino (se for o Radar, não exige).
+function exigeDatasParaFazendo(card, destinoRaia, destinoPessoa) {
+    if (ehColunaRadar(destinoPessoa || card.personId)) return false;
     if (destinoRaia !== 'todo') return false;
     if ((card.status || 'todo') === 'todo') return false; // já está lá: só reordena
     return !card.startDate || !card.dueDate;
@@ -11582,7 +11591,7 @@ function moverPeloPostItAberto() {
     }
 
     // Entrar em "Fazendo" exige início e término; pede e refaz o movimento
-    if (!mesmaRaia && exigeDatasParaFazendo(card, destinoRaia)) {
+    if (!mesmaRaia && exigeDatasParaFazendo(card, destinoRaia, destinoPessoa)) {
         pedirDatasParaFazendo(card, moverPeloPostItAberto);
         return;
     }
@@ -11701,7 +11710,7 @@ function drop(e) {
     };
 
     // Entrar em "Fazendo" exige início e término: pede antes de mover
-    if (card && exigeDatasParaFazendo(card, newStatus)) pedirDatasParaFazendo(card, concluirDrop);
+    if (card && exigeDatasParaFazendo(card, newStatus, newPersonId)) pedirDatasParaFazendo(card, concluirDrop);
     else concluirDrop();
 }
 
