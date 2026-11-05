@@ -25,7 +25,7 @@ header('Content-Type: application/json; charset=utf-8');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
 $providedToken = $_GET['token'] ?? $_POST['token'] ?? ($_SERVER['HTTP_X_SUGGESTION_TOKEN'] ?? '');
-if (!hash_equals(SUGGESTIONS_WEBHOOK_TOKEN, $providedToken)) {
+if (SUGGESTIONS_WEBHOOK_TOKEN === '' || !hash_equals(SUGGESTIONS_WEBHOOK_TOKEN, (string) $providedToken)) {
     http_response_code(401);
     echo json_encode(['error' => 'Token inválido ou ausente.']);
     exit;

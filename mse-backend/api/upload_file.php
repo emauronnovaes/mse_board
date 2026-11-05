@@ -58,6 +58,14 @@ try {
         $safeName = str_replace('.', '_', $safeName) . '.txt';
     }
 
+    // Página/imagem com script (html, svg...) aberta pelo link rodaria código no
+    // domínio do board (e leria a sessão de quem clicou). Salva como .txt.
+    $renderizaveis = ['html', 'htm', 'xhtml', 'shtml', 'svg', 'svgz', 'xml', 'xsl', 'mht', 'mhtml'];
+    $extensao = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
+    if (in_array($extensao, $renderizaveis, true)) {
+        $safeName .= '.txt';
+    }
+
     $uniqueName = uniqid() . '_' . $safeName;
     $fullPath = $uploadsDir . '/' . $uniqueName;
 

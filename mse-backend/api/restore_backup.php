@@ -24,7 +24,7 @@ if (!$p || empty($p['filename'])) {
 
 // Só aceita nomes de arquivo dentro do padrão esperado, por segurança
 $safeName = basename($p['filename']);
-if (!preg_match('/^backup_[0-9_\-]+\.json$/', $safeName)) {
+if (!preg_match('/^backup_[0-9_\-]+(_[0-9a-f]{16})?\.json$/', $safeName)) {
     http_response_code(400);
     echo json_encode(['error' => 'Nome de arquivo inválido.']);
     exit;

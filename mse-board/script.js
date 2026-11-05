@@ -1912,9 +1912,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (rememberedRaw) {
             try {
                 const remembered = JSON.parse(rememberedRaw);
-                document.getElementById('username').value = remembered.email;
-                document.getElementById('password').value = remembered.password;
+                document.getElementById('username').value = remembered.email || '';
                 document.getElementById('rememberMe').checked = true;
+                // Versões antigas guardavam a senha aqui: regrava sem ela
+                if (remembered.password) localStorage.setItem('mse_remembered_creds', JSON.stringify({ email: remembered.email }));
             } catch (err) {
                 localStorage.removeItem('mse_remembered_creds');
             }
@@ -2010,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Lembrar senha (ou esquecer, se desmarcado)
             if (document.getElementById('rememberMe').checked) {
-                localStorage.setItem('mse_remembered_creds', JSON.stringify({ email, password }));
+                localStorage.setItem('mse_remembered_creds', JSON.stringify({ email }));
             } else {
                 localStorage.removeItem('mse_remembered_creds');
             }
@@ -5447,7 +5448,7 @@ function renderDeliveryReport() {
             ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 64) : p.avatarKey)
             : null;
         const avatarHtml = avatarSrc
-            ? `<img src="${avatarSrc}" class="podium-entry-avatar" alt="">`
+            ? `<img src="${escapeHtml(avatarSrc)}" class="podium-entry-avatar" alt="">`
             : `<span class="podium-entry-avatar podium-entry-avatar-fallback">${getInitials(p.name)}</span>`;
 
         const total = p.onTime + p.late;
@@ -5486,7 +5487,7 @@ function renderDeliveryReport() {
                 ? (p.avatarKey.includes('@') ? getAvatarUrl(p.avatarKey, 60) : p.avatarKey)
                 : null;
             const avatarHtml = avatarSrc
-                ? `<img src="${avatarSrc}" class="dash-table-avatar" alt="">`
+                ? `<img src="${escapeHtml(avatarSrc)}" class="dash-table-avatar" alt="">`
                 : `<span class="dash-table-avatar dash-table-avatar-fallback">${getInitials(p.name)}</span>`;
 
             // A barra é o visual principal da linha, então ela é quem leva a
@@ -9230,7 +9231,20 @@ function showToast(message, type) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = `toast${type ? ' toast-' + type : ''}`;
-    toast.innerHTML = message;
+    // Mostra como TEXTO: título/nome de tarefa com "<script>" não pode virar
+    // código. Só o ícone do começo (<i class="fa-...">) é montado de verdade,
+    // e entidades já escapadas por quem chamou voltam a ser o caractere.
+    let texto = String(message);
+    const icone = /^<i class="(fa-[a-z]+ fa-[a-z0-9-]+)"><\/i>\s*/.exec(texto);
+    if (icone) {
+        const i = document.createElement('i');
+        i.className = icone[1];
+        toast.appendChild(i);
+        toast.appendChild(document.createTextNode(' '));
+        texto = texto.slice(icone[0].length);
+    }
+    const ENTIDADES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#039;': "'" };
+    toast.appendChild(document.createTextNode(texto.replace(/&(amp|lt|gt|quot|#39|#039);/g, m => ENTIDADES[m])));
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3500);
 }
@@ -10920,7 +10934,7 @@ function openViewModal(cardId) {
         attachSection.style.display = 'none';
     }
 
-    document.getElementById('viewCardAuthor').innerHTML = `<i class="fa-solid fa-user"></i> ${card.author}`;
+    document.getElementById('viewCardAuthor').innerHTML = `<i class="fa-solid fa-user"></i> ${escapeHtml(card.author || '')}`;
     if (card.assignees && card.assignees.length > 0) {
         document.getElementById('viewCardAuthor').textContent += ` — Atribuído(s): ${card.assignees.join(', ')}`;
     }
