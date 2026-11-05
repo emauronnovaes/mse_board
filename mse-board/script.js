@@ -351,39 +351,24 @@ async function persistComment(cardId, author, text, attempt = 1) {
     return false; // fica pendente; retryPendingCardSaves tenta de novo com o post-it inteiro
 }
 
-async function sha256Hex(str) {
-    const data = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function generateSalt() {
-    const bytes = new Uint8Array(8);
-    crypto.getRandomValues(bytes);
-    return [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashPasswordWithSalt(password, salt) {
-    const hash = await sha256Hex(`${salt}:${password}`);
-    return `${salt}:${hash}`;
-}
-
-async function verifyPassword(password, storedHash) {
-    if (!storedHash) return false;
-
-    if (storedHash.includes(':')) {
-        const [salt] = storedHash.split(':');
-        const recomputed = await hashPasswordWithSalt(password, salt);
-        return recomputed === storedHash;
+// Senhas: o navegador não vê hash nenhum. Conferir, criar e apagar senha
+// é tudo no servidor (mse-backend/api/auth.php). Devolve null se a conexão falhar.
+async function authCall(action, dados) {
+    try {
+        const res = await fetch(apiUrl('auth.php'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            body: JSON.stringify({ action, ...dados })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+    } catch (err) {
+        console.error('Falha ao falar com o servidor de login:', err);
+        return null;
     }
-
-    // Formato antigo (sem sal, de antes dessa proteção existir) — ainda aceita,
-    // pra não travar contas que já tinham senha salva.
-    const legacyHash = await sha256Hex(password);
-    return legacyHash === storedHash;
 }
 
-// Conta admin fixa: admin@mse.com.br / admin123 (hash salgado pré-calculado)
+// Conta admin fixa (a senha é conferida e guardada só no servidor)
 const BOOTSTRAP_ADMIN_EMAIL = 'admin@mse.com.br';
 
 // Perfis que NÃO devem aparecer nas bolinhas de "Conectados", por
@@ -393,7 +378,6 @@ const PERFIS_OCULTOS_NO_ONLINE = {
     planejamento: ['matheus.batista@mse.com.br'],
     escopos_custos: ['matheus.batista@mse.com.br'],
 };
-const BOOTSTRAP_ADMIN_PASSWORD_HASH = 'e8eda0d35f19623f:b087c63fcb3b0a7b5c32e7ce04ff85f58df14c514cf1068392cb92e007b3bf82';
 
 async function ensureBootstrapAdmin() {
     let boardState = await fetchBoardStateFromServer();
@@ -403,14 +387,12 @@ async function ensureBootstrapAdmin() {
         boardState = raw ? JSON.parse(raw) : {};
     }
     if (!boardState.members) boardState.members = {};
-    if (!boardState.userPasswords) boardState.userPasswords = {};
     if (!boardState.knownUsers) boardState.knownUsers = [];
 
     let changed = false;
 
     if (!boardState.members[BOOTSTRAP_ADMIN_EMAIL]) {
         boardState.members[BOOTSTRAP_ADMIN_EMAIL] = 'Admin';
-        boardState.userPasswords[BOOTSTRAP_ADMIN_EMAIL] = BOOTSTRAP_ADMIN_PASSWORD_HASH;
         changed = true;
     }
     if (!boardState.knownUsers.includes(BOOTSTRAP_ADMIN_EMAIL)) {
@@ -1987,81 +1969,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isBrandNewBoard = !boardState.members;
             if (!boardState.members) boardState.members = {};
             if (!boardState.pendingApprovals) boardState.pendingApprovals = [];
-            if (!boardState.userPasswords) boardState.userPasswords = {};
-            if (!boardState.loginAttempts) boardState.loginAttempts = {};
-
-            const accountExists = !!boardState.userPasswords[email];
-
-            // Bloqueio após muitas tentativas erradas
-            const attemptInfo = boardState.loginAttempts[email];
-            if (!isSignupMode && attemptInfo && attemptInfo.lockedUntil && Date.now() < attemptInfo.lockedUntil) {
-                const minutesLeft = Math.ceil((attemptInfo.lockedUntil - Date.now()) / 60000);
-                msgEl.textContent = `Muitas tentativas erradas. Tente novamente em ${minutesLeft} minuto${minutesLeft > 1 ? 's' : ''}.`;
+            const mostrarErro = (texto) => {
+                msgEl.textContent = texto;
                 msgEl.classList.add('is-error');
                 msgEl.style.display = 'block';
-                return;
-            }
+            };
+            const ERRO_CONEXAO = 'Não foi possível conectar ao servidor. Tente de novo em instantes.';
 
             if (isSignupMode) {
                 // ===== CRIAR CONTA =====
-                if (accountExists) {
-                    msgEl.textContent = 'Já existe uma conta com esse e-mail. Clique em "Entrar" em vez de criar conta.';
-                    msgEl.classList.add('is-error');
-                    msgEl.style.display = 'block';
-                    return;
-                }
-
                 const confirmPassword = document.getElementById('confirmPassword').value;
-                if (password !== confirmPassword) {
-                    msgEl.textContent = 'As senhas não coincidem.';
-                    msgEl.classList.add('is-error');
-                    msgEl.style.display = 'block';
-                    return;
-                }
-                if (password.length < 6) {
-                    msgEl.textContent = 'Use uma senha com pelo menos 6 caracteres.';
-                    msgEl.classList.add('is-error');
-                    msgEl.style.display = 'block';
-                    return;
-                }
+                if (password !== confirmPassword) { mostrarErro('As senhas não coincidem.'); return; }
+                if (password.length < 6) { mostrarErro('Use uma senha com pelo menos 6 caracteres.'); return; }
 
-                const salt = generateSalt();
-                boardState.userPasswords[email] = await hashPasswordWithSalt(password, salt);
+                const r = await authCall('signup', { email, password });
+                if (!r) { mostrarErro(ERRO_CONEXAO); return; }
+                if (!r.ok) {
+                    mostrarErro(r.reason === 'existe'
+                        ? 'Já existe uma conta com esse e-mail. Clique em "Entrar" em vez de criar conta.'
+                        : r.reason === 'curta' ? 'Use uma senha com pelo menos 6 caracteres.'
+                        : 'Não foi possível criar a conta.');
+                    return;
+                }
             } else {
                 // ===== ENTRAR =====
-                if (!accountExists) {
-                    msgEl.textContent = 'Não existe conta com esse e-mail ainda. Clique em "Criar conta" abaixo.';
-                    msgEl.classList.add('is-error');
-                    msgEl.style.display = 'block';
+                // Conferência da senha e bloqueio após 5 erros (15 min) ficam no servidor
+                const r = await authCall('login', { email, password });
+                if (!r) { mostrarErro(ERRO_CONEXAO); return; }
+                if (!r.ok) {
+                    const minutos = r.minutos || 15;
+                    mostrarErro(
+                        r.reason === 'sem_conta' ? 'Não existe conta com esse e-mail ainda. Clique em "Criar conta" abaixo.'
+                        : r.reason === 'bloqueado' ? `Muitas tentativas erradas. Tente novamente em ${minutos} minuto${minutos > 1 ? 's' : ''}.`
+                        : r.reason === 'senha_padrao' ? 'A senha padrão desta conta foi desativada por segurança. Clique em "Esqueci a senha" para o administrador liberar uma nova.'
+                        : 'Senha incorreta.'
+                    );
                     return;
-                }
-
-                const passwordOk = await verifyPassword(password, boardState.userPasswords[email]);
-                if (!passwordOk) {
-                    const prev = boardState.loginAttempts[email] || { count: 0 };
-                    prev.count = (prev.count || 0) + 1;
-                    if (prev.count >= 5) {
-                        prev.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 minutos
-                        prev.count = 0;
-                    }
-                    boardState.loginAttempts[email] = prev;
-                    await saveBoardStateToServer(boardState);
-
-                    msgEl.textContent = prev.lockedUntil && Date.now() < prev.lockedUntil
-                        ? 'Muitas tentativas erradas. Conta bloqueada por 15 minutos.'
-                        : 'Senha incorreta.';
-                    msgEl.classList.add('is-error');
-                    msgEl.style.display = 'block';
-                    return;
-                }
-
-                // Login certo: zera o contador de tentativas
-                delete boardState.loginAttempts[email];
-
-                // Se a senha salva ainda era do formato antigo (sem sal), atualiza pro novo formato agora
-                if (!boardState.userPasswords[email].includes(':')) {
-                    const salt = generateSalt();
-                    boardState.userPasswords[email] = await hashPasswordWithSalt(password, salt);
                 }
             }
 
@@ -2423,8 +2366,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 others.forEach(email => {
                     delete state.members[email];
                     delete state.customAvatars[email];
-                    delete state.userPasswords[email];
                 });
+                authCall('remove', { emails: others });
                 state.knownUsers = state.knownUsers.filter(u => u === currentUserName);
                 saveState();
                 logAudit(`Excluiu todas as outras pessoas do quadro (${others.length})`);
@@ -3564,11 +3507,9 @@ async function loadState() {
         if (!state.labels) state.labels = [];
         if (!state.pendingApprovals) state.pendingApprovals = [];
         if (!state.customAvatars) state.customAvatars = {};
-        if (!state.userPasswords) state.userPasswords = {};
         if (!state.passwordResetRequests) state.passwordResetRequests = [];
         if (!state.privateComments) state.privateComments = [];
         if (!state.mentions) state.mentions = [];
-        if (!state.loginAttempts) state.loginAttempts = {};
         if (!state.errorLog) state.errorLog = [];
         state.cards.forEach(c => { if (!c.labelIds) c.labelIds = []; if (c.starred === undefined) c.starred = false; if (c.stickerId === undefined) c.stickerId = null; if (c.coverImage === undefined) c.coverImage = null; if (c.completedAt === undefined) c.completedAt = null; if (c.startDate === undefined) c.startDate = null; if (c.observacao === undefined) c.observacao = ''; if (c.resumo === undefined) c.resumo = ''; });
         if (currentUserName && !state.knownUsers.includes(currentUserName)) state.knownUsers.push(currentUserName);
@@ -5108,7 +5049,7 @@ function renderPasswordResetList() {
             </div>
         `;
         row.querySelector('[data-action="reset"]').addEventListener('click', () => {
-            delete state.userPasswords[email];
+            authCall('remove', { emails: [email] });
             state.passwordResetRequests = state.passwordResetRequests.filter(e => e !== email);
             saveState();
             renderPasswordResetList();
@@ -11822,7 +11763,7 @@ function renderUsersList() {
                     state.knownUsers = state.knownUsers.filter(u => u !== user);
                     delete state.members[user];
                     delete state.customAvatars[user];
-                    delete state.userPasswords[user];
+                    authCall('remove', { emails: [user] });
                     saveState();
                     logAudit(`Excluiu a pessoa "${user}" do quadro`);
                     renderUsersList();
