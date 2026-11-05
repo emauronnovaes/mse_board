@@ -1559,7 +1559,7 @@ function abrirNovaPendencia(btn) {
             ${pessoas.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === pendenciasPersonFilter ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select>
         <div class="pend-novo-datas" style="display:flex;gap:6px;">
-            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" style="width:100%;"></label>
+            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" value="${relatorioHojeISO()}" style="width:100%;"></label>
             <label style="flex:1;font-size:0.75rem;">Término<input type="date" class="pend-novo-fim" style="width:100%;"></label>
         </div>
         <div class="pend-novo-acoes">
@@ -3849,7 +3849,7 @@ function abrirFormularioDeNovoItemDeReuniao(btn) {
         <button type="button" class="depto-editar reu-form-deptos-btn">+ Departamentos</button>
         <div class="reu-form-deptos" style="display:none;">${gradeDeDepartamentosHtml([])}</div>
         <div class="pend-novo-datas" style="display:flex;gap:6px;">
-            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" style="width:100%;"></label>
+            <label style="flex:1;font-size:0.75rem;">Início<input type="date" class="pend-novo-inicio" value="${relatorioHojeISO()}" style="width:100%;"></label>
             <label style="flex:1;font-size:0.75rem;">Término<input type="date" class="pend-novo-fim" style="width:100%;"></label>
         </div>
         <div class="pend-novo-acoes">
@@ -10773,6 +10773,9 @@ function openCardModalForCreate(opcoes) {
     renderCoverPreview(null);
     document.getElementById('cardCoverInput').value = '';
     restaurarRascunhoDaTarefa('');
+    // Início já vem com a data de hoje (dá pra trocar); rascunho salvo tem prioridade
+    const inicioEl = document.getElementById('cardStartDate');
+    if (!inicioEl.value) inicioEl.value = relatorioHojeISO();
     preencherPosicaoDoFormulario(); // depois do rascunho: ele pode trocar a pessoa
     limparAnexosPendentes();
     document.getElementById('cardModal').style.display = 'flex';
