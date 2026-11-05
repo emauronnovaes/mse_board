@@ -31,7 +31,9 @@ if (!is_dir($backupsDir)) {
     mkdir($backupsDir, 0755, true);
 }
 
-$filename = 'backup_' . date('Y-m-d_His') . '.json';
+// Sufixo aleatório: a pasta backups/ é pública no servidor, e um nome só com
+// data/hora dava pra adivinhar e baixar o banco inteiro.
+$filename = 'backup_' . date('Y-m-d_His') . '_' . bin2hex(random_bytes(8)) . '.json';
 $fullPath = $backupsDir . '/' . $filename;
 file_put_contents($fullPath, json_encode($backup, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 

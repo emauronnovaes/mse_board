@@ -28,6 +28,14 @@ if (!$p || empty($p['id']) || empty($p['personId'])) {
     exit;
 }
 
+// IDs só com letras, números, _ e - : eles vão parar dentro de onclick="..."
+// na tela, e um id com aspas viraria código rodando no navegador de todos.
+if (!preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string) $p['id']) || !preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string) $p['personId'])) {
+    http_response_code(400);
+    echo json_encode(['error' => 'ID inválido.']);
+    exit;
+}
+
 try {
     $pdo = getDbConnection();
     $dept = getCurrentDepartment();

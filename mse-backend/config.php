@@ -48,6 +48,8 @@ define('DB_USER', getenv('DB_USER') ?: 'root');
 define('DB_PASS', getenv('DB_PASS') ?: '');
 define('API_SECRET', getenv('API_SECRET') ?: '');
 define('ALLOWED_ORIGIN', getenv('ALLOWED_ORIGIN') ?: '*');
+// Token do webhook de sugestões (receive_suggestion.php). Vazio = webhook desligado.
+define('SUGGESTIONS_WEBHOOK_TOKEN', getenv('SUGGESTIONS_WEBHOOK_TOKEN') ?: '');
 
 // Endereco base da API, entregue ao frontend pelo config.js.php.
 define('API_BASE', getenv('API_BASE') ?: 'http://localhost/mse_board/mse-backend/api');
