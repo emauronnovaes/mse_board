@@ -58,6 +58,17 @@ function boardUrl() {
 // do perfil, e a pessoa ficava presa na conta de admin.
 const PERFIL_ANTERIOR_KEY = 'mse_user_anterior';
 
+// A conta admin@mse.com.br só abre vindo do perfil do Matheus (botão escondido
+// dele, que guarda o perfil anterior). Trava de tela: sem sessão no servidor,
+// quem souber mexer no navegador ainda contorna — a proteção real é a senha.
+const DONO_DA_CONTA_ADMIN = 'matheus.batista@mse.com.br';
+function veioDoPerfilDoDono() {
+    try {
+        const anterior = JSON.parse(localStorage.getItem(PERFIL_ANTERIOR_KEY));
+        return !!anterior && anterior.name === DONO_DA_CONTA_ADMIN;
+    } catch (e) { return false; }
+}
+
 async function fetchBoardStateFromServer() {
     try {
         const res = await fetch(apiUrl('get_state.php'), {
@@ -1977,6 +1988,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             const ERRO_CONEXAO = 'Não foi possível conectar ao servidor. Tente de novo em instantes.';
 
+            if (email === 'admin@mse.com.br' && !veioDoPerfilDoDono()) {
+                mostrarErro('Acesso não permitido para esta conta.');
+                return;
+            }
+
             if (isSignupMode) {
                 // ===== CRIAR CONTA =====
                 const confirmPassword = document.getElementById('confirmPassword').value;
@@ -2099,7 +2115,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. TELA DO QUADRO
     // ==========================================
     if (boardContainer) {
-        const userData = JSON.parse(localStorage.getItem('mse_user'));
+        let userData = JSON.parse(localStorage.getItem('mse_user'));
+
+        // Sessão de admin@mse.com.br sem ter vindo do perfil do Matheus: derruba
+        if (userData && userData.name === 'admin@mse.com.br' && !veioDoPerfilDoDono()) {
+            localStorage.removeItem('mse_user');
+            userData = null;
+        }
 
         if (!userData) {
             document.body.innerHTML = `
