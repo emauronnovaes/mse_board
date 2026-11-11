@@ -2076,6 +2076,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (!boardState.passwordResetRequests) boardState.passwordResetRequests = [];
 
+            // A conta master não pede redefinição pros outros Admins (eles não podem mexer nela)
+            if (email === CONTA_MASTER) {
+                msgEl.textContent = 'A senha desta conta só pode ser redefinida pelo suporte do sistema (direto no servidor).';
+                msgEl.classList.add('is-pending');
+                msgEl.style.display = 'block';
+                return;
+            }
+
             if (!boardState.passwordResetRequests.includes(email)) {
                 boardState.passwordResetRequests.push(email);
                 await saveBoardStateToServer(boardState);
@@ -2775,7 +2783,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (getMemberRole(currentUserName) === 'Admin') {
             const nApprovals = (state.pendingApprovals || []).length;
-            const nResets = (state.passwordResetRequests || []).length;
+            const nResets = pedidosDeRedefinicaoVisiveis().length;
             if (nApprovals > 0 || nResets > 0) {
                 const parts = [];
                 if (nApprovals > 0) parts.push(`${nApprovals} solicitaç${nApprovals > 1 ? 'ões' : 'ão'} de acesso`);
@@ -5020,7 +5028,7 @@ function updatePendingApprovalsBadge() {
     const badge = document.getElementById('pendingApprovalsBadge');
     if (!badge) return;
     const isAdmin = getMemberRole(currentUserName) === 'Admin';
-    const count = (state.pendingApprovals || []).length + (state.passwordResetRequests || []).length;
+    const count = (state.pendingApprovals || []).length + pedidosDeRedefinicaoVisiveis().length;
 
     if (isAdmin && count > 0) {
         badge.textContent = count;
@@ -5030,18 +5038,25 @@ function updatePendingApprovalsBadge() {
     }
 }
 
+// Conta acima dos outros Admins: pedido de redefinição dela não aparece pra eles
+const CONTA_MASTER = 'admin@mse.com.br';
+
+function pedidosDeRedefinicaoVisiveis() {
+    return (state.passwordResetRequests || []).filter(e => e !== CONTA_MASTER);
+}
+
 function renderPasswordResetList() {
     const container = document.getElementById('passwordResetList');
     if (!state.passwordResetRequests) state.passwordResetRequests = [];
     state.mentions = state.mentions || [];
 
-    if (state.passwordResetRequests.length === 0) {
+    if (pedidosDeRedefinicaoVisiveis().length === 0) {
         container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Nenhum pedido de redefinição.</p>';
         return;
     }
 
     container.innerHTML = '';
-    state.passwordResetRequests.forEach(email => {
+    pedidosDeRedefinicaoVisiveis().forEach(email => {
         const row = document.createElement('div');
         row.className = 'member-row';
         row.innerHTML = `
