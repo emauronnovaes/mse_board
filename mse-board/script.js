@@ -3684,9 +3684,7 @@ function renderChatMessages() {
 // colunas: Pendente, Backlog, Em Andamento e Concluído. Cada item é uma
 // tarefa NORMAL do quadro marcada como "reunião" (card.reuniao) e com um
 // status só da reunião (card.reuniaoStatus) — mexer no status aqui não muda a
-// raia da tarefa no quadro. No sentido contrário, uma coisa só: a tarefa que
-// entra em "Fazendo" no quadro passa para "Em Andamento" aqui
-// (acompanharRaiaNaReuniao).
+// raia da tarefa no quadro, e vice-versa.
 //
 //  - "+ Novo item" abre a mesma tela de criar tarefa do quadro; a tarefa
 //    nasce no backlog do quadro e já entra nesta aba, na coluna escolhida.
@@ -3742,17 +3740,6 @@ function cardsDeReuniao() {
 
 function proximoNumeroDeReuniao() {
     return (state.cards || []).reduce((max, c) => Math.max(max, c.reuniaoNum || 0), 0) + 1;
-}
-
-// A tarefa da reunião que entra em "Fazendo" no quadro passa para "Em
-// Andamento" nas Reuniões. Devolve true quando mudou (aí precisa salvar o card).
-function acompanharRaiaNaReuniao(card, statusAntes) {
-    if (!card.reuniao) return false;
-    if ((card.status || 'todo') !== 'todo' || (statusAntes || 'todo') === 'todo') return false;
-    if (card.reuniaoStatus === 'andamento') return false;
-    card.reuniaoStatus = 'andamento';
-    setTimeout(() => logAudit(`Reuniões: "${card.title}" foi para Em Andamento (entrou em Fazendo no quadro)`), 0);
-    return true;
 }
 
 function marcarReuniao(cardId, status) {
@@ -6614,7 +6601,6 @@ function moveCard(cardId, newPersonId, newStatus) {
     card.personId = newPersonId;
     if (newStatus) card.status = newStatus;
     marcarEntradaNaRaia(card, pessoaAntes, statusAntes);
-    const reuniaoMudou = acompanharRaiaNaReuniao(card, statusAntes);
 
     const targetPerson = state.people.find(p => p.id === newPersonId);
     const isNowDone = (targetPerson && targetPerson.isDone) || newStatus === 'done';
@@ -6626,7 +6612,6 @@ function moveCard(cardId, newPersonId, newStatus) {
     }
 
     persistCardMove(cardId, newPersonId, newStatus, card.completedAt);
-    if (reuniaoMudou) persistCard(card); // o move_card só grava pessoa/raia; o status da reunião vai pelo save_card
 
     if (isNowDone) {
         fireWebhook('card_completed', { title: card.title });
