@@ -3684,7 +3684,8 @@ function renderChatMessages() {
 // colunas: Pendente, Backlog, Em Andamento e Concluído. Cada item é uma
 // tarefa NORMAL do quadro marcada como "reunião" (card.reuniao) e com um
 // status só da reunião (card.reuniaoStatus) — mexer no status aqui não muda a
-// raia da tarefa no quadro, e vice-versa.
+// raia da tarefa no quadro. Exceção no outro sentido: a tarefa que entra em
+// Fazendo no quadro passa pra "Em Andamento" aqui (ver moveCard).
 //
 //  - "+ Novo item" abre a mesma tela de criar tarefa do quadro; a tarefa
 //    nasce no backlog do quadro e já entra nesta aba, na coluna escolhida.
@@ -6612,6 +6613,13 @@ function moveCard(cardId, newPersonId, newStatus) {
     }
 
     persistCardMove(cardId, newPersonId, newStatus, card.completedAt);
+
+    // Item de reunião que entrou em Fazendo no quadro vai pra "Em Andamento" nas Reuniões
+    if (card.reuniao && card.status === 'todo' && statusAntes !== 'todo' && statusDaReuniao(card) !== 'andamento') {
+        card.reuniaoStatus = 'andamento';
+        persistCard(card);
+        setTimeout(() => logAudit(`Reuniões: "${card.title}" foi para Em Andamento (entrou em Fazendo no quadro)`), 0);
+    }
 
     if (isNowDone) {
         fireWebhook('card_completed', { title: card.title });
