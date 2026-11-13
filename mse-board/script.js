@@ -3536,10 +3536,14 @@ async function loadState() {
         if (!state.trash) state.trash = [];
         if (!state.templates) state.templates = [];
         if (!state.labels) state.labels = [];
-        // Etiqueta MIA: criada uma vez em cada quadro (se apagarem pelo menu Etiquetas, não volta)
-        if (!state.etiquetaMiaCriada) {
-            if (!state.labels.some(l => l.name === 'MIA')) state.labels.push({ id: 'label_mia', name: 'MIA', color: '#7c3aed' });
-            state.etiquetaMiaCriada = true;
+        // Etiqueta MIA: só na Programação, criada uma vez (se apagarem pelo menu Etiquetas, não volta)
+        if (CURRENT_DEPARTMENT === 'programacao') {
+            if (!state.etiquetaMiaCriada) {
+                if (!state.labels.some(l => l.name === 'MIA')) state.labels.push({ id: 'label_mia', name: 'MIA', color: '#7c3aed' });
+                state.etiquetaMiaCriada = true;
+            }
+        } else {
+            state.labels = state.labels.filter(l => l.id !== 'label_mia');
         }
         if (!state.pendingApprovals) state.pendingApprovals = [];
         if (!state.customAvatars) state.customAvatars = {};
@@ -3555,6 +3559,16 @@ async function loadState() {
         state.cards.forEach(c => {
             if (!c.status || c.status === 'waiting') c.status = 'todo';
         });
+
+        // Programação: acerta uma vez os itens de reunião que estavam fora de
+        // sincronia com o quadro (vale a raia do quadro)
+        if (SINCRONIZA_REUNIAO_COM_QUADRO && !carregamentoIncompleto && !state.reuniaoSincronizada) {
+            state.cards.filter(c => c.reuniao && statusDaReuniao(c) !== reuniaoPelaRaia(c)).forEach(c => {
+                c.reuniaoStatus = reuniaoPelaRaia(c);
+                persistCard(c);
+            });
+            state.reuniaoSincronizada = true;
+        }
 
         isObserver = getMemberRole(currentUserName) === 'Observador';
         saveState();
@@ -3719,8 +3733,9 @@ function renderChatMessages() {
 // colunas: Pendente, Backlog, Em Andamento e Concluído. Cada item é uma
 // tarefa NORMAL do quadro marcada como "reunião" (card.reuniao) e com um
 // status só da reunião (card.reuniaoStatus) — mexer no status aqui não muda a
-// raia da tarefa no quadro. Exceção no outro sentido: a tarefa que entra em
-// Fazendo no quadro passa pra "Em Andamento" aqui (ver moveCard).
+// raia da tarefa no quadro. Na Programação os dois andam juntos (ver
+// SINCRONIZA_REUNIAO_COM_QUADRO): A Fazer = Pendente, Fazendo/Em Teste/Pausado
+// = Em Andamento, Concluída = Concluído.
 //
 //  - "+ Novo item" abre a mesma tela de criar tarefa do quadro; a tarefa
 //    nasce no backlog do quadro e já entra nesta aba, na coluna escolhida.
@@ -3778,12 +3793,50 @@ function proximoNumeroDeReuniao() {
     return (state.cards || []).reduce((max, c) => Math.max(max, c.reuniaoNum || 0), 0) + 1;
 }
 
+// Programação: status da reunião e raia do quadro andam juntos
+const SINCRONIZA_REUNIAO_COM_QUADRO = CURRENT_DEPARTMENT === 'programacao';
+const RAIA_PELA_REUNIAO = { pendente: 'afazer', andamento: 'todo', concluido: 'done' };
+
+function reuniaoPelaRaia(card) {
+    const pessoa = (state.people || []).find(p => p.id === card.personId);
+    const raia = card.status || 'todo';
+    if ((pessoa && pessoa.isDone) || raia === 'done') return 'concluido';
+    if (raia === 'afazer') return 'pendente';
+    return 'andamento';
+}
+
+// Muda o status na aba Reuniões e, na Programação, leva a tarefa pra raia
+// correspondente do quadro (ir pra Fazendo sem datas pede as datas antes).
+function mudarStatusDaReuniao(card, novo, aoTerminar) {
+    const label = REUNIAO_COLUNAS.find(c => c.key === novo).label;
+    const moverNoQuadro = SINCRONIZA_REUNIAO_COM_QUADRO && reuniaoPelaRaia(card) !== novo;
+    const aplicar = () => {
+        card.reuniaoStatus = novo;
+        if (moverNoQuadro) moveCard(card.id, card.personId, RAIA_PELA_REUNIAO[novo]);
+        persistCard(card);
+        setTimeout(() => logAudit(`Reuniões: "${card.title}" foi para ${label}${moverNoQuadro ? ' (quadro acompanhou)' : ''}`), 0);
+        if (aoTerminar) aoTerminar();
+    };
+    if (moverNoQuadro && exigeDatasParaFazendo(card, RAIA_PELA_REUNIAO[novo], card.personId)) {
+        if (aoTerminar) aoTerminar(); // volta a tela pro status atual enquanto pede as datas
+        pedirDatasParaFazendo(card, aplicar);
+        return;
+    }
+    aplicar();
+}
+
 function marcarReuniao(cardId, status) {
     const card = (state.cards || []).find(c => c.id === cardId);
     if (!card) return;
     card.reuniao = true;
-    card.reuniaoStatus = status || 'pendente';
     if (!card.reuniaoNum) card.reuniaoNum = proximoNumeroDeReuniao();
+    if (SINCRONIZA_REUNIAO_COM_QUADRO) {
+        card.reuniaoStatus = reuniaoPelaRaia(card);
+        persistCard(card);
+        if (status && status !== card.reuniaoStatus) mudarStatusDaReuniao(card, status, () => { if (typeof redesenharReunioes === 'function') redesenharReunioes(); });
+        return;
+    }
+    card.reuniaoStatus = status || 'pendente';
     persistCard(card);
 }
 
@@ -3794,7 +3847,7 @@ function marcarReuniao(cardId, status) {
 function aplicarReuniao(card, ligar) {
     card.reuniao = ligar;
     if (ligar) {
-        card.reuniaoStatus = 'pendente';
+        card.reuniaoStatus = SINCRONIZA_REUNIAO_COM_QUADRO ? reuniaoPelaRaia(card) : 'pendente';
         if (!card.reuniaoNum) card.reuniaoNum = proximoNumeroDeReuniao();
     }
     persistCard(card);
@@ -4063,12 +4116,13 @@ function ligarEdicaoDoCard(el, card) {
         card.resumo = el.querySelector('.reu-edit-resumo').value.trim();
         card.observacao = el.querySelector('.reu-edit-obs').value.trim();
         card.personId = el.querySelector('.reu-edit-pessoa').value;
-        card.reuniaoStatus = el.querySelector('.reu-edit-status').value;
         card.departamentos = marcados;
+        const novoStatus = el.querySelector('.reu-edit-status').value;
         persistCard(card);
         setTimeout(() => logAudit(`Reuniões: editou o item "${card.title}"`), 0);
         showToast('Item atualizado.', 'success');
-        fechar();
+        if (novoStatus !== statusDaReuniao(card)) mudarStatusDaReuniao(card, novoStatus, fechar);
+        else fechar();
     });
     el.querySelector('.reu-edit-titulo').focus();
     el.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
@@ -4265,10 +4319,7 @@ function renderReunioesView(container) {
         });
 
         el.querySelector('.reu-status').addEventListener('change', (e) => {
-            card.reuniaoStatus = e.target.value;
-            persistCard(card);
-            logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === e.target.value).label}`);
-            redesenharReunioes();
+            mudarStatusDaReuniao(card, e.target.value, redesenharReunioes);
         });
 
         const campos = {
@@ -4301,10 +4352,7 @@ function renderReunioesView(container) {
                 if (!dado.startsWith('reu:')) return;
                 const card = state.cards.find(c => c.id === dado.slice(4));
                 if (!card || statusDaReuniao(card) === colEl.dataset.status) return;
-                card.reuniaoStatus = colEl.dataset.status;
-                persistCard(card);
-                logAudit(`Reuniões: "${card.title}" foi para ${REUNIAO_COLUNAS.find(c => c.key === colEl.dataset.status).label}`);
-                redesenharReunioes();
+                mudarStatusDaReuniao(card, colEl.dataset.status, redesenharReunioes);
             });
         });
     }
@@ -6656,11 +6704,12 @@ function moveCard(cardId, newPersonId, newStatus) {
 
     persistCardMove(cardId, newPersonId, newStatus, card.completedAt);
 
-    // Item de reunião que entrou em Fazendo no quadro vai pra "Em Andamento" nas Reuniões
-    if (card.reuniao && card.status === 'todo' && statusAntes !== 'todo' && statusDaReuniao(card) !== 'andamento') {
-        card.reuniaoStatus = 'andamento';
+    // Programação: item de reunião acompanha a raia nova na aba Reuniões
+    if (SINCRONIZA_REUNIAO_COM_QUADRO && card.reuniao && statusDaReuniao(card) !== reuniaoPelaRaia(card)) {
+        card.reuniaoStatus = reuniaoPelaRaia(card);
         persistCard(card);
-        setTimeout(() => logAudit(`Reuniões: "${card.title}" foi para Em Andamento (entrou em Fazendo no quadro)`), 0);
+        const label = REUNIAO_COLUNAS.find(c => c.key === card.reuniaoStatus).label;
+        setTimeout(() => logAudit(`Reuniões: "${card.title}" foi para ${label} (acompanhou o quadro)`), 0);
     }
 
     if (isNowDone) {
