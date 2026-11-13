@@ -3536,6 +3536,11 @@ async function loadState() {
         if (!state.trash) state.trash = [];
         if (!state.templates) state.templates = [];
         if (!state.labels) state.labels = [];
+        // Etiqueta MIA: criada uma vez em cada quadro (se apagarem pelo menu Etiquetas, não volta)
+        if (!state.etiquetaMiaCriada) {
+            if (!state.labels.some(l => l.name === 'MIA')) state.labels.push({ id: 'label_mia', name: 'MIA', color: '#7c3aed' });
+            state.etiquetaMiaCriada = true;
+        }
         if (!state.pendingApprovals) state.pendingApprovals = [];
         if (!state.customAvatars) state.customAvatars = {};
         if (!state.passwordResetRequests) state.passwordResetRequests = [];
@@ -9663,7 +9668,7 @@ function buildPostItElement(card) {
 
     const cardLabels = (card.labelIds || []).map(id => state.labels.find(l => l.id === id)).filter(Boolean);
     const labelsHtml = cardLabels.length > 0
-        ? `<div class="postit-labels">${cardLabels.map(l => `<span class="label-swatch-dot" style="background:${l.color}" title="${escapeHtml(l.name)}"></span>`).join('')}</div>`
+        ? `<div class="postit-labels">${cardLabels.map(l => `<span class="label-chip" style="background:${escapeHtml(l.color)}">${escapeHtml(l.name)}</span>`).join('')}</div>`
         : '';
 
     const sticker = getStickerById(card.stickerId);
