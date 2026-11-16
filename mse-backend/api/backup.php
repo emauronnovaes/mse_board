@@ -11,7 +11,7 @@
 require_once __DIR__ . '/../config.php';
 
 header('Content-Type: application/json; charset=utf-8');
-requireApiKey();
+if (!chaveDeApiConfere()) requireAdminDoQuadro(); // backup agendado usa a chave; pelo site, só Admin
 
 $pdo = getDbConnection();
 

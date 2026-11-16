@@ -145,3 +145,6 @@ function requireApiKey() {
         exit;
     }
 }
+
+// Sessão de quem está logado (requireSession / requireAdminDoQuadro)
+require_once __DIR__ . '/session_helper.php';

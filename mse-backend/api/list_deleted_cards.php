@@ -19,11 +19,11 @@ require_once __DIR__ . '/../deleted_cards_helper.php';
 
 header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-API-Key');
+header('Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Session-Token');
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
-requireApiKey();
+requireSession();
 
 function resumoDoCard(array $r) {
     return [
