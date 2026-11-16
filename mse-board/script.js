@@ -4128,6 +4128,18 @@ function ligarEdicaoDoCard(el, card) {
     el.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
 }
 
+// Anexos do card nas Reuniões: são os MESMOS da tarefa do quadro (card.attachments)
+function anexosDaReuniaoHtml(c) {
+    const anexos = c.attachments || [];
+    const itens = anexos.map(att => att.isImage
+        ? `<a href="${escapeHtml(att.url)}" target="_blank" class="reu-anexo-img" title="${escapeHtml(att.name)}"><img src="${escapeHtml(att.url)}" alt="${escapeHtml(att.name)}"></a>`
+        : `<a href="${escapeHtml(att.url)}" target="_blank" download="${escapeHtml(att.name)}" class="reu-anexo-doc" title="${escapeHtml(att.name)}"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(att.name)}</a>`
+    ).join('');
+    const botao = isObserver ? '' : `<label class="depto-editar reu-anexo-add" title="Anexar arquivo (qualquer tipo)"><i class="fa-solid fa-paperclip"></i> Anexo<input type="file" multiple hidden data-reu-anexo-input></label>`;
+    if (!itens && !botao) return '';
+    return `<div class="reu-card-anexos">${itens}${botao}</div>`;
+}
+
 function renderReunioesView(container) {
     const todosSemFiltro = cardsDeReuniao();
     // Atribuições: quem está atribuído (responsáveis) nos itens de reunião.
@@ -4222,6 +4234,7 @@ function renderReunioesView(container) {
                 ${reunioesDeptoAberto === c.id && !isObserver ? `<div class="reu-deptos-picker">${gradeDeDepartamentosHtml(c.departamentos || [])}<button type="button" class="depto-fechar" data-reu-deptos-fechar>Pronto</button></div>` : ''}
                 <div class="reu-card-detalhe ${(c.resumo || '').trim() ? '' : 'is-vazio'}" data-reu-campo="resumo">${(c.resumo || '').trim() ? escapeHtml(c.resumo) : 'Adicionar detalhe...'}</div>
                 <div class="reu-card-obs"><b>Obs:</b> <span class="${(c.observacao || '').trim() ? '' : 'is-vazio'}" data-reu-campo="observacao">${(c.observacao || '').trim() ? escapeHtml(c.observacao) : 'adicionar observação...'}</span></div>
+                ${anexosDaReuniaoHtml(c)}
                 <div class="reu-card-rodape">
                     <select class="reu-status" ${isObserver ? 'disabled' : ''}>${opcoes}</select>
                 </div>
@@ -4294,6 +4307,19 @@ function renderReunioesView(container) {
 
         const editar = el.querySelector('[data-reu-editar]');
         if (editar) editar.addEventListener('click', () => { reunioesEditando = id; reunioesDeptoAberto = null; redesenharReunioes(); });
+
+        const inputAnexo = el.querySelector('[data-reu-anexo-input]');
+        if (inputAnexo) inputAnexo.addEventListener('change', async () => {
+            const arquivos = Array.from(inputAnexo.files || []);
+            if (!arquivos.length) return;
+            showToast(`Enviando ${arquivos.length} anexo(s)...`);
+            const novos = await processFiles(arquivos);
+            card.attachments = [...(card.attachments || []), ...novos];
+            persistCard(card);
+            setTimeout(() => logAudit(`Reuniões: anexou ${novos.length} arquivo(s) em "${card.title}"`), 0);
+            showToast('Anexo adicionado.', 'success');
+            redesenharReunioes();
+        });
         const tirar = el.querySelector('[data-reu-tirar]');
         if (tirar) tirar.addEventListener('click', () => tirarDasReunioes(id));
 

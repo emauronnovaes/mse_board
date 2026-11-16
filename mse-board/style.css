@@ -6751,3 +6751,10 @@ body.modo-so-modal .modal { background-color: var(--bg); backdrop-filter: none; 
 #deptoPickerGrid.is-recolhido { max-height: calc(3.08rem + 4px); overflow: hidden; }
 .tags-vazio { display: block; color: var(--text-muted); font-size: 0.78rem; }
 #viewTagsGrid .depto-chip[disabled] { cursor: default; }
+
+/* Anexos no card das Reuniões */
+.reu-card-anexos { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.4rem; }
+.reu-anexo-img img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+.reu-anexo-doc { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; padding: 0.12rem 0.5rem; border-radius: 6px; background: rgba(22, 36, 60, 0.07); color: var(--text-primary); font-size: 0.68rem; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reu-anexo-doc:hover { background: rgba(22, 36, 60, 0.14); }
+.reu-anexo-add { display: inline-flex; align-items: center; gap: 0.25rem; }
