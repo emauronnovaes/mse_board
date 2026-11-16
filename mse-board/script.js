@@ -33,8 +33,48 @@ const QUADRO_COMO_PLANEJAMENTO = DEPARTAMENTOS_COMO_PLANEJAMENTO.includes(CURREN
 // arquivo no HTML. O fallback abaixo só serve caso o config.js.php não carregue.
 const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || 'http://localhost/mse_board/mse-backend/api';
 
-// Chave da API — a MESMA definida no .env (API_SECRET). Vem via window.APP_CONFIG.
-const API_SECRET = (window.APP_CONFIG && window.APP_CONFIG.API_SECRET) || '';
+// Sessão no servidor: o login (senha ou Portal) devolve um token que vai em
+// toda chamada da API (cabeçalho X-Session-Token). Sem ele a API responde 401.
+const SESSAO_KEY = 'mse_token';
+function tokenDaSessao() {
+    try { return localStorage.getItem(SESSAO_KEY) || ''; } catch (e) { return ''; }
+}
+function cabecalhosDaApi(extra) {
+    return { 'X-Session-Token': tokenDaSessao(), ...(extra || {}) };
+}
+
+// Login de antes da sessão no servidor (sem token): não vale mais, entra de novo
+try {
+    if (localStorage.getItem('mse_user') && !tokenDaSessao()) localStorage.removeItem('mse_user');
+} catch (e) { /* navegador sem localStorage */ }
+
+// API respondeu 401: sessão vencida/encerrada. Limpa o login e avisa uma vez.
+let avisoDeSessaoMostrado = false;
+function sessaoExpirou() {
+    try {
+        localStorage.removeItem('mse_user');
+        localStorage.removeItem(SESSAO_KEY);
+    } catch (e) { /* nada */ }
+    if (avisoDeSessaoMostrado || document.getElementById('loginForm')) return;
+    avisoDeSessaoMostrado = true;
+    const aviso = document.createElement('div');
+    aviso.style.cssText = 'position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.55);padding:16px;font-family:inherit;';
+    aviso.innerHTML = `
+        <div style="background:#fff;color:#16243c;border-radius:12px;max-width:420px;width:100%;padding:22px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.25);">
+            <h3 style="margin:0 0 8px;">Sessão encerrada</h3>
+            <p style="margin:0 0 16px;font-size:0.92rem;">Por segurança, entre de novo pelo Portal MSE (ou pela tela de login).</p>
+            <a href="login.html?dept=${encodeURIComponent(CURRENT_DEPARTMENT)}" style="display:inline-block;background:#2563eb;color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:600;">Ir para o login</a>
+        </div>`;
+    document.body.appendChild(aviso);
+}
+
+// fetch da API com o token da sessão e tratamento do 401
+async function apiFetch(url, opcoes) {
+    const o = opcoes || {};
+    const res = await fetch(url, { ...o, headers: cabecalhosDaApi(o.headers) });
+    if (res.status === 401) sessaoExpirou();
+    return res;
+}
 
 // Monta a URL de um endpoint já incluindo ?dept=... — TODA chamada ao
 // backend precisa passar por aqui, senão o servidor não sabe de qual
@@ -71,9 +111,7 @@ function veioDoPerfilDoDono() {
 
 async function fetchBoardStateFromServer() {
     try {
-        const res = await fetch(apiUrl('get_state.php'), {
-            headers: { 'X-API-Key': API_SECRET }
-        });
+        const res = await apiFetch(apiUrl('get_state.php'));
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const text = await res.text();
         return text ? JSON.parse(text) : {};
@@ -90,12 +128,9 @@ async function saveBoardStateToServer(obj) {
     try {
         // Não manda pessoas/post-its no blob — eles agora moram nas tabelas próprias
         const { people, cards, ...rest } = obj;
-        await fetch(apiUrl('save_state.php'), {
+        await apiFetch(apiUrl('save_state.php'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': API_SECRET
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(rest)
         });
         return true;
@@ -111,12 +146,9 @@ async function saveBoardStateToServer(obj) {
 
 async function apiCall(endpoint, body) {
     try {
-        const res = await fetch(apiUrl(endpoint), {
+        const res = await apiFetch(apiUrl(endpoint), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': API_SECRET
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -135,7 +167,7 @@ async function apiCall(endpoint, body) {
 
 async function fetchPeopleFromServer() {
     try {
-        const res = await fetch(apiUrl('get_people.php'), { headers: { 'X-API-Key': API_SECRET } });
+        const res = await apiFetch(apiUrl('get_people.php'));
         const text = await res.text();
         if (!res.ok) {
             let details = text;
@@ -151,7 +183,7 @@ async function fetchPeopleFromServer() {
 
 async function fetchCardsFromServer() {
     try {
-        const res = await fetch(apiUrl('get_cards.php'), { headers: { 'X-API-Key': API_SECRET } });
+        const res = await apiFetch(apiUrl('get_cards.php'));
         const text = await res.text();
         if (!res.ok) {
             let details = text;
@@ -366,9 +398,10 @@ async function persistComment(cardId, author, text, attempt = 1) {
 // é tudo no servidor (mse-backend/api/auth.php). Devolve null se a conexão falhar.
 async function authCall(action, dados) {
     try {
-        const res = await fetch(apiUrl('auth.php'), {
+        const res = await apiFetch(apiUrl('auth.php'), {
+            keepalive: true, // o logout da troca de perfil sai antes da página mudar
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action, ...dados })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -473,6 +506,7 @@ async function tryInheritLoginFromSso() {
         const data = await res.json().catch(() => null);
 
         if (res.ok && data && data.ok) {
+            if (data.token) localStorage.setItem(SESSAO_KEY, data.token);
             localStorage.setItem('mse_user', JSON.stringify({
                 id: 'sso_' + Date.now(),
                 name: data.email,
@@ -1971,16 +2005,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const boardState = await fetchBoardStateFromServer();
-            if (boardState === null) {
-                msgEl.textContent = 'Não foi possível conectar ao servidor (XAMPP/MySQL). Verifique se o Apache e o MySQL estão ligados.';
-                msgEl.classList.add('is-error');
-                msgEl.style.display = 'block';
-                return;
-            }
-            const isBrandNewBoard = !boardState.members;
-            if (!boardState.members) boardState.members = {};
-            if (!boardState.pendingApprovals) boardState.pendingApprovals = [];
             const mostrarErro = (texto) => {
                 msgEl.textContent = texto;
                 msgEl.classList.add('is-error');
@@ -1993,27 +2017,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
+            let r = null;
             if (isSignupMode) {
                 // ===== CRIAR CONTA =====
                 const confirmPassword = document.getElementById('confirmPassword').value;
                 if (password !== confirmPassword) { mostrarErro('As senhas não coincidem.'); return; }
                 if (password.length < 6) { mostrarErro('Use uma senha com pelo menos 6 caracteres.'); return; }
 
-                const r = await authCall('signup', { email, password });
+                r = await authCall('signup', { email, password });
                 if (!r) { mostrarErro(ERRO_CONEXAO); return; }
-                if (!r.ok) {
+                if (!r.ok && r.reason !== 'pendente') {
                     mostrarErro(r.reason === 'existe'
                         ? 'Já existe uma conta com esse e-mail. Clique em "Entrar" em vez de criar conta.'
                         : r.reason === 'curta' ? 'Use uma senha com pelo menos 6 caracteres.'
+                        : r.reason === 'portal' ? 'Você já tem acesso a este quadro pelo Portal MSE: entre por lá. Para usar senha aqui, clique em "Esqueci a senha" e peça ao administrador para liberar.'
                         : 'Não foi possível criar a conta.');
                     return;
                 }
             } else {
                 // ===== ENTRAR =====
                 // Conferência da senha e bloqueio após 5 erros (15 min) ficam no servidor
-                const r = await authCall('login', { email, password });
+                r = await authCall('login', { email, password });
                 if (!r) { mostrarErro(ERRO_CONEXAO); return; }
-                if (!r.ok) {
+                if (!r.ok && r.reason !== 'pendente') {
                     const minutos = r.minutos || 15;
                     mostrarErro(
                         r.reason === 'sem_conta' ? 'Não existe conta com esse e-mail ainda. Clique em "Criar conta" abaixo.'
@@ -2032,37 +2058,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 localStorage.removeItem('mse_remembered_creds');
             }
 
-            // Já aprovado: entra direto
-            if (boardState.members[email]) {
-                await saveBoardStateToServer(boardState);
+            // Membro do quadro (ou primeiro acesso de um quadro vazio): o
+            // servidor já criou a sessão — guarda o token e entra
+            if (r.ok && r.token) {
+                localStorage.setItem(SESSAO_KEY, r.token);
                 localStorage.setItem('mse_user', JSON.stringify({
                     id: 'usr_' + Date.now(),
                     name: email,
-                    role: boardState.members[email] === 'Admin' ? 'Admin' : 'Membro'
+                    role: r.role === 'Admin' ? 'Admin' : 'Membro'
                 }));
                 window.location.href = boardUrl();
                 return;
             }
 
-            // Primeiro acesso de todos (quadro nunca usado antes): vira Admin automaticamente
-            if (isBrandNewBoard) {
-                boardState.members[email] = 'Admin';
-                await saveBoardStateToServer(boardState);
-                localStorage.setItem('mse_user', JSON.stringify({
-                    id: 'usr_' + Date.now(),
-                    name: email,
-                    role: 'Admin'
-                }));
-                window.location.href = boardUrl();
-                return;
-            }
-
-            // Conta existe (ou acabou de ser criada) mas ainda não foi aprovada pelo Admin
-            if (!boardState.pendingApprovals.includes(email)) {
-                boardState.pendingApprovals.push(email);
-            }
-            await saveBoardStateToServer(boardState);
-
+            // Conta existe (ou acabou de ser criada) mas ainda não foi aprovada
+            // pelo Admin — o servidor já pôs na fila de aprovação
             msgEl.textContent = isSignupMode
                 ? 'Conta criada! Agora é só aguardar a aprovação do administrador para acessar o quadro.'
                 : 'Sua conta ainda está aguardando aprovação do administrador.';
@@ -2083,15 +2093,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const boardState = await fetchBoardStateFromServer();
-            if (boardState === null) {
-                msgEl.textContent = 'Não foi possível conectar ao servidor (XAMPP/MySQL). Verifique se está tudo ligado.';
-                msgEl.classList.add('is-error');
-                msgEl.style.display = 'block';
-                return;
-            }
-            if (!boardState.passwordResetRequests) boardState.passwordResetRequests = [];
-
             // A conta master não pede redefinição pros outros Admins (eles não podem mexer nela)
             if (email === CONTA_MASTER) {
                 msgEl.textContent = 'A senha desta conta só pode ser redefinida pelo suporte do sistema (direto no servidor).';
@@ -2100,9 +2101,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            if (!boardState.passwordResetRequests.includes(email)) {
-                boardState.passwordResetRequests.push(email);
-                await saveBoardStateToServer(boardState);
+            const pedido = await authCall('pedir_redefinicao', { email });
+            if (!pedido) {
+                msgEl.textContent = 'Não foi possível conectar ao servidor. Tente de novo em instantes.';
+                msgEl.classList.add('is-error');
+                msgEl.style.display = 'block';
+                return;
             }
 
             msgEl.textContent = 'Pedido de redefinição enviado ao administrador. Assim que ele liberar, você poderá definir uma nova senha no próximo login.';
@@ -2156,8 +2160,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Guarda a sessão atual ANTES de sair, pra o botão de voltar
                 // (logo abaixo) conseguir restaurá-la depois num clique só.
                 hiddenLoginAccessEl.addEventListener('click', () => {
-                    localStorage.setItem(PERFIL_ANTERIOR_KEY, JSON.stringify(userData));
+                    localStorage.setItem(PERFIL_ANTERIOR_KEY, JSON.stringify({ ...userData, token: tokenDaSessao() }));
                     localStorage.removeItem('mse_user');
+                    localStorage.removeItem(SESSAO_KEY);
                 });
             } else {
                 hiddenLoginAccessEl.remove();
@@ -2183,7 +2188,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 voltarPerfilEl.title = `Voltar para ${perfilAnterior.name}`;
                 voltarPerfilEl.addEventListener('click', (e) => {
                     e.preventDefault();
-                    localStorage.setItem('mse_user', JSON.stringify(perfilAnterior));
+                    const { token: tokenAnterior, ...perfilSemToken } = perfilAnterior;
+                    authCall('logout', {}); // encerra a sessão da conta de admin no servidor
+                    localStorage.setItem('mse_user', JSON.stringify(perfilSemToken));
+                    if (tokenAnterior) localStorage.setItem(SESSAO_KEY, tokenAnterior);
                     localStorage.removeItem(PERFIL_ANTERIOR_KEY);
                     // replace() em vez de href: não deixa o "voltar" do
                     // navegador cair de novo na sessão que acabou de sair.
@@ -3627,9 +3635,9 @@ function sendMessage(text, to, attachment) {
 // dispara a criação da tarefa automaticamente quando a intenção rodar.
 async function sendToMiaAI(userText) {
     try {
-        const res = await fetch(`${API_BASE}/mia_chat.php`, {
+        const res = await apiFetch(`${API_BASE}/mia_chat.php`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: userText,
                 author: currentUserName,
@@ -4403,7 +4411,7 @@ async function buscarExcluidosNoServidor() {
     if (de) url += `&de=${encodeURIComponent(de)}`;
     if (ate) url += `&ate=${encodeURIComponent(ate)}`;
     try {
-        const res = await fetch(url, { headers: { 'X-API-Key': API_SECRET } });
+        const res = await apiFetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return await res.json();
     } catch (err) {
@@ -4464,9 +4472,9 @@ async function renderHistoricoExcluidos() {
 
 async function restaurarExcluido(item) {
     try {
-        const res = await fetch(apiUrl('restore_deleted_card.php'), {
+        const res = await apiFetch(apiUrl('restore_deleted_card.php'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_SECRET },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ source: item.source, historyId: item.historyId, file: item.file, cardId: item.cardId })
         });
         const dados = await res.json().catch(() => ({}));
@@ -5167,7 +5175,7 @@ function renderPasswordResetList() {
             </div>
         `;
         row.querySelector('[data-action="reset"]').addEventListener('click', () => {
-            authCall('remove', { emails: [email] });
+            authCall('remove', { emails: [email], liberar: true });
             state.passwordResetRequests = state.passwordResetRequests.filter(e => e !== email);
             saveState();
             renderPasswordResetList();
@@ -6302,7 +6310,7 @@ function applyBoardBackground() {
 
 async function fetchBackupsList() {
     try {
-        const res = await fetch(`${API_BASE}/list_backups.php`, { headers: { 'X-API-Key': API_SECRET } });
+        const res = await apiFetch(`${API_BASE}/list_backups.php`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return await res.json();
     } catch (err) {

@@ -8,7 +8,8 @@
 // (ignora o que vier do navegador). Quem confere/cria senha é o auth.php.
 // ==========================================
 
-const CAMPOS_PRIVADOS_DO_ESTADO = ['userPasswords', 'loginAttempts'];
+// senhaLiberada: membros que um Admin liberou pra criar senha nova ("Redefinir")
+const CAMPOS_PRIVADOS_DO_ESTADO = ['userPasswords', 'loginAttempts', 'senhaLiberada'];
 
 // Hash da senha padrão antiga do admin@mse.com.br ("admin123"), que estava
 // escrita no código público. Login com ela fica recusado.

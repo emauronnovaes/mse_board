@@ -18,8 +18,8 @@
 
     <script src="config.js.php"></script>
     <script>
-        // Chave e endereço vêm do .env, entregues por config.js.php (window.APP_CONFIG).
-        const API_SECRET = (window.APP_CONFIG && window.APP_CONFIG.API_SECRET) || '';
+        // Endereço vem do .env (config.js.php); quem autoriza é a sessão do login (Admin).
+        const TOKEN = localStorage.getItem('mse_token') || '';
         const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || 'http://localhost/mse_board/mse-backend/api';
 
         document.getElementById('btn').addEventListener('click', async () => {
@@ -27,7 +27,7 @@
             result.textContent = 'Rodando...';
             try {
                 const res = await fetch(`${API_BASE}/migrate_to_tables.php`, {
-                    headers: { 'X-API-Key': API_SECRET }
+                    headers: { 'X-Session-Token': TOKEN }
                 });
                 const text = await res.text();
                 result.textContent = text;

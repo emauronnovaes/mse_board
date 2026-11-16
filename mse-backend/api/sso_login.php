@@ -86,6 +86,7 @@ if ($roleEncontrada === null || $roleEncontrada === '') {
 // email como identificador do usuário (getMemberRole, avatares, menções, etc.).
 echo json_encode([
     'ok'          => true,
+    'token'       => criarSessao($pdo, $email), // sessão no servidor (ver session_helper.php)
     'email'       => $email,
     'name'        => $email,
     'role'        => $roleEncontrada,
