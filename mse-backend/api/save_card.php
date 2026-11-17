@@ -145,10 +145,32 @@ try {
     $pdo->beginTransaction();
     $before = lockCardPosition($pdo, $c['id'], $dept);
 
+    // O navegador manda junto onde o post-it estava quando ele carregou
+    // (posicaoBase). Coluna/raia iguais a essa base = esta tela NÃO moveu o
+    // post-it, então vale o que está no banco. Sem isso, quem estava com o
+    // post-it aberto (ou a tela parada) e salvava qualquer coisa desfazia a
+    // movimentação de outra pessoa — ex.: o card voltava de "Aprovados" pra
+    // "A Fazer" sozinho.
+    $base = (isset($c['posicaoBase']) && is_array($c['posicaoBase'])) ? $c['posicaoBase'] : null;
+    if ($before && $base) {
+        if (isset($fields['person_id']) && (string) $c['personId'] === (string) ($base['personId'] ?? '')) {
+            $fields['person_id'] = $before['person_id'];
+        }
+        $statusBase = ($base['status'] ?? '') ?: 'todo';
+        if (array_key_exists('status', $fields) && (($c['status'] ?? '') ?: 'todo') === $statusBase) {
+            $fields['status'] = $before['status'];
+            if (array_key_exists('completed_at', $fields)) {
+                $st = $pdo->prepare("SELECT completed_at FROM cards WHERE id = :id AND department = :dept");
+                $st->execute(['id' => $c['id'], 'dept' => $dept]);
+                $fields['completed_at'] = $st->fetchColumn();
+            }
+        }
+    }
+
     $stmt = $pdo->prepare($sql);
     $stmt->execute($fields);
 
-    logCardMoveIfChanged($pdo, $c['id'], $dept, $before, $c['personId'], $c['status'] ?? 'todo', $c['movedBy'] ?? null);
+    logCardMoveIfChanged($pdo, $c['id'], $dept, $before, $fields['person_id'] ?? $c['personId'], $fields['status'] ?? ($c['status'] ?? 'todo'), $c['movedBy'] ?? null);
     $pdo->commit();
 
     echo json_encode(['success' => true]);
