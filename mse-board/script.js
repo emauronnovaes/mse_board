@@ -190,7 +190,9 @@ async function fetchCardsFromServer() {
             try { details = JSON.parse(text).details || JSON.parse(text).error || text; } catch (e) {}
             throw new Error(`HTTP ${res.status} — ${details}`);
         }
-        return JSON.parse(text);
+        const cards = JSON.parse(text);
+        if (Array.isArray(cards)) cards.forEach(marcarPosicaoBase);
+        return cards;
     } catch (err) {
         console.error('Não foi possível buscar post-its do servidor:', err.message || err);
         return null;
@@ -291,6 +293,15 @@ async function retryPendingPersonDeletes() {
 
 function saveCardToServer(card) { return apiCall('save_card.php', card); }
 
+// Onde o post-it estava da última vez que o servidor confirmou (coluna/raia).
+// Vai junto no salvamento completo: se não mudou, o servidor mantém a posição
+// atual do banco — assim uma tela desatualizada não desfaz a movimentação de
+// outra pessoa (ver save_card.php).
+function marcarPosicaoBase(card, personId, status) {
+    if (!card) return;
+    card.posicaoBase = { personId: personId || card.personId, status: status || card.status || 'todo' };
+}
+
 // Post-its com um salvamento em andamento ou que falhou e está sendo tentado de
 // novo. Enquanto o id estiver aqui, a sincronização automática NUNCA sobrescreve
 // esse post-it com a versão do servidor — sem isso, se o salvamento falhasse
@@ -300,9 +311,11 @@ const pendingCardSaves = new Set();
 
 async function persistCard(card, attempt = 1) {
     pendingCardSaves.add(card.id);
+    const enviado = { personId: card.personId, status: card.status || 'todo' };
     const ok = await saveCardToServer(card);
 
     if (ok) {
+        marcarPosicaoBase(card, enviado.personId, enviado.status);
         pendingCardSaves.delete(card.id);
         clearErrorOnce(`card_${card.id}`);
         return true;
@@ -344,6 +357,8 @@ async function persistCardMove(cardId, personId, status, completedAt) {
     pendingCardSaves.add(cardId);
     const ok = await moveCardOnServer(cardId, personId, status, completedAt);
     if (ok) {
+        const movido = (state.cards || []).find(c => c.id === cardId);
+        marcarPosicaoBase(movido, personId, status || (movido && movido.status));
         pendingCardSaves.delete(cardId);
         clearErrorOnce(`card_move_${cardId}`);
         return true;
