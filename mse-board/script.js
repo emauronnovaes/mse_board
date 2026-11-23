@@ -3107,9 +3107,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        document.getElementById('newCardForm').addEventListener('submit', async (e) => {
+        // Salvar com anexo demora (envia os arquivos antes): um 2º clique/Enter
+        // nesse meio tempo rodava o salvamento de novo e anexava tudo em dobro.
+        let salvandoTarefa = false;
+        document.getElementById('newCardForm').addEventListener('submit', (e) => {
             e.preventDefault();
-
+            if (salvandoTarefa) return;
+            salvandoTarefa = true;
+            const botaoSalvar = document.getElementById('cardFormSubmitBtn');
+            if (botaoSalvar) botaoSalvar.disabled = true;
+            salvarFormularioDaTarefa().finally(() => {
+                salvandoTarefa = false;
+                if (botaoSalvar) botaoSalvar.disabled = false;
+            });
+        });
+        const salvarFormularioDaTarefa = async () => {
             const editingId = document.getElementById('editingCardId').value;
             const targetPersonId = document.getElementById('targetPersonSelect').value;
             const title = document.getElementById('cardTitle').value;
@@ -3188,7 +3200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 perguntarPosicaoAposSalvar = null;
                 abrirEscolhaDePosicao(id);
             }
-        });
+        };
 
         document.getElementById('addCommentBtn').addEventListener('click', () => {
             const editingId = document.getElementById('editingCardId').value;
@@ -11194,9 +11206,13 @@ function anexarArquivosAoInput(input, novosArquivos) {
         // seletor. Não vale pra imagem colada: duas capturas da mesma tela
         // têm o mesmo tamanho e seriam descartadas, mesmo sendo colagens
         // diferentes de propósito — por isso o nome delas já sai único.
+        // Imagem colada ganha nome novo a cada vez, então compara pelo conteúdo
+        // (tipo + tamanho exato em bytes): alguns programas mandam o mesmo
+        // print duas vezes num único Ctrl+V, e aí 2 imagens viravam 4.
         const ehColada = f.name.indexOf('colado-') === 0;
-        const repetido = !ehColada && anexosPendentesDaTarefa.some(
-            j => j.name === f.name && j.size === f.size && j.lastModified === f.lastModified
+        const repetido = anexosPendentesDaTarefa.some(j => ehColada
+            ? (j.name.indexOf('colado-') === 0 && j.type === f.type && j.size === f.size)
+            : (j.name === f.name && j.size === f.size && j.lastModified === f.lastModified)
         );
         if (repetido) return;
         anexosPendentesDaTarefa.push(f);
