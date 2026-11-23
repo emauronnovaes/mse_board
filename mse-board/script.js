@@ -191,7 +191,7 @@ async function fetchCardsFromServer() {
             throw new Error(`HTTP ${res.status} — ${details}`);
         }
         const cards = JSON.parse(text);
-        if (Array.isArray(cards)) cards.forEach(marcarPosicaoBase);
+        if (Array.isArray(cards)) cards.forEach(c => marcarPosicaoBase(c));
         return cards;
     } catch (err) {
         console.error('Não foi possível buscar post-its do servidor:', err.message || err);
@@ -299,7 +299,10 @@ function saveCardToServer(card) { return apiCall('save_card.php', card); }
 // outra pessoa (ver save_card.php).
 function marcarPosicaoBase(card, personId, status) {
     if (!card) return;
-    card.posicaoBase = { personId: personId || card.personId, status: status || card.status || 'todo' };
+    // Só texto: chamada errada (ex.: forEach passando índice e a lista) já
+    // gravou aqui a própria lista de cards, e aí o salvamento quebrava.
+    const texto = v => (typeof v === 'string' || typeof v === 'number') ? String(v) : '';
+    card.posicaoBase = { personId: texto(personId) || texto(card.personId), status: texto(status) || texto(card.status) || 'todo' };
 }
 
 // Post-its com um salvamento em andamento ou que falhou e está sendo tentado de
